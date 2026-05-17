@@ -1354,15 +1354,14 @@
       }
       const text = Util.text(btn);
       Util.log(`领取结果(页面文字): ${text || '无'}`);
+      // 判断逻辑：按钮名称为"查看奖励"视为领取成功，否则失败
+      if (/查看奖励/.test(text)) {
+        return { ok: true, response_code: 0, message: '✅ 按钮文字为"查看奖励"，领取成功' };
+      }
       if (/已领取|已拥有|成功|领取成功/.test(text)) {
         return { ok: true, response_code: 0, message: text || '领取成功' };
       }
-      if (/失败|错误|抢完|库存不足|未开始/.test(document.body.innerText || '')) {
-        const matched = (document.body.innerText || '').match(/.{0,12}(失败|错误|抢完|库存不足|未开始).{0,12}/);
-        return { ok: false, response_code: -1, message: matched ? matched[0] : '页面提示领取失败' };
-      }
-      Util.log('未检测到明确成功/失败标识，视为完成');
-      return { ok: true, response_code: 200, message: '点击流程完成，未捕获领取接口响应' };
+      return { ok: false, response_code: -1, message: text ? `按钮文字为"${text}"，非"查看奖励"，抢码失败` : '按钮不存在或无文字，抢码失败' };
     },
 
     async setupCurrentPage(selector, maxAttempts) {
