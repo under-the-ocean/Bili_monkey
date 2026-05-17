@@ -86,10 +86,7 @@
   z-index: 2147483646;
   width: 440px;
   max-width: calc(100vw - 48px);
-  max-height: min(calc(100vh - 80px), 90vh) !important;
-  overflow-y: auto !important;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
+  max-height: calc(100vh - 100px);
   font-family: var(--tm-font);
   color: var(--tm-text);
   background: var(--tm-bg-card);
@@ -131,7 +128,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: nowrap; gap: 0.25rem;
+  flex-wrap: wrap;
 }
 .tm-material-header-badge {
   font-size: 11px;
@@ -182,7 +179,7 @@
 /* ========== Body ========== */
 .tm-material-body {
   padding: 14px 16px;
-  overflow-y: visible;
+  overflow-y: auto;
   flex: 1;
 }
 .tm-material-meta {
@@ -273,13 +270,6 @@
   padding: 0 12px;
   font-size: 12px;
 }
-.tm-material-btn-xs {
-  height: 24px;
-  padding: 0 8px;
-  font-size: 11px;
-  border-radius: 4px;
-  min-width: auto;
-}
 
 /* ========== Chip ========== */
 .tm-material-chip {
@@ -339,7 +329,7 @@
 /* ========== List ========== */
 .tm-material-list {
   max-height: 350px;
-  overflow-y: visible;
+  overflow-y: auto;
   margin-top: 10px;
   scrollbar-width: thin;
   scrollbar-color: var(--tm-divider) transparent;
@@ -394,7 +384,7 @@
 .tm-material-item-actions {
   display: flex;
   gap: 6px;
-  flex-wrap: nowrap; gap: 0.25rem;
+  flex-wrap: wrap;
 }
 .tm-material-empty {
   padding: 24px 12px;
@@ -413,7 +403,7 @@
 .tm-material-toolbar {
   display: flex;
   gap: 8px;
-  flex-wrap: nowrap; gap: 0.25rem;
+  flex-wrap: wrap;
   align-items: center;
   margin-bottom: 10px;
 }
@@ -421,9 +411,8 @@
   flex: 1;
 }
 
-/* ========== Login Overlay - 仿 OIDC 风格（响应式缩放，强制 16px 基准） ========== */
+/* ========== Login Overlay - 仿 OIDC 风格（响应式缩放） ========== */
 #biliauto-login-overlay {
-  font-size: 16px;
   position: fixed;
   inset: 0;
   z-index: 2147483647;
@@ -437,28 +426,23 @@
   transition: opacity 0.35s cubic-bezier(.4,0,.2,1);
   padding: 16px;
   box-sizing: border-box;
-  /* 强制重置根字号为 16px，防止被 B 站页面影响 */
-  font-size: 16px;
 }
 #biliauto-login-overlay.tm-overlay-visible {
   opacity: 1;
   pointer-events: auto;
-}
-#biliauto-login-overlay * {
-  box-sizing: border-box;
 }
 
 /* 桌面端容器 */
 .bili-login-glass {
   background: rgba(255,255,255,0.95);
   backdrop-filter: blur(10px);
-  border-radius: 1rem;
+  border-radius: 2.5rem;
   box-shadow: 0 25px 50px -12px rgba(80,182,254,0.3);
-  padding: 0.75rem;
+  padding: 1.5rem;
   border: 1px solid rgba(255,255,255,0.8);
   width: 100%;
-  max-height: auto;
-  overflow-y: visible;
+  max-height: 90vh;
+  overflow-y: auto;
 }
 
 /* 桌面端（≥1024px）：左右双栏布局 */
@@ -473,11 +457,11 @@
   }
   .bili-login-left {
     display: block !important;
-    padding: 0.75rem;
+    padding: 1rem;
     padding-right: 2rem;
   }
   .bili-login-right {
-    padding: 0.75rem;
+    padding: 1rem;
     padding-left: 2rem;
   }
   .bili-login-mobile-only {
@@ -508,27 +492,27 @@
 .bili-login-header {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.75rem;
-  flex-wrap: nowrap; gap: 0.25rem;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
 }
 .bili-login-icon {
-  width: 4rem;
-  height: 4rem;
+  width: 64px;
+  height: 64px;
   flex-shrink: 0;
   background: linear-gradient(135deg, #50b6fe, #3a9ae0);
-  border-radius: 1rem;
+  border-radius: 0.75rem;
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
 }
 .bili-login-icon svg {
-  width: 2.25rem;
-  height: 2.25rem;
+  width: 36px;
+  height: 36px;
 }
 .bili-login-title {
-  font-size: 5vw;
+  font-size: 1.5rem;
   font-weight: 700;
   color: #1e293b;
   margin: 0;
@@ -536,7 +520,7 @@
 }
 .bili-login-subtitle {
   margin: 0.25rem 0 0 0;
-  font-size: 3vw;
+  font-size: 0.875rem;
   color: #64748b;
   font-weight: 500;
 }
@@ -544,7 +528,7 @@
   color: #50b6fe;
 }
 .bili-login-perms-title {
-  font-size: 2rem;
+  font-size: 0.75rem;
   font-weight: 700;
   color: #64748b;
   text-transform: uppercase;
@@ -557,24 +541,24 @@
   gap: 0.75rem;
   padding: 0.75rem;
   background: #f8fafc;
-  border-radius: 1rem;
+  border-radius: 0.75rem;
   margin-bottom: 0.5rem;
 }
 .bili-login-perm-icon {
   background: rgba(80,182,254,0.1);
   padding: 0.375rem;
-  border-radius: 1rem;
+  border-radius: 0.5rem;
   color: #50b6fe;
   flex-shrink: 0;
 }
 .bili-login-perm-name {
-  font-size: 2rem;
+  font-size: 0.875rem;
   font-weight: 600;
   color: #334155;
   margin: 0;
 }
 .bili-login-perm-desc {
-  font-size: 2rem;
+  font-size: 0.75rem;
   color: #94a3b8;
   margin: 0.125rem 0 0 0;
 }
@@ -585,35 +569,35 @@
 }
 .bili-login-mobile-header {
   text-align: center;
-  margin-bottom: 0.75rem;
+  margin-bottom: 1.5rem;
 }
 .bili-login-mobile-icon {
-  width: 4rem;
-  height: 4rem;
+  width: 64px;
+  height: 64px;
   margin: 0 auto 1rem auto;
   background: linear-gradient(135deg, #50b6fe, #3a9ae0);
-  border-radius: 1rem;
+  border-radius: 0.75rem;
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
 }
 .bili-login-mobile-icon svg {
-  width: 2.25rem;
-  height: 2.25rem;
+  width: 36px;
+  height: 36px;
 }
 .bili-login-code-section {
   background: #50b6fe;
-  border-radius: 1rem;
-  padding: 0.75rem;
-  margin-bottom: 0.75rem;
+  border-radius: 1.5rem;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
   box-shadow: 0 10px 15px -3px rgba(80,182,254,0.3);
   position: relative;
   overflow: hidden;
 }
 .bili-login-code-label {
   color: rgba(255,255,255,0.7);
-  font-size: 2.5vw;
+  font-size: 0.75rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.2em;
@@ -623,16 +607,16 @@
   display: flex;
   justify-content: center;
   gap: 0.5rem;
-  flex-wrap: nowrap; gap: 0.25rem;
+  flex-wrap: wrap;
 }
 .bili-login-code-char {
   display: inline-block;
-  width: 8vw;
-  height: 10vw;
-  line-height: 10vw;
+  width: 3rem;
+  height: 4rem;
+  line-height: 4rem;
   background: white;
-  border-radius: 1.5vw;
-  font-size: 5vw;
+  border-radius: 0.75rem;
+  font-size: 1.75rem;
   font-weight: 800;
   color: #50b6fe;
   text-align: center;
@@ -642,7 +626,7 @@
   display: flex;
   align-items: flex-start;
   gap: 0.75rem;
-  padding: 0.75rem;
+  padding: 1rem;
   background: rgba(80,182,254,0.05);
   border-radius: 1rem;
   border: 1px solid rgba(80,182,254,0.1);
@@ -652,12 +636,12 @@
 .bili-login-send-icon {
   background: #50b6fe;
   padding: 0.375rem;
-  border-radius: 1rem;
+  border-radius: 0.5rem;
   color: white;
   flex-shrink: 0;
 }
 .bili-login-send-title {
-  font-size: 2.5vw;
+  font-size: 0.75rem;
   font-weight: 700;
   color: #50b6fe;
   text-transform: uppercase;
@@ -665,13 +649,13 @@
   margin: 0;
 }
 .bili-login-send-group {
-  font-size: 3.5vw;
+  font-size: 0.875rem;
   font-weight: 600;
   color: #334155;
   margin: 0.25rem 0 0 0;
 }
 .bili-login-status {
-  font-size: 3vw;
+  font-size: 0.8125rem;
   color: #64748b;
   margin-bottom: 0.75rem;
   min-height: 1.25rem;
@@ -681,13 +665,13 @@
   align-items: center;
   justify-content: center;
   width: 100%;
-  height: 10vw;
+  height: 2.75rem;
   padding: 0 1.5rem;
   border: none;
-  border-radius: 1rem;
+  border-radius: 0.75rem;
   background: #50b6fe;
   color: white;
-  font-size: 3.5vw;
+  font-size: 0.875rem;
   font-weight: 600;
   font-family: inherit;
   cursor: pointer;
@@ -704,207 +688,69 @@
   cursor: not-allowed;
 }
 
-/* 桌面端限制最大尺寸 */
-@media (min-width: 768px) {
-  .bili-login-code-char {
-    width: 48px;
-    height: 64px;
-    line-height: 64px;
-    font-size: 28px;
-    border-radius: 12px;
-  }
-  .bili-login-title {
-    font-size: 24px;
-  }
-  .bili-login-subtitle {
-    font-size: 14px;
-  }
-  .bili-login-send-group {
-    font-size: 14px;
-  }
-  .bili-login-btn {
-    font-size: 14px;
-    height: 44px;
-  }
-  .bili-login-status {
-    font-size: 13px;
-  }
-  .bili-login-code-label {
-    font-size: 12px;
-  }
-  .bili-login-send-title {
-    font-size: 12px;
-  }
-}
-
-
-/* 移动端字体缩放 */
 /* 移动端字体缩放（<768px） */
 @media (max-width: 768px) {
-.bili-login-code-char {
-  display: inline-block;
-  width: 8vw;
-  height: 10vw;
-  line-height: 10vw;
-  background: white;
-  border-radius: 1.5vw;
-  font-size: 5vw;
-  font-weight: 800;
-  color: #50b6fe;
-  text-align: center;
-  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
-}
-.bili-login-title {
-  font-size: 5vw;
-  font-weight: 700;
-  color: #1e293b;
-  margin: 0;
-  line-height: 1.2;
-}
-.bili-login-subtitle {
-  margin: 0.25rem 0 0 0;
-  font-size: 3vw;
-  color: #64748b;
-  font-weight: 500;
-}
-.bili-login-send-group {
-  font-size: 3.5vw;
-  font-weight: 600;
-  color: #334155;
-  margin: 0.25rem 0 0 0;
-}
-.bili-login-send-title {
-  font-size: 2.5vw;
-  font-weight: 700;
-  color: #50b6fe;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin: 0;
-}
-.bili-login-status {
-  font-size: 3vw;
-  color: #64748b;
-  margin-bottom: 0.75rem;
-  min-height: 1.25rem;
-}
-.bili-login-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 10vw;
-  padding: 0 1.5rem;
-  border: none;
-  border-radius: 1rem;
-  background: #50b6fe;
-  color: white;
-  font-size: 3.5vw;
-  font-weight: 600;
-  font-family: inherit;
-  cursor: pointer;
-  transition: opacity 0.2s, transform 0.1s;
-}
+  .bili-login-code-char {
+    width: 2.5rem;
+    height: 3.5rem;
+    line-height: 3.5rem;
+    font-size: 1.5rem;
+    border-radius: 0.6rem;
+  }
+  .bili-login-title {
+    font-size: 1.25rem;
+  }
+  .bili-login-send-group {
+    font-size: 0.75rem;
+  }
   .bili-login-glass {
-    padding: 0.8rem;
-  }
-  .bili-login-code-section {
-    padding: 0.8rem;
-  }
-  .bili-login-perm-name {
-    font-size: 2rem;
-  }
-  .bili-login-perm-desc {
-    font-size: 2rem;
+    padding: 1rem;
   }
 }
 
 /* 小屏幕（<480px）进一步缩小 */
 @media (max-width: 480px) {
   .bili-login-glass {
-    padding: 0.6rem;
+    padding: 0.875rem;
   }
-.bili-login-code-char {
-  display: inline-block;
-  width: 8vw;
-  height: 10vw;
-  line-height: 10vw;
-  background: white;
-  border-radius: 1.5vw;
-  font-size: 5vw;
-  font-weight: 800;
-  color: #50b6fe;
-  text-align: center;
-  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
-}
+  .bili-login-code-char {
+    width: 2rem;
+    height: 2.8rem;
+    line-height: 2.8rem;
+    font-size: 1.2rem;
+    border-radius: 0.5rem;
+  }
   .bili-login-code-section {
-    padding: 0.6rem;
+    padding: 1rem;
   }
   .bili-login-send-info {
-    padding: 0.5rem;
+    padding: 0.75rem;
   }
-.bili-login-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 10vw;
-  padding: 0 1.5rem;
-  border: none;
-  border-radius: 1rem;
-  background: #50b6fe;
-  color: white;
-  font-size: 3.5vw;
-  font-weight: 600;
-  font-family: inherit;
-  cursor: pointer;
-  transition: opacity 0.2s, transform 0.1s;
-}
-.bili-login-title {
-  font-size: 5vw;
-  font-weight: 700;
-  color: #1e293b;
-  margin: 0;
-  line-height: 1.2;
-}
-.bili-login-subtitle {
-  margin: 0.25rem 0 0 0;
-  font-size: 3vw;
-  color: #64748b;
-  font-weight: 500;
-}
-.bili-login-send-group {
-  font-size: 3.5vw;
-  font-weight: 600;
-  color: #334155;
-  margin: 0.25rem 0 0 0;
-}
-.bili-login-status {
-  font-size: 3vw;
-  color: #64748b;
-  margin-bottom: 0.75rem;
-  min-height: 1.25rem;
-}
-  .bili-login-perm-name {
-    font-size: 2rem;
+  .bili-login-btn {
+    height: 2.5rem;
+    font-size: 0.8rem;
   }
-  .bili-login-perm-desc {
-    font-size: 2rem;
+  .bili-login-title {
+    font-size: 1rem;
+  }
+  .bili-login-subtitle {
+    font-size: 0.7rem;
   }
 }
 
 /* 横屏模式 */
 @media (max-height: 600px) and (orientation: landscape) {
   #biliauto-login-overlay {
-  font-size: 16px;
     align-items: flex-start;
     padding-top: 8px;
   }
   .bili-login-glass {
     max-height: 92vh;
   }
-  .bili-login-left .bili-login-perms {
+  .bili-login-left .bili-login-perms,
+  .bili-login-mobile-only .bili-login-perms {
     max-height: 180px;
-    overflow-y: visible;
+    overflow-y: auto;
   }
 }
 
@@ -940,7 +786,7 @@
     justify-content: flex-start;
   }
   .tm-material-toolbar {
-    flex-wrap: nowrap; gap: 0.25rem;
+    flex-wrap: wrap;
   }
   .tm-material-btn {
     min-width: 60px;
@@ -1101,106 +947,4 @@ BiliAuto
       </div>
     </div>
   </div>
-</div><style>
-/* 强制一屏显示 - 覆盖原有样式 */
-#biliauto-login-overlay {
-  align-items: center !important;
-  padding: 8px !important;
-}
-.bili-login-glass {
-  max-height: 95vh !important;
-  overflow-y: auto !important;
-  padding: 0.75rem !important;
-}
-.bili-login-inner {
-  display: flex !important;
-  flex-direction: column !important;
-}
-.bili-login-right {
-  padding: 0 !important;
-}
-.bili-login-mobile-header {
-  margin-bottom: 0.5rem !important;
-}
-.bili-login-mobile-icon {
-  width: 2rem !important;
-  height: 2rem !important;
-  margin-bottom: 0.25rem !important;
-}
-.bili-login-title {
-  font-size: 1rem !important;
-  margin-bottom: 0 !important;
-}
-.bili-login-subtitle {
-  font-size: 0.6rem !important;
-  margin-top: 0 !important;
-}
-.bili-login-code-section {
-  padding: 0.5rem !important;
-  margin-bottom: 0.5rem !important;
-}
-.bili-login-code-label {
-  margin-bottom: 0.25rem !important;
-  font-size: 0.55rem !important;
-}
-.bili-login-code-chars {
-  gap: 0.2rem !important;
-  flex-wrap: nowrap !important;
-}
-.bili-login-code-char {
-  width: 12vw !important;
-  max-width: 2.2rem !important;
-  height: 8vw !important;
-  max-height: 2rem !important;
-  line-height: 8vw !important;
-  font-size: 4vw !important;
-  border-radius: 0.4rem !important;
-}
-.bili-login-send-info {
-  padding: 0.3rem 0.5rem !important;
-  margin-bottom: 0.5rem !important;
-  gap: 0.4rem !important;
-}
-.bili-login-send-icon {
-  padding: 0.2rem !important;
-}
-.bili-login-send-icon svg {
-  width: 14px !important;
-  height: 14px !important;
-}
-.bili-login-send-title {
-  font-size: 0.5rem !important;
-}
-.bili-login-send-group {
-  font-size: 0.65rem !important;
-  margin-top: 0 !important;
-}
-.bili-login-status {
-  font-size: 0.6rem !important;
-  margin-bottom: 0.3rem !important;
-  min-height: auto !important;
-}
-.bili-login-btn {
-  height: 2rem !important;
-  font-size: 0.7rem !important;
-  padding: 0 !important;
-}
-.mobile-only .bili-login-perms {
-  max-height: 100px !important;
-  overflow-y: auto !important;
-}
-.bili-login-perm-item {
-  padding: 0.3rem !important;
-  gap: 0.4rem !important;
-}
-.bili-login-perm-name {
-  font-size: 0.6rem !important;
-}
-.bili-login-perm-desc {
-  font-size: 0.5rem !important;
-}
-.bili-login-perms-title {
-  margin-bottom: 0.2rem !important;
-  font-size: 0.55rem !important;
-}
-</style>
+</div>

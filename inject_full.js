@@ -1,23 +1,1238 @@
-// ==UserScript==
-// @name         BiliAutoClicker - 油猴客户端
-// @namespace    https://github.com/under-the-ocean
-// @version      0.7.0
-// @author       under-the-ocean
-// @match        https://www.bilibili.com/blackboard/era/award-exchange.html?*
-// @connect      150.242.246.137
-// @grant        GM_xmlhttpRequest
-// @grant        GM_notification
-// @grant        GM_setValue
-// @grant        GM_getValue
-// @grant        GM_deleteValue
-// @grant        GM_listValues
-// @grant        GM_getResourceText
-// @resource     TEMPLATE_HTML https://gh-proxy.com/https://raw.githubusercontent.com/under-the-ocean/Bili_monkey/main/template.html
-// @run-at       document-start
-// @downloadURL  https://gh-proxy.com/https://raw.githubusercontent.com/under-the-ocean/Bili_monkey/main/biliauto-tampermonkey-client.user.js
-// @updateURL    https://gh-proxy.com/https://raw.githubusercontent.com/under-the-ocean/Bili_monkey/main/biliauto-tampermonkey-client.user.js
-// ==/UserScript==
-// ==/UserScript==
+
+(function() {
+  // Preload template
+  window._INJECTED_TEMPLATE = `<style>
+/* ========== Material Design Tokens ========== */
+:root {
+  --tm-primary: #50b6fe;
+  --tm-primary-dark: #3a9ae0;
+  --tm-accent: #ff5252;
+  --tm-accent-dark: #d50000;
+  --tm-bg: #ffffff;
+  --tm-bg-card: #ffffff;
+  --tm-text: rgba(0,0,0,0.87);
+  --tm-text-secondary: rgba(0,0,0,0.54);
+  --tm-text-hint: rgba(0,0,0,0.38);
+  --tm-divider: rgba(0,0,0,0.12);
+  --tm-input-bg: #f5f5f5;
+  --tm-surface: #f5f5f5;
+  --tm-shadow: 0 25px 50px -12px rgba(80,182,254,0.3);
+  --tm-shadow-btn: 0 3px 1px -2px rgba(0,0,0,0.2), 0 2px 2px 0 rgba(0,0,0,0.14), 0 1px 5px 0 rgba(0,0,0,0.12);
+  --tm-radius: 10px;
+  --tm-radius-btn: 6px;
+  --tm-radius-chip: 32px;
+  --tm-font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --tm-transition: 0.3s cubic-bezier(.4,0,.2,1);
+}
+#biliauto-panel.tm-material-dark {
+  --tm-bg: #121212;
+  --tm-bg-card: #1e1e1e;
+  --tm-text: rgba(255,255,255,0.87);
+  --tm-text-secondary: rgba(255,255,255,0.54);
+  --tm-text-hint: rgba(255,255,255,0.38);
+  --tm-divider: rgba(255,255,255,0.12);
+  --tm-input-bg: #2c2c2c;
+  --tm-surface: #1e1e1e;
+  --tm-shadow: 0 11px 15px -7px rgba(0,0,0,0.4), 0 24px 38px 3px rgba(0,0,0,0.3), 0 9px 46px 8px rgba(0,0,0,0.25);
+}
+
+/* ========== FAB ========== */
+#biliauto-fab {
+  position: fixed;
+  left: 50%!important;
+  right: auto!important;
+  top: 50%!important;
+  transform: translate(-50%, -50%)!important;
+  z-index: 2147483647;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: var(--tm-primary);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 6px 10px 0 rgba(0,0,0,0.14), 0 1px 18px 0 rgba(0,0,0,0.12), 0 3px 5px -1px rgba(0,0,0,0.2);
+  transition: opacity 0.25s cubic-bezier(.4,0,.2,1), transform 0.25s cubic-bezier(.4,0,.2,1), box-shadow 0.25s, background 0.25s;
+  user-select: none;
+  -webkit-user-select: none;
+  opacity: 1;
+  transform: scale(1);
+}
+#biliauto-fab.tm-fab-hidden {
+  opacity: 0;
+  transform: scale(0.4);
+  pointer-events: none;
+}
+#biliauto-fab:hover {
+  box-shadow: 0 8px 12px 0 rgba(0,0,0,0.18), 0 3px 20px 0 rgba(0,0,0,0.16), 0 3px 5px -1px rgba(0,0,0,0.24);
+  background: var(--tm-primary-dark);
+}
+#biliauto-fab:active {
+  transform: scale(0.92);
+}
+#biliauto-fab svg {
+  display: block;
+}
+#biliauto-fab.tm-material-dark {
+  background: #1e88e5;
+}
+
+/* ========== Panel ========== */
+#biliauto-panel {
+  position: fixed;
+  left: 50%!important;
+  right: auto!important;
+  transform: translateX(-50%)!important;
+  bottom: 88px;
+  z-index: 2147483646;
+  width: 440px;
+  max-width: calc(100vw - 48px);
+  max-height: min(calc(100vh - 80px), 90vh) !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  font-family: var(--tm-font);
+  color: var(--tm-text);
+  background: var(--tm-bg-card);
+  border-radius: var(--tm-radius);
+  box-shadow: var(--tm-shadow);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  opacity: 0;
+  transform: translateY(12px) scale(0.96);
+  pointer-events: none;
+  transition: opacity 0.25s cubic-bezier(.4,0,.2,1), transform 0.25s cubic-bezier(.4,0,.2,1);
+}
+#biliauto-panel.tm-panel-visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+}
+#biliauto-panel * { box-sizing: border-box; }
+
+/* ========== Header ========== */
+.tm-material-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  min-height: 44px;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  border-bottom: 1px solid var(--tm-divider);
+  flex-shrink: 0;
+}
+.tm-material-header:active { cursor: grabbing; }
+.tm-material-header-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--tm-text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap; gap: 0.25rem;
+}
+.tm-material-header-badge {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--tm-text-secondary);
+  background: var(--tm-input-bg);
+  padding: 2px 8px;
+  border-radius: var(--tm-radius-chip);
+}
+.tm-material-header-actions {
+  display: flex;
+  gap: 4px;
+  cursor: default;
+}
+
+/* ========== Icon Button ========== */
+.tm-material-icon-btn {
+  position: relative;
+  overflow: hidden;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--tm-text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: background 0.15s;
+  font-size: 18px;
+  line-height: 1;
+}
+.tm-material-icon-btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0;
+  transition: opacity 0.3s cubic-bezier(.4,0,.2,1);
+  pointer-events: none;
+}
+.tm-material-icon-btn:hover::after { opacity: 0.08; }
+.tm-material-icon-btn:active::after { opacity: 0.16; transition: opacity 0.05s; }
+
+/* ========== Body ========== */
+.tm-material-body {
+  padding: 14px 16px;
+  overflow-y: visible;
+  flex: 1;
+}
+.tm-material-meta {
+  font-size: 12px;
+  color: var(--tm-text-secondary);
+  line-height: 1.6;
+  margin-bottom: 12px;
+  word-break: break-all;
+  background: var(--tm-surface);
+  padding: 10px 12px;
+  border-radius: var(--tm-radius-btn);
+}
+
+/* ========== Input ========== */
+.tm-material-input {
+  width: 100%;
+  border: none;
+  border-radius: var(--tm-radius-btn);
+  background: var(--tm-input-bg);
+  color: var(--tm-text);
+  padding: 10px 12px;
+  outline: none;
+  font-size: 13px;
+  font-family: var(--tm-font);
+  transition: background 0.15s;
+}
+.tm-material-input:focus {
+  background: var(--tm-input-bg);
+  box-shadow: 0 0 0 2px var(--tm-primary);
+}
+.tm-material-input::placeholder { color: var(--tm-text-hint); }
+.tm-material-input-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.tm-material-input-row .tm-material-input { flex: 1; }
+
+/* ========== Button ========== */
+.tm-material-btn {
+  position: relative;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 40px;
+  min-width: 72px;
+  padding: 0 18px;
+  border: none;
+  border-radius: var(--tm-radius-btn);
+  background: transparent;
+  color: var(--tm-primary);
+  font-size: 13px;
+  font-weight: 500;
+  font-family: var(--tm-font);
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: var(--tm-transition);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+.tm-material-btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--tm-radius-btn);
+  background: currentColor;
+  opacity: 0;
+  transition: opacity 0.3s cubic-bezier(.4,0,.2,1);
+  pointer-events: none;
+}
+.tm-material-btn:hover::after { opacity: 0.08; }
+.tm-material-btn:active::after { opacity: 0.16; transition: opacity 0.05s; }
+.tm-material-btn-primary {
+  background: var(--tm-primary);
+  color: #fff;
+  box-shadow: var(--tm-shadow-btn);
+}
+.tm-material-btn-primary:hover { background: var(--tm-primary-dark); }
+.tm-material-btn-primary::after { display: none; }
+.tm-material-btn-primary:active { box-shadow: 0 5px 5px -3px rgba(0,0,0,0.2), 0 8px 10px 1px rgba(0,0,0,0.14), 0 3px 14px 2px rgba(0,0,0,0.12); }
+.tm-material-btn-accent { color: var(--tm-accent); }
+.tm-material-btn-sm {
+  height: 32px;
+  min-width: 52px;
+  padding: 0 12px;
+  font-size: 12px;
+}
+.tm-material-btn-xs {
+  height: 24px;
+  padding: 0 8px;
+  font-size: 11px;
+  border-radius: 4px;
+  min-width: auto;
+}
+
+/* ========== Chip ========== */
+.tm-material-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: var(--tm-radius-chip);
+  background: var(--tm-surface);
+  color: var(--tm-text-secondary);
+  font-size: 12px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+/* ========== Checkbox ========== */
+.tm-material-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--tm-text);
+  line-height: 1.4;
+  cursor: pointer;
+}
+.tm-material-check input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--tm-text-hint);
+  border-radius: 3px;
+  cursor: pointer;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--tm-transition);
+  position: relative;
+  margin: 0;
+}
+.tm-material-check input[type="checkbox"]:checked {
+  border-color: var(--tm-primary);
+  background: var(--tm-primary);
+}
+.tm-material-check input[type="checkbox"]:checked::after {
+  content: '';
+  display: block;
+  width: 4px;
+  height: 8px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+  margin-top: -1px;
+}
+
+/* ========== List ========== */
+.tm-material-list {
+  max-height: 350px;
+  overflow-y: visible;
+  margin-top: 10px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--tm-divider) transparent;
+}
+.tm-material-list::-webkit-scrollbar { width: 5px; }
+.tm-material-list::-webkit-scrollbar-thumb { background: var(--tm-divider); border-radius: 4px; }
+
+.tm-material-item {
+  padding: 12px;
+  border-radius: var(--tm-radius-btn);
+  margin-bottom: 10px;
+  background: var(--tm-surface);
+  border: 1px solid var(--tm-divider);
+}
+.tm-material-item:last-child { margin-bottom: 0; }
+.tm-material-item-title {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
+  margin-bottom: 4px;
+  color: var(--tm-text);
+}
+.tm-material-item-id {
+  font-size: 11px;
+  color: var(--tm-primary);
+  word-break: break-all;
+  margin-bottom: 8px;
+  font-family: "SF Mono", monospace;
+  opacity: 0.8;
+}
+.tm-material-item-config {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.tm-material-item-config input {
+  padding: 5px 8px;
+  font-size: 11px;
+  text-align: center;
+  border: none;
+  border-radius: var(--tm-radius-btn);
+  background: var(--tm-input-bg);
+  color: var(--tm-text);
+  outline: none;
+  font-family: var(--tm-font);
+  transition: box-shadow 0.15s;
+}
+.tm-material-item-config input:focus {
+  box-shadow: 0 0 0 2px var(--tm-primary);
+}
+.tm-material-item-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: nowrap; gap: 0.25rem;
+}
+.tm-material-empty {
+  padding: 24px 12px;
+  text-align: center;
+  color: var(--tm-text-hint);
+  font-size: 13px;
+}
+.tm-material-status {
+  font-size: 12px;
+  color: var(--tm-text-secondary);
+  margin-top: 12px;
+  min-height: 20px;
+  padding: 8px 0;
+  text-align: center;
+}
+.tm-material-toolbar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: nowrap; gap: 0.25rem;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.tm-material-separator {
+  flex: 1;
+}
+
+/* ========== Login Overlay - 仿 OIDC 风格（响应式缩放，强制 16px 基准） ========== */
+#biliauto-login-overlay {
+  font-size: 16px;
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  background: radial-gradient(circle at bottom right, #dbeafe, #f8fafc, #f0fdfa);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  transition: opacity 0.35s cubic-bezier(.4,0,.2,1);
+  padding: 16px;
+  box-sizing: border-box;
+  /* 强制重置根字号为 16px，防止被 B 站页面影响 */
+  font-size: 16px;
+}
+#biliauto-login-overlay.tm-overlay-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+#biliauto-login-overlay * {
+  box-sizing: border-box;
+}
+
+/* 桌面端容器 */
+.bili-login-glass {
+  background: rgba(255,255,255,0.95);
+  backdrop-filter: blur(10px);
+  border-radius: 1rem;
+  box-shadow: 0 25px 50px -12px rgba(80,182,254,0.3);
+  padding: 0.75rem;
+  border: 1px solid rgba(255,255,255,0.8);
+  width: 100%;
+  max-height: auto;
+  overflow-y: visible;
+}
+
+/* 桌面端（≥1024px）：左右双栏布局 */
+@media (min-width: 1024px) {
+  .bili-login-glass {
+    max-width: 800px;
+  }
+  .bili-login-inner {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+  }
+  .bili-login-left {
+    display: block !important;
+    padding: 0.75rem;
+    padding-right: 2rem;
+  }
+  .bili-login-right {
+    padding: 0.75rem;
+    padding-left: 2rem;
+  }
+  .bili-login-mobile-only {
+    display: none !important;
+  }
+}
+
+/* 移动端（<1024px）：单列布局，隐藏左侧 */
+@media (max-width: 1023px) {
+  .bili-login-glass {
+    max-width: 28rem;
+  }
+  .bili-login-left {
+    display: none !important;
+  }
+  .bili-login-right {
+    padding: 0 !important;
+  }
+  .bili-login-mobile-only {
+    display: block !important;
+  }
+}
+
+/* 左侧：应用信息和权限 */
+.bili-login-left {
+  text-align: left;
+}
+.bili-login-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  flex-wrap: nowrap; gap: 0.25rem;
+}
+.bili-login-icon {
+  width: 4rem;
+  height: 4rem;
+  flex-shrink: 0;
+  background: linear-gradient(135deg, #50b6fe, #3a9ae0);
+  border-radius: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+}
+.bili-login-icon svg {
+  width: 2.25rem;
+  height: 2.25rem;
+}
+.bili-login-title {
+  font-size: 5vw;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0;
+  line-height: 1.2;
+}
+.bili-login-subtitle {
+  margin: 0.25rem 0 0 0;
+  font-size: 3vw;
+  color: #64748b;
+  font-weight: 500;
+}
+.bili-login-accent {
+  color: #50b6fe;
+}
+.bili-login-perms-title {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.75rem;
+}
+.bili-login-perm-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  background: #f8fafc;
+  border-radius: 1rem;
+  margin-bottom: 0.5rem;
+}
+.bili-login-perm-icon {
+  background: rgba(80,182,254,0.1);
+  padding: 0.375rem;
+  border-radius: 1rem;
+  color: #50b6fe;
+  flex-shrink: 0;
+}
+.bili-login-perm-name {
+  font-size: 2rem;
+  font-weight: 600;
+  color: #334155;
+  margin: 0;
+}
+.bili-login-perm-desc {
+  font-size: 2rem;
+  color: #94a3b8;
+  margin: 0.125rem 0 0 0;
+}
+
+/* 右侧：验证码区域 */
+.bili-login-right {
+  text-align: center;
+}
+.bili-login-mobile-header {
+  text-align: center;
+  margin-bottom: 0.75rem;
+}
+.bili-login-mobile-icon {
+  width: 4rem;
+  height: 4rem;
+  margin: 0 auto 1rem auto;
+  background: linear-gradient(135deg, #50b6fe, #3a9ae0);
+  border-radius: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+}
+.bili-login-mobile-icon svg {
+  width: 2.25rem;
+  height: 2.25rem;
+}
+.bili-login-code-section {
+  background: #50b6fe;
+  border-radius: 1rem;
+  padding: 0.75rem;
+  margin-bottom: 0.75rem;
+  box-shadow: 0 10px 15px -3px rgba(80,182,254,0.3);
+  position: relative;
+  overflow: hidden;
+}
+.bili-login-code-label {
+  color: rgba(255,255,255,0.7);
+  font-size: 2.5vw;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  margin-bottom: 0.75rem;
+}
+.bili-login-code-chars {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  flex-wrap: nowrap; gap: 0.25rem;
+}
+.bili-login-code-char {
+  display: inline-block;
+  width: 8vw;
+  height: 10vw;
+  line-height: 10vw;
+  background: white;
+  border-radius: 1.5vw;
+  font-size: 5vw;
+  font-weight: 800;
+  color: #50b6fe;
+  text-align: center;
+  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+}
+.bili-login-send-info {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  background: rgba(80,182,254,0.05);
+  border-radius: 1rem;
+  border: 1px solid rgba(80,182,254,0.1);
+  margin-bottom: 1rem;
+  text-align: left;
+}
+.bili-login-send-icon {
+  background: #50b6fe;
+  padding: 0.375rem;
+  border-radius: 1rem;
+  color: white;
+  flex-shrink: 0;
+}
+.bili-login-send-title {
+  font-size: 2.5vw;
+  font-weight: 700;
+  color: #50b6fe;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0;
+}
+.bili-login-send-group {
+  font-size: 3.5vw;
+  font-weight: 600;
+  color: #334155;
+  margin: 0.25rem 0 0 0;
+}
+.bili-login-status {
+  font-size: 3vw;
+  color: #64748b;
+  margin-bottom: 0.75rem;
+  min-height: 1.25rem;
+}
+.bili-login-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 10vw;
+  padding: 0 1.5rem;
+  border: none;
+  border-radius: 1rem;
+  background: #50b6fe;
+  color: white;
+  font-size: 3.5vw;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.1s;
+}
+.bili-login-btn:hover {
+  opacity: 0.85;
+}
+.bili-login-btn:active {
+  transform: scale(0.98);
+}
+.bili-login-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* 桌面端限制最大尺寸 */
+@media (min-width: 768px) {
+  .bili-login-code-char {
+    width: 48px;
+    height: 64px;
+    line-height: 64px;
+    font-size: 28px;
+    border-radius: 12px;
+  }
+  .bili-login-title {
+    font-size: 24px;
+  }
+  .bili-login-subtitle {
+    font-size: 14px;
+  }
+  .bili-login-send-group {
+    font-size: 14px;
+  }
+  .bili-login-btn {
+    font-size: 14px;
+    height: 44px;
+  }
+  .bili-login-status {
+    font-size: 13px;
+  }
+  .bili-login-code-label {
+    font-size: 12px;
+  }
+  .bili-login-send-title {
+    font-size: 12px;
+  }
+}
+
+
+/* 移动端字体缩放 */
+/* 移动端字体缩放（<768px） */
+@media (max-width: 768px) {
+.bili-login-code-char {
+  display: inline-block;
+  width: 8vw;
+  height: 10vw;
+  line-height: 10vw;
+  background: white;
+  border-radius: 1.5vw;
+  font-size: 5vw;
+  font-weight: 800;
+  color: #50b6fe;
+  text-align: center;
+  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+}
+.bili-login-title {
+  font-size: 5vw;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0;
+  line-height: 1.2;
+}
+.bili-login-subtitle {
+  margin: 0.25rem 0 0 0;
+  font-size: 3vw;
+  color: #64748b;
+  font-weight: 500;
+}
+.bili-login-send-group {
+  font-size: 3.5vw;
+  font-weight: 600;
+  color: #334155;
+  margin: 0.25rem 0 0 0;
+}
+.bili-login-send-title {
+  font-size: 2.5vw;
+  font-weight: 700;
+  color: #50b6fe;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0;
+}
+.bili-login-status {
+  font-size: 3vw;
+  color: #64748b;
+  margin-bottom: 0.75rem;
+  min-height: 1.25rem;
+}
+.bili-login-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 10vw;
+  padding: 0 1.5rem;
+  border: none;
+  border-radius: 1rem;
+  background: #50b6fe;
+  color: white;
+  font-size: 3.5vw;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.1s;
+}
+  .bili-login-glass {
+    padding: 0.8rem;
+  }
+  .bili-login-code-section {
+    padding: 0.8rem;
+  }
+  .bili-login-perm-name {
+    font-size: 2rem;
+  }
+  .bili-login-perm-desc {
+    font-size: 2rem;
+  }
+}
+
+/* 小屏幕（<480px）进一步缩小 */
+@media (max-width: 480px) {
+  .bili-login-glass {
+    padding: 0.6rem;
+  }
+.bili-login-code-char {
+  display: inline-block;
+  width: 8vw;
+  height: 10vw;
+  line-height: 10vw;
+  background: white;
+  border-radius: 1.5vw;
+  font-size: 5vw;
+  font-weight: 800;
+  color: #50b6fe;
+  text-align: center;
+  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+}
+  .bili-login-code-section {
+    padding: 0.6rem;
+  }
+  .bili-login-send-info {
+    padding: 0.5rem;
+  }
+.bili-login-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 10vw;
+  padding: 0 1.5rem;
+  border: none;
+  border-radius: 1rem;
+  background: #50b6fe;
+  color: white;
+  font-size: 3.5vw;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.1s;
+}
+.bili-login-title {
+  font-size: 5vw;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0;
+  line-height: 1.2;
+}
+.bili-login-subtitle {
+  margin: 0.25rem 0 0 0;
+  font-size: 3vw;
+  color: #64748b;
+  font-weight: 500;
+}
+.bili-login-send-group {
+  font-size: 3.5vw;
+  font-weight: 600;
+  color: #334155;
+  margin: 0.25rem 0 0 0;
+}
+.bili-login-status {
+  font-size: 3vw;
+  color: #64748b;
+  margin-bottom: 0.75rem;
+  min-height: 1.25rem;
+}
+  .bili-login-perm-name {
+    font-size: 2rem;
+  }
+  .bili-login-perm-desc {
+    font-size: 2rem;
+  }
+}
+
+/* 横屏模式 */
+@media (max-height: 600px) and (orientation: landscape) {
+  #biliauto-login-overlay {
+  font-size: 16px;
+    align-items: flex-start;
+    padding-top: 8px;
+  }
+  .bili-login-glass {
+    max-height: 92vh;
+  }
+  .bili-login-left .bili-login-perms {
+    max-height: 180px;
+    overflow-y: visible;
+  }
+}
+
+/* ========== Login Status Badge in Header ========== */
+.tm-login-status-badge {
+  font-size: 11px;
+  color: #4caf50;
+  background: rgba(76,175,80,0.15);
+  padding: 2px 10px;
+  border-radius: 10px;
+  margin-left: 6px;
+  white-space: nowrap;
+}
+
+/* ========== 手机端面板额外优化 ========== */
+@media (max-width: 600px) {
+  #biliauto-panel {
+    width: calc(100vw - 24px);
+    max-width: none;
+    bottom: 16px;
+    left: 12px !important;
+    right: 12px !important;
+    transform: none !important;
+  }
+  .tm-material-header-title {
+    font-size: 14px;
+  }
+  .tm-material-item-config {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+  .tm-material-item-actions {
+    justify-content: flex-start;
+  }
+  .tm-material-toolbar {
+    flex-wrap: nowrap; gap: 0.25rem;
+  }
+  .tm-material-btn {
+    min-width: 60px;
+    padding: 0 12px;
+    height: 36px;
+    font-size: 12px;
+  }
+  .tm-material-btn-sm {
+    min-width: 44px;
+    padding: 0 8px;
+  }
+}
+</style>
+
+<div class="tm-material-header">
+  <span class="tm-material-header-title">
+BiliAuto
+<span class="tm-material-header-badge">v\${CONFIG.VERSION}</span>
+<span class="tm-login-status-badge" data-ba="loginStatusBadge" style="display:\${CONFIG.QQ_ID?'':'none'}">✅ \${CONFIG.QQ_ID}</span>
+  </span>
+  <span class="tm-material-header-actions">
+<button class="tm-material-icon-btn" data-ba="logout" title="退出登录" style="display:\${CONFIG.QQ_ID?'':'none'}">🚪</button>
+<button class="tm-material-icon-btn" data-ba="copyPageInfo" title="复制当前页面信息">📋</button>
+<button class="tm-material-icon-btn" data-ba="toggleDark" title="切换夜间模式">🌙</button>
+<button class="tm-material-icon-btn" data-ba="closePanel" title="关闭面板">✕</button>
+  </span>
+</div>
+
+<div class="tm-material-body">
+
+  <div class="tm-material-meta" data-ba="meta"></div>
+
+  <div class="tm-material-toolbar">
+<input class="tm-material-input" data-ba="addTaskInput" placeholder="添加 task_id" style="flex:1">
+<button class="tm-material-btn" data-ba="addTask">添加</button>
+  </div>
+
+  <div class="tm-material-input-row">
+    <input class="tm-material-input" data-ba="manual" placeholder="输入 task_id 后跳转">
+    <button class="tm-material-btn" data-ba="manualJump">跳转</button>
+  </div>
+
+  <input class="tm-material-input" data-ba="filter" placeholder="筛选任务名称或 ID">
+
+  <div class="tm-material-list" data-ba="list"></div>
+
+  <div class="tm-material-toolbar" style="margin-top:8px;justify-content:space-between">
+<div style="display:flex;gap:4px">
+  <button class="tm-material-btn tm-material-btn-primary tm-material-btn-sm" data-ba="runAll">执行全部</button>
+  <button class="tm-material-btn tm-material-btn-sm" data-ba="refresh">刷新</button>
+</div>
+<div style="display:flex;gap:4px">
+  <button class="tm-material-btn tm-material-btn-sm" data-ba="defaults">重置</button>
+  <button class="tm-material-btn tm-material-btn-accent tm-material-btn-sm" data-ba="clearAll">清空</button>
+  <button class="tm-material-btn tm-material-btn-accent tm-material-btn-sm" data-ba="logout" style="display:\${CONFIG.QQ_ID?'':'none'}">退出</button>
+</div>
+  </div>
+
+  <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
+<span class="tm-material-chip" data-ba="taskCount">0 个任务</span>
+  </div>
+
+  <div class="tm-material-status" data-ba="status"></div>
+</div>
+
+<!-- 登录界面 HTML（仿 OIDC 风格） -->
+<div id="biliauto-login-overlay">
+  <div class="bili-login-glass">
+    <div class="bili-login-inner">
+      <!-- 左侧：桌面端显示 -->
+      <div class="bili-login-left">
+        <div class="bili-login-header">
+          <div class="bili-login-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.5">
+              <path d="M12 2L2 7l10 5 10-5-10-5z" stroke="currentColor"/>
+              <path d="M2 17l10 5 10-5" stroke="currentColor"/>
+              <path d="M2 12l10 5 10-5" stroke="currentColor"/>
+            </svg>
+          </div>
+          <div>
+            <h1 class="bili-login-title">授权登录</h1>
+            <p class="bili-login-subtitle"><strong class="bili-login-accent">BiliAuto 抢码系统</strong> 请求访问你的账号</p>
+          </div>
+        </div>
+        <div>
+          <p class="bili-login-perms-title">请求的权限</p>
+          <div class="bili-login-perm-item">
+            <div class="bili-login-perm-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </div>
+            <div>
+              <p class="bili-login-perm-name">openid</p>
+              <p class="bili-login-perm-desc">识别你的账号主体，用于登录鉴权。</p>
+            </div>
+          </div>
+          <div class="bili-login-perm-item">
+            <div class="bili-login-perm-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </div>
+            <div>
+              <p class="bili-login-perm-name">profile</p>
+              <p class="bili-login-perm-desc">读取昵称等基础资料，用于展示个人信息。</p>
+            </div>
+          </div>
+          <div class="bili-login-perm-item">
+            <div class="bili-login-perm-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </div>
+            <div>
+              <p class="bili-login-perm-name">API 访问</p>
+              <p class="bili-login-perm-desc">使用抢码任务相关接口权限。</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 右侧：验证码区域 -->
+      <div class="bili-login-right">
+        <!-- 移动端显示的应用信息 -->
+        <div class="bili-login-mobile-only bili-login-mobile-header">
+          <div class="bili-login-mobile-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.5">
+              <path d="M12 2L2 7l10 5 10-5-10-5z" stroke="currentColor"/>
+              <path d="M2 17l10 5 10-5" stroke="currentColor"/>
+              <path d="M2 12l10 5 10-5" stroke="currentColor"/>
+            </svg>
+          </div>
+          <h1 class="bili-login-title">授权登录</h1>
+          <p class="bili-login-subtitle"><strong class="bili-login-accent">BiliAuto 抢码系统</strong> 请求访问你的账号</p>
+        </div>
+
+        <div class="bili-login-code-section">
+          <p class="bili-login-code-label">验证码</p>
+          <div class="bili-login-code-chars" data-ba="loginCodeDisplay">
+            <span class="bili-login-code-char">-</span>
+            <span class="bili-login-code-char">-</span>
+            <span class="bili-login-code-char">-</span>
+            <span class="bili-login-code-char">-</span>
+            <span class="bili-login-code-char">-</span>
+            <span class="bili-login-code-char">-</span>
+          </div>
+        </div>
+
+        <div class="bili-login-send-info">
+          <div class="bili-login-send-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+            </svg>
+          </div>
+          <div>
+            <p class="bili-login-send-title">发送到群聊</p>
+            <p class="bili-login-send-group">1082333812</p>
+          </div>
+        </div>
+
+        <div data-ba="loginStatus" class="bili-login-status">等待验证...</div>
+        <button class="bili-login-btn" data-ba="startLogin">开始登录</button>
+      </div>
+    </div>
+  </div>
+</div><style>
+/* 强制一屏显示 - 覆盖原有样式 */
+#biliauto-login-overlay {
+  align-items: center !important;
+  padding: 8px !important;
+}
+.bili-login-glass {
+  max-height: 95vh !important;
+  overflow-y: auto !important;
+  padding: 0.75rem !important;
+}
+.bili-login-inner {
+  display: flex !important;
+  flex-direction: column !important;
+}
+.bili-login-right {
+  padding: 0 !important;
+}
+.bili-login-mobile-header {
+  margin-bottom: 0.5rem !important;
+}
+.bili-login-mobile-icon {
+  width: 2rem !important;
+  height: 2rem !important;
+  margin-bottom: 0.25rem !important;
+}
+.bili-login-title {
+  font-size: 1rem !important;
+  margin-bottom: 0 !important;
+}
+.bili-login-subtitle {
+  font-size: 0.6rem !important;
+  margin-top: 0 !important;
+}
+.bili-login-code-section {
+  padding: 0.5rem !important;
+  margin-bottom: 0.5rem !important;
+}
+.bili-login-code-label {
+  margin-bottom: 0.25rem !important;
+  font-size: 0.55rem !important;
+}
+.bili-login-code-chars {
+  gap: 0.2rem !important;
+  flex-wrap: nowrap !important;
+}
+.bili-login-code-char {
+  width: 12vw !important;
+  max-width: 2.2rem !important;
+  height: 8vw !important;
+  max-height: 2rem !important;
+  line-height: 8vw !important;
+  font-size: 4vw !important;
+  border-radius: 0.4rem !important;
+}
+.bili-login-send-info {
+  padding: 0.3rem 0.5rem !important;
+  margin-bottom: 0.5rem !important;
+  gap: 0.4rem !important;
+}
+.bili-login-send-icon {
+  padding: 0.2rem !important;
+}
+.bili-login-send-icon svg {
+  width: 14px !important;
+  height: 14px !important;
+}
+.bili-login-send-title {
+  font-size: 0.5rem !important;
+}
+.bili-login-send-group {
+  font-size: 0.65rem !important;
+  margin-top: 0 !important;
+}
+.bili-login-status {
+  font-size: 0.6rem !important;
+  margin-bottom: 0.3rem !important;
+  min-height: auto !important;
+}
+.bili-login-btn {
+  height: 2rem !important;
+  font-size: 0.7rem !important;
+  padding: 0 !important;
+}
+.mobile-only .bili-login-perms {
+  max-height: 100px !important;
+  overflow-y: auto !important;
+}
+.bili-login-perm-item {
+  padding: 0.3rem !important;
+  gap: 0.4rem !important;
+}
+.bili-login-perm-name {
+  font-size: 0.6rem !important;
+}
+.bili-login-perm-desc {
+  font-size: 0.5rem !important;
+}
+.bili-login-perms-title {
+  margin-bottom: 0.2rem !important;
+  font-size: 0.55rem !important;
+}
+</style>
+`;
+  
+  // Mock GM_* APIs
+  var _store = {};
+  window.GM_getValue = function(k, d) { return _store[k] !== undefined ? _store[k] : d; };
+  window.GM_setValue = function(k, v) { _store[k] = v; };
+  window.GM_deleteValue = function(k) { delete _store[k]; };
+  window.GM_listValues = function() { return Object.keys(_store); };
+  window.GM_xmlhttpRequest = function(opts) {
+    var xhr = new XMLHttpRequest();
+    xhr.open(opts.method || 'GET', opts.url);
+    xhr.onload = function() {
+      if (opts.onload) opts.onload({ responseText: xhr.responseText, status: xhr.status });
+    };
+    xhr.onerror = function() {
+      if (opts.onerror) opts.onerror({ statusText: xhr.statusText });
+    };
+    xhr.send(opts.data || null);
+  };
+  window.GM_notification = function(t) { console.log('[TEST] GM_notification:', t); };
+  window.GM_getResourceText = function(name) {
+    if (name === 'TEMPLATE_HTML') return window._INJECTED_TEMPLATE;
+    return '';
+  };
+  
+  // ==/UserScript==
 
 (function () {
   'use strict';
@@ -532,8 +1747,6 @@
         else if (action === 'addTask') this.addCustomTask();
         else if (action === 'removeTask') this.removeTask(target.getAttribute('data-taskid'));
         else if (action === 'defaults') this.applyDefaults();
-        else if (action === 'pagePrev') { this.state._page = (this.state._page || 1) - 1; this.renderList(); }
-        else if (action === 'pageNext') { this.state._page = (this.state._page || 1) + 1; this.renderList(); }
         else if (action === 'clearAll') this.clearAllTasks();
         else if (action === 'copyPageInfo') this.copyPageInfo();
         else if (action === 'toggleDark') this.toggleDarkMode();
@@ -590,69 +1803,6 @@
       if (el) {
         el.textContent = text || '';
         el.style.color = text && text.includes('失败') ? 'var(--tm-accent)' : '';
-      }
-      // 同时更新页面上替换的日志区域
-      this.updatePageLog(text);
-    },
-
-    // 替换B站页面上的"领取须知"区域为抢码日志面板
-    injectLogPanel() {
-      const notices = document.querySelectorAll('div, section');
-      let targetEl = null;
-      for (const el of notices) {
-        if (el.textContent.includes('领取须知') && el.children.length >= 2 && el.children.length <= 5) {
-          targetEl = el;
-          break;
-        }
-      }
-      if (!targetEl) return;
-      this._originalNoticeHTML = targetEl.innerHTML;
-      targetEl.innerHTML = `
-        <div style="padding:8px 0;font-size:13px;color:#666;">
-          <div style="font-weight:600;font-size:14px;color:#333;margin-bottom:6px;">📋 抢码运行状态</div>
-          <div id="tm-page-log" style="font-size:12px;line-height:1.8;">
-            <div>⏳ 等待任务开始...</div>
-            <div>📦 任务数：<span id="tm-log-taskCount">-</span></div>
-            <div>⏰ 距最近任务开始：<span id="tm-log-countdown">-</span></div>
-            <div>📊 日志：<span id="tm-log-status" style="color:#999;">等待中</span></div>
-          </div>
-        </div>
-      `;
-    },
-
-    updatePageLog(text) {
-      const logEl = document.getElementById('tm-page-log');
-      if (!logEl) return;
-      const statusEl = document.getElementById('tm-log-status');
-      if (statusEl && text) statusEl.textContent = text;
-      const countEl = document.getElementById('tm-log-taskCount');
-      if (countEl) countEl.textContent = String(this.state.tasks.length);
-      if (!this._countdownTimer) {
-        this._countdownTimer = setInterval(() => {
-          const el = document.getElementById('tm-log-countdown');
-          if (!el) { clearInterval(this._countdownTimer); this._countdownTimer = null; return; }
-          let minWait = '-';
-          const now = Date.now();
-          for (const task of this.state.tasks) {
-            const taskId = String(task.task_value || task.value || task.task_id || '');
-            const cfg = this.state.taskConfigs[taskId];
-            if (cfg && cfg.start_time) {
-              const parts = cfg.start_time.split(':');
-              if (parts.length === 3) {
-                const target = new Date();
-                target.setHours(+parts[0], +parts[1], +parts[2], 0);
-                if (target <= now) target.setDate(target.getDate() + 1);
-                const diff = Math.max(0, Math.floor((target - now) / 1000));
-                const h = Math.floor(diff / 3600);
-                const m = Math.floor((diff % 3600) / 60);
-                const s = diff % 60;
-                const wait = `${h}时${m}分${s}秒`;
-                if (minWait === '-' || diff < parseInt(now)) minWait = wait;
-              }
-            }
-          }
-          el.textContent = minWait;
-        }, 1000);
       }
     },
 
@@ -1083,11 +2233,11 @@
       html += '<span style="display:flex;gap:4px;align-items:center">';
       html += '<button class="tm-material-btn tm-material-btn-xs" data-ba="pagePrev"';
       if (page <= 1) html += ' disabled style="opacity:0.4"';
-      html += '>上一页</button>';
+      html += '>‹ 上一页</button>';
       html += '<span>' + page + '/' + totalPages + '</span>';
       html += '<button class="tm-material-btn tm-material-btn-xs" data-ba="pageNext"';
       if (page >= totalPages) html += ' disabled style="opacity:0.4"';
-      html += '>下一页</button></span></div>';
+      html += '>下一页 ›</button></span></div>';
       for (var ti = 0; ti < pageTasks.length; ti++) {
         var task = pageTasks[ti];
         var taskId = String(task.task_value || task.value || task.task_id || '');
@@ -1113,6 +2263,7 @@
       }
       list.innerHTML = html;
     },
+
 
     escape(text) {
       return String(text).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
@@ -1587,7 +2738,6 @@
     Util.info(`API 地址: ${CONFIG.API_BASE}`);
 
     Panel.init();
-    Panel.injectLogPanel();
 
     if (!isLoggedIn()) {
       Util.info('未登录，显示全屏登录界面');
@@ -1746,5 +2896,7 @@
   } else {
     main();
   }
+
+})();
 
 })();

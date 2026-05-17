@@ -1,22 +1,35 @@
-// ==UserScript==
-// @name         BiliAutoClicker - 油猴客户端
-// @namespace    https://github.com/under-the-ocean
-// @version      0.7.0
-// @author       under-the-ocean
-// @match        https://www.bilibili.com/blackboard/era/award-exchange.html?*
-// @connect      150.242.246.137
-// @grant        GM_xmlhttpRequest
-// @grant        GM_notification
-// @grant        GM_setValue
-// @grant        GM_getValue
-// @grant        GM_deleteValue
-// @grant        GM_listValues
-// @grant        GM_getResourceText
-// @resource     TEMPLATE_HTML https://gh-proxy.com/https://raw.githubusercontent.com/under-the-ocean/Bili_monkey/main/template.html
-// @run-at       document-start
-// @downloadURL  https://gh-proxy.com/https://raw.githubusercontent.com/under-the-ocean/Bili_monkey/main/biliauto-tampermonkey-client.user.js
-// @updateURL    https://gh-proxy.com/https://raw.githubusercontent.com/under-the-ocean/Bili_monkey/main/biliauto-tampermonkey-client.user.js
-// ==/UserScript==
+
+(function() {
+  // Mock GM_* APIs for testing
+  if (typeof GM_getValue === 'undefined') {
+    var _store = {};
+    window.GM_getValue = function(k, d) { return _store[k] !== undefined ? _store[k] : d; };
+    window.GM_setValue = function(k, v) { _store[k] = v; };
+    window.GM_deleteValue = function(k) { delete _store[k]; };
+    window.GM_listValues = function() { return Object.keys(_store); };
+    window.GM_xmlhttpRequest = function(opts) {
+      var xhr = new XMLHttpRequest();
+      xhr.open(opts.method || 'GET', opts.url);
+      xhr.onload = function() {
+        if (opts.onload) opts.onload({ responseText: xhr.responseText, status: xhr.status });
+      };
+      xhr.onerror = function() {
+        if (opts.onerror) opts.onerror({ statusText: xhr.statusText });
+      };
+      xhr.send(opts.data || null);
+    };
+    window.GM_notification = function(t) { console.log('[GM_notification]', t); };
+    window.GM_getResourceText = function(name) {
+      if (name === 'TEMPLATE_HTML') {
+        // Fetch template from server
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', 'https://gh-proxy.com/https://raw.githubusercontent.com/under-the-ocean/Bili_monkey/main/template.html', false);
+        xhr.send();
+        return xhr.responseText;
+      }
+      return '';
+    };
+  }
 // ==/UserScript==
 
 (function () {
@@ -532,8 +545,6 @@
         else if (action === 'addTask') this.addCustomTask();
         else if (action === 'removeTask') this.removeTask(target.getAttribute('data-taskid'));
         else if (action === 'defaults') this.applyDefaults();
-        else if (action === 'pagePrev') { this.state._page = (this.state._page || 1) - 1; this.renderList(); }
-        else if (action === 'pageNext') { this.state._page = (this.state._page || 1) + 1; this.renderList(); }
         else if (action === 'clearAll') this.clearAllTasks();
         else if (action === 'copyPageInfo') this.copyPageInfo();
         else if (action === 'toggleDark') this.toggleDarkMode();
@@ -590,69 +601,6 @@
       if (el) {
         el.textContent = text || '';
         el.style.color = text && text.includes('失败') ? 'var(--tm-accent)' : '';
-      }
-      // 同时更新页面上替换的日志区域
-      this.updatePageLog(text);
-    },
-
-    // 替换B站页面上的"领取须知"区域为抢码日志面板
-    injectLogPanel() {
-      const notices = document.querySelectorAll('div, section');
-      let targetEl = null;
-      for (const el of notices) {
-        if (el.textContent.includes('领取须知') && el.children.length >= 2 && el.children.length <= 5) {
-          targetEl = el;
-          break;
-        }
-      }
-      if (!targetEl) return;
-      this._originalNoticeHTML = targetEl.innerHTML;
-      targetEl.innerHTML = `
-        <div style="padding:8px 0;font-size:13px;color:#666;">
-          <div style="font-weight:600;font-size:14px;color:#333;margin-bottom:6px;">📋 抢码运行状态</div>
-          <div id="tm-page-log" style="font-size:12px;line-height:1.8;">
-            <div>⏳ 等待任务开始...</div>
-            <div>📦 任务数：<span id="tm-log-taskCount">-</span></div>
-            <div>⏰ 距最近任务开始：<span id="tm-log-countdown">-</span></div>
-            <div>📊 日志：<span id="tm-log-status" style="color:#999;">等待中</span></div>
-          </div>
-        </div>
-      `;
-    },
-
-    updatePageLog(text) {
-      const logEl = document.getElementById('tm-page-log');
-      if (!logEl) return;
-      const statusEl = document.getElementById('tm-log-status');
-      if (statusEl && text) statusEl.textContent = text;
-      const countEl = document.getElementById('tm-log-taskCount');
-      if (countEl) countEl.textContent = String(this.state.tasks.length);
-      if (!this._countdownTimer) {
-        this._countdownTimer = setInterval(() => {
-          const el = document.getElementById('tm-log-countdown');
-          if (!el) { clearInterval(this._countdownTimer); this._countdownTimer = null; return; }
-          let minWait = '-';
-          const now = Date.now();
-          for (const task of this.state.tasks) {
-            const taskId = String(task.task_value || task.value || task.task_id || '');
-            const cfg = this.state.taskConfigs[taskId];
-            if (cfg && cfg.start_time) {
-              const parts = cfg.start_time.split(':');
-              if (parts.length === 3) {
-                const target = new Date();
-                target.setHours(+parts[0], +parts[1], +parts[2], 0);
-                if (target <= now) target.setDate(target.getDate() + 1);
-                const diff = Math.max(0, Math.floor((target - now) / 1000));
-                const h = Math.floor(diff / 3600);
-                const m = Math.floor((diff % 3600) / 60);
-                const s = diff % 60;
-                const wait = `${h}时${m}分${s}秒`;
-                if (minWait === '-' || diff < parseInt(now)) minWait = wait;
-              }
-            }
-          }
-          el.textContent = minWait;
-        }, 1000);
       }
     },
 
@@ -1083,11 +1031,11 @@
       html += '<span style="display:flex;gap:4px;align-items:center">';
       html += '<button class="tm-material-btn tm-material-btn-xs" data-ba="pagePrev"';
       if (page <= 1) html += ' disabled style="opacity:0.4"';
-      html += '>上一页</button>';
+      html += '>‹ 上一页</button>';
       html += '<span>' + page + '/' + totalPages + '</span>';
       html += '<button class="tm-material-btn tm-material-btn-xs" data-ba="pageNext"';
       if (page >= totalPages) html += ' disabled style="opacity:0.4"';
-      html += '>下一页</button></span></div>';
+      html += '>下一页 ›</button></span></div>';
       for (var ti = 0; ti < pageTasks.length; ti++) {
         var task = pageTasks[ti];
         var taskId = String(task.task_value || task.value || task.task_id || '');
@@ -1113,6 +1061,7 @@
       }
       list.innerHTML = html;
     },
+
 
     escape(text) {
       return String(text).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
@@ -1587,7 +1536,6 @@
     Util.info(`API 地址: ${CONFIG.API_BASE}`);
 
     Panel.init();
-    Panel.injectLogPanel();
 
     if (!isLoggedIn()) {
       Util.info('未登录，显示全屏登录界面');
@@ -1747,4 +1695,5 @@
     main();
   }
 
+})();
 })();
