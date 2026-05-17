@@ -532,6 +532,8 @@
         else if (action === 'addTask') this.addCustomTask();
         else if (action === 'removeTask') this.removeTask(target.getAttribute('data-taskid'));
         else if (action === 'defaults') this.applyDefaults();
+        else if (action === 'pagePrev') { this.state._page = (this.state._page || 1) - 1; this.renderList(); }
+        else if (action === 'pageNext') { this.state._page = (this.state._page || 1) + 1; this.renderList(); }
         else if (action === 'clearAll') this.clearAllTasks();
         else if (action === 'copyPageInfo') this.copyPageInfo();
         else if (action === 'toggleDark') this.toggleDarkMode();
@@ -999,7 +1001,29 @@
         list.innerHTML = '<div class="tm-material-empty">暂无任务<br>点击「刷新」拉取或输入 task_id 添加</div>';
         return;
       }
-      list.innerHTML = tasks.map(task => {
+      list.innerHTML = (() => {
+        // 分页: 每页10个
+        const PER_PAGE = 10;
+        const totalPages = Math.max(1, Math.ceil(tasks.length / PER_PAGE));
+        let page = this.state._page || 1;
+        if (page > totalPages) page = totalPages;
+        if (page < 1) page = 1;
+        this.state._page = page;
+        const start = (page - 1) * PER_PAGE;
+        const pageTasks = tasks.slice(start, start + PER_PAGE);
+
+        let html = '';
+        // 分页导航
+        html += `<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;margin-bottom:4px;font-size:12px;color:var(--tm-text-secondary)">
+          <span>共 ${tasks.length} 个任务</span>
+          <span style="display:flex;gap:4px;align-items:center">
+            <button class="tm-material-btn tm-material-btn-xs" data-ba="pagePrev" ${page <= 1 ? 'disabled style="opacity:0.4"' : ''}>‹ 上一页</button>
+            <span>${page}/${totalPages}</span>
+            <button class="tm-material-btn tm-material-btn-xs" data-ba="pageNext" ${page >= totalPages ? 'disabled style="opacity:0.4"' : ''}>下一页 ›</button>
+          </span>
+        </div>`;
+
+        html += pageTasks.map(task => {
         const taskId = String(task.task_value || task.value || task.task_id || '');
         const name = String(task.task_key || task.name || task.id || '未命名任务');
         const cfg = this.state.taskConfigs[taskId] || Util.defaultTaskConfig(taskId);
