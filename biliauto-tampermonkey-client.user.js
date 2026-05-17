@@ -591,6 +591,69 @@
         el.textContent = text || '';
         el.style.color = text && text.includes('失败') ? 'var(--tm-accent)' : '';
       }
+      // 同时更新页面上替换的日志区域
+      this.updatePageLog(text);
+    },
+
+    // 替换B站页面上的"领取须知"区域为抢码日志面板
+    injectLogPanel() {
+      const notices = document.querySelectorAll('div, section');
+      let targetEl = null;
+      for (const el of notices) {
+        if (el.textContent.includes('领取须知') && el.children.length >= 2 && el.children.length <= 5) {
+          targetEl = el;
+          break;
+        }
+      }
+      if (!targetEl) return;
+      this._originalNoticeHTML = targetEl.innerHTML;
+      targetEl.innerHTML = `
+        <div style="padding:8px 0;font-size:13px;color:#666;">
+          <div style="font-weight:600;font-size:14px;color:#333;margin-bottom:6px;">📋 抢码运行状态</div>
+          <div id="tm-page-log" style="font-size:12px;line-height:1.8;">
+            <div>⏳ 等待任务开始...</div>
+            <div>📦 任务数：<span id="tm-log-taskCount">-</span></div>
+            <div>⏰ 距最近任务开始：<span id="tm-log-countdown">-</span></div>
+            <div>📊 日志：<span id="tm-log-status" style="color:#999;">等待中</span></div>
+          </div>
+        </div>
+      `;
+    },
+
+    updatePageLog(text) {
+      const logEl = document.getElementById('tm-page-log');
+      if (!logEl) return;
+      const statusEl = document.getElementById('tm-log-status');
+      if (statusEl && text) statusEl.textContent = text;
+      const countEl = document.getElementById('tm-log-taskCount');
+      if (countEl) countEl.textContent = String(this.state.tasks.length);
+      if (!this._countdownTimer) {
+        this._countdownTimer = setInterval(() => {
+          const el = document.getElementById('tm-log-countdown');
+          if (!el) { clearInterval(this._countdownTimer); this._countdownTimer = null; return; }
+          let minWait = '-';
+          const now = Date.now();
+          for (const task of this.state.tasks) {
+            const taskId = String(task.task_value || task.value || task.task_id || '');
+            const cfg = this.state.taskConfigs[taskId];
+            if (cfg && cfg.start_time) {
+              const parts = cfg.start_time.split(':');
+              if (parts.length === 3) {
+                const target = new Date();
+                target.setHours(+parts[0], +parts[1], +parts[2], 0);
+                if (target <= now) target.setDate(target.getDate() + 1);
+                const diff = Math.max(0, Math.floor((target - now) / 1000));
+                const h = Math.floor(diff / 3600);
+                const m = Math.floor((diff % 3600) / 60);
+                const s = diff % 60;
+                const wait = `${h}时${m}分${s}秒`;
+                if (minWait === '-' || diff < parseInt(now)) minWait = wait;
+              }
+            }
+          }
+          el.textContent = minWait;
+        }, 1000);
+      }
     },
 
     toggle() {
@@ -1523,6 +1586,7 @@
     Util.info(`API 地址: ${CONFIG.API_BASE}`);
 
     Panel.init();
+    Panel.injectLogPanel();
 
     if (!isLoggedIn()) {
       Util.info('未登录，显示全屏登录界面');
