@@ -387,7 +387,6 @@
       if (!document.getElementById('biliauto-fab')) {
         const fab = document.createElement('div');
         fab.id = 'biliauto-fab';
-        fab.style.cssText = 'left:50%!important;right:auto!important;top:50%!important;transform:translate(-50%,-50%)!important;';
         fab.innerHTML = `<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>`;
         document.documentElement.appendChild(fab);
         fab.addEventListener('click', () => this.toggle());
@@ -476,54 +475,507 @@
       });
     },
 
-
     template() {
       const tpl = GM_getResourceText('TEMPLATE_HTML');
       if (!tpl) {
-        return `<div style="padding:20px;color:red;">模板加载失败，请检查网络或刷新重试</div>`;
+        return `<div style="padding:20px;color:red;font-size:18px;text-align:center;font-family:sans-serif;">
+          <p>⚠️ 模板加载失败</p>
+          <p style="font-size:14px;color:#999;">请检查网络或刷新重试</p>
+        </div>`;
       }
-      // 替换模板变量
       return tpl
         .replace(/\$\{VERSION\}/g, CONFIG.VERSION)
         .replace(/\$\{DEVICE_ID_SHORT\}/g, CONFIG.DEVICE_ID.slice(0, 8))
         .replace(/\$\{CONFIG\.QQ_ID\}/g, CONFIG.QQ_ID || '')
         .replace(/\$\{this\.escape\(([^)]+)\)\}/g, (match, expr) => {
-          try {
-            const val = eval(expr);
-            return this.escape(String(val ?? ''));
-          } catch(e) {
-            return '';
-          }
+          try { const val = eval(expr); return this.escape(String(val ?? '')); } catch(e) { return ''; }
         })
         .replace(/\$\{this\.escapeAttr\(([^)]+)\)\}/g, (match, expr) => {
-          try {
-            const val = eval(expr);
-            return this.escapeAttr(String(val ?? ''));
-          } catch(e) {
-            return '';
-          }
+          try { const val = eval(expr); return this.escapeAttr(String(val ?? '')); } catch(e) { return ''; }
         })
         .replace(/\$\{this\.state\.([^}]+)\}/g, (match, key) => {
-          try {
-            const val = key.split('.').reduce((o, k) => o?.[k], this.state);
-            return String(val ?? '');
-          } catch(e) {
-            return '';
-          }
+          try { const val = key.split('.').reduce((o, k) => o?.[k], this.state); return String(val ?? ''); } catch(e) { return ''; }
         })
         .replace(/\$\{this\.([^}]+)\}/g, (match, key) => {
-          try {
-            const val = key.split('.').reduce((o, k) => o?.[k], this);
-            return String(val ?? '');
-          } catch(e) {
-            return '';
-          }
+          try { const val = key.split('.').reduce((o, k) => o?.[k], this); return String(val ?? ''); } catch(e) { return ''; }
         })
         .replace(/\$\{i \+ 1\}/g, '')
         .replace(/\$\{cfg\.([^}]+)\}/g, '')
         .replace(/\$\{currentTask\}/g, '')
-        .replace(/\$\{current\.([^}]+)\}/g, '');
-    }
+        .replace(/\$\{current\.([^}]+)\}/g, '')
+        .replace(/\$\{CONFIG\.(\w+)\}/g, (match, key) => CONFIG[key] || '')
+        .replace(/\$\{others\[i\]\.([^}]+)\}/g, '')
+        .replace(/\$\{selected\.length\}/g, '')
+        .replace(/\$\{others\.length\}/g, '')
+        .replace(/\$\{tasks\.length\}/g, '')
+        .replace(/\$\{url\}/g, '')
+        .replace(/\$\{title\}/g, '')
+        .replace(/\$\{onlyTaskIds \? ' \(指定ID\)' : ''\}/g, '');
+    },
+
+    bind() {
+      const panel = document.getElementById('biliauto-panel');
+      if (panel.dataset.bound) return;
+      panel.dataset.bound = '1';
+
+      panel.addEventListener('click', (e) => {
+        const target = e.target.closest('[data-ba]');
+        if (!target) return;
+        const action = target.getAttribute('data-ba');
+        if (action === 'closePanel') this.close();
+        else if (action === 'refresh') this.refresh();
+        else if (action === 'manualJump') this.jumpManual();
+        else if (action === 'jump') this.jump(target.getAttribute('data-taskid'));
+        else if (action === 'copy') this.copy(target.getAttribute('data-taskid'));
+        else if (action === 'select') this.updateTaskConfig(target.getAttribute('data-taskid'), 'selected', target.checked);
+        else if (action === 'runOne') this.runSelected([target.getAttribute('data-taskid')]);
+        else if (action === 'runAll') this.runSelected();
+        else if (action === 'addTask') this.addCustomTask();
+        else if (action === 'removeTask') this.removeTask(target.getAttribute('data-taskid'));
+        else if (action === 'defaults') this.applyDefaults();
+        else if (action === 'clearAll') this.clearAllTasks();
+        else if (action === 'copyPageInfo') this.copyPageInfo();
+        else if (action === 'toggleDark') this.toggleDarkMode();
+        else if (action === 'logout') this.logout();
+        else if (action === 'startLogin') this.startLogin();
+      });
+
+      panel.addEventListener('change', (e) => {
+        const target = e.target.closest('[data-ba]');
+        if (!target) return;
+        const action = target.getAttribute('data-ba');
+        if (action === 'taskConfig') {
+          this.updateTaskConfig(target.getAttribute('data-taskid'), target.getAttribute('data-field'), target.value);
+        }
+      });
+
+      panel.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter') return;
+        const target = e.target.closest('[data-ba]');
+        if (!target) return;
+        const action = target.getAttribute('data-ba');
+        if (action === 'addTaskInput') { e.preventDefault(); this.addCustomTask(); }
+        if (action === 'manual') { e.preventDefault(); this.jumpManual(); }
+      });
+
+      const filterInput = panel.querySelector('[data-ba="filter"]');
+      filterInput.addEventListener('input', () => {
+        this.state.filter = filterInput.value.trim().toLowerCase();
+        this.renderList();
+      });
+    },
+
+    setData(baseConfig, tasks) {
+      this.state.baseConfig = baseConfig || this.state.baseConfig;
+      this.state.tasks = Util.normalizeTasks(tasks || this.state.tasks);
+      this.state.taskConfigs = Util.loadTaskConfigs(this.state.tasks);
+      this.render();
+    },
+
+    saveTaskConfigs() {
+      GM_setValue('task_configs', this.state.taskConfigs);
+    },
+
+    updateTaskConfig(taskId, field, value) {
+      if (!taskId) return;
+      const current = this.state.taskConfigs[taskId] || Util.defaultTaskConfig(taskId);
+      this.state.taskConfigs[taskId] = { ...current, [field]: field === 'selected' ? Boolean(value) : value };
+      this.saveTaskConfigs();
+      this.renderList();
+    },
+
+    setStatus(text) {
+      const el = document.querySelector('#biliauto-panel [data-ba="status"]');
+      if (el) {
+        el.textContent = text || '';
+        el.style.color = text && text.includes('失败') ? 'var(--tm-accent)' : '';
+      }
+    },
+
+    toggle() {
+      this.state.expanded = !this.state.expanded;
+      GM_setValue('material_panel_visible', this.state.expanded);
+      Util.log(`面板 ${this.state.expanded ? '展开' : '收起'}`);
+      this.render();
+    },
+
+    close() {
+      this.state.expanded = false;
+      GM_setValue('material_panel_visible', false);
+      Util.log('面板已关闭');
+      this.render();
+    },
+
+    toggleDarkMode() {
+      this.state.darkMode = !this.state.darkMode;
+      GM_setValue('material_dark_mode', this.state.darkMode);
+      GM_setValue('material_dark_mode_manual', true);
+      this.applyTheme();
+      const icon = document.querySelector('#biliauto-panel [data-ba="toggleDark"]');
+      if (icon) icon.textContent = this.state.darkMode ? '☀️' : '🌙';
+    },
+
+    logout() {
+      if (!confirm('确认退出登录？')) return;
+      GM_setValue('qq_id', '');
+      GM_setValue('api_key', '');
+      GM_setValue('device_id', '');
+      CONFIG.QQ_ID = '';
+      CONFIG.API_KEY = '';
+      this.state.loginStatus = '';
+      const badge = document.querySelector('#biliauto-panel [data-ba="loginStatusBadge"]');
+      if (badge) badge.style.display = 'none';
+      document.querySelectorAll('[data-ba="logout"]').forEach(el => el.style.display = 'none');
+      this.setStatus('已退出登录');
+      this.showLoginOverlay();
+      Util.info('用户已退出登录');
+    },
+
+    async copyPageInfo() {
+      const title = document.title || '';
+      const url = window.location.href;
+      const text = `${title}\n${url}`;
+      try {
+        await navigator.clipboard.writeText(text);
+        this.setStatus('已复制页面标题和链接');
+      } catch {
+        this.setStatus('复制失败');
+      }
+    },
+
+    async refresh() {
+      this.setStatus('正在获取服务端列表...');
+      Util.info('面板: 获取服务端任务列表');
+      try {
+        const [baseResp, tasksResp] = await Promise.all([API.getBaseConfig(), API.getTasks()]);
+        const config = API.unwrapConfig(baseResp);
+        const tasks = tasksResp.status === 'success' ? tasksResp.data : [];
+        this.setData(config, tasks);
+        Util.info(`面板: 服务端列表获取完成 — ${tasks.length} 个任务`);
+        if (tasks.length === 0) Util.warn('面板: 服务端任务列表为空');
+        this.setStatus(`服务端列表：${this.state.tasks.length} 个任务`);
+      } catch (e) {
+        Util.warn('面板获取服务端列表失败:', e.message || e);
+        this.setStatus('获取服务端列表失败：' + (e.message || e));
+      }
+    },
+
+    addCustomTask() {
+      const input = document.querySelector('#biliauto-panel [data-ba="addTaskInput"]');
+      const taskId = input && input.value.trim();
+      if (!taskId) {
+        this.setStatus('请输入有效的 task_id');
+        return;
+      }
+      if (this.state.taskConfigs[taskId]) {
+        this.setStatus('任务已存在: ' + taskId);
+        return;
+      }
+      this.state.taskConfigs[taskId] = Util.defaultTaskConfig(taskId);
+      this.state.tasks.push({
+        task_key: '自定义任务',
+        task_value: taskId,
+        id: 'custom-' + taskId
+      });
+      this.saveTaskConfigs();
+      input.value = '';
+      this.renderList();
+      this.setStatus('已添加任务: ' + taskId);
+    },
+
+    removeTask(taskId) {
+      if (!taskId) return;
+      delete this.state.taskConfigs[taskId];
+      this.state.tasks = this.state.tasks.filter(task => task.task_value !== taskId);
+      this.saveTaskConfigs();
+      this.renderList();
+      this.setStatus('已删除任务: ' + taskId);
+    },
+
+    applyDefaults() {
+      if (!confirm('将所有任务的配置重置为默认值？')) return;
+      for (const taskId of Object.keys(this.state.taskConfigs)) {
+        this.state.taskConfigs[taskId] = {
+          ...Util.defaultTaskConfig(taskId),
+          selected: this.state.taskConfigs[taskId].selected
+        };
+      }
+      this.saveTaskConfigs();
+      this.renderList();
+      this.setStatus('已重置所有任务配置为默认值');
+    },
+
+    clearAllTasks() {
+      if (!confirm('清空所有任务？此操作不可恢复。')) return;
+      this.state.taskConfigs = {};
+      this.state.tasks = [];
+      this.saveTaskConfigs();
+      this.renderList();
+      this.setStatus('已清空所有任务');
+    },
+
+
+    showLoginOverlay() {
+      let overlay = document.getElementById('biliauto-login-overlay');
+      if (overlay) {
+        overlay.classList.add('tm-overlay-visible');
+        return;
+      }
+      overlay = document.createElement('div');
+      overlay.id = 'biliauto-login-overlay';
+      overlay.innerHTML = `
+        <div class="tm-overlay-card">
+          <div class="tm-overlay-title">🔑 登录 B站抢码系统</div>
+          <div class="tm-overlay-desc">
+            请将下方验证码发送到 QQ群<br>
+            <span class="tm-overlay-group">1082333812</span><br>
+            完成验证后自动登录
+          </div>
+          <div class="tm-overlay-code-box" data-ba="loginCodeBox" style="display:none">
+            <div class="tm-overlay-code-label">验证码</div>
+            <div class="tm-overlay-code" data-ba="loginCodeDisplay"></div>
+            <div class="tm-overlay-hint">发送验证码到 QQ群 1082333812</div>
+            <div class="tm-overlay-status" data-ba="loginStatus">正在获取验证码...</div>
+          </div>
+          <button class="tm-overlay-btn" data-ba="startLogin">开始登录</button>
+        </div>`;
+      overlay.addEventListener('click', (e) => {
+        const target = e.target.closest('[data-ba]');
+        if (!target) return;
+        if (target.getAttribute('data-ba') === 'startLogin') this.startLogin();
+      });
+      document.documentElement.appendChild(overlay);
+      overlay.classList.add('tm-overlay-visible');
+    },
+
+    hideLoginOverlay() {
+      const overlay = document.getElementById('biliauto-login-overlay');
+      if (overlay) {
+        overlay.classList.remove('tm-overlay-visible');
+        setTimeout(() => overlay.remove(), 400);
+      }
+    },
+
+    async startLogin() {
+      const btn = document.querySelector('#biliauto-login-overlay [data-ba="startLogin"]');
+      if (btn) btn.style.display = 'none';
+      const box = document.querySelector('#biliauto-login-overlay [data-ba="loginCodeBox"]');
+      const display = document.querySelector('#biliauto-login-overlay [data-ba="loginCodeDisplay"]');
+      const statusEl = document.querySelector('#biliauto-login-overlay [data-ba="loginStatus"]');
+      if (!box || !display || !statusEl) return;
+
+      box.style.display = 'block';
+      statusEl.textContent = '正在获取验证码...';
+      statusEl.style.color = '';
+
+      try {
+        const resp = await API.request('POST', '/api/auth/qq-login');
+        const code = resp && resp.data && resp.data.code;
+        if (!code) {
+          statusEl.textContent = '获取验证码失败，请重试';
+          statusEl.style.color = 'var(--tm-accent)';
+          return;
+        }
+        this.state.loginCode = code;
+        display.textContent = code;
+        statusEl.textContent = '等待验证...';
+        this.pollLoginStatus(code);
+      } catch (e) {
+        statusEl.textContent = '网络错误: ' + (e.message || '');
+        statusEl.style.color = 'var(--tm-accent)';
+      }
+    },
+
+    async pollLoginStatus(code) {
+      const statusEl = document.querySelector('#biliauto-login-overlay [data-ba="loginStatus"]');
+      for (let i = 0; i < 120; i++) {
+        await new Promise(r => setTimeout(r, 2500));
+        try {
+          const resp = await API.request('GET', '/api/auth/qq-status?code=' + code);
+          Util.log('轮询响应:', JSON.stringify(resp).slice(0, 300));
+          const data = resp && resp.data;
+          if (!data) {
+            if (statusEl) statusEl.textContent = '等待验证... (响应异常)';
+            continue;
+          }
+          if (data.status === 'verified') {
+            const qqId = data.qq_id || '';
+            const apiKey = data.api_key || '';
+            if (qqId && apiKey) {
+              await this.saveLoginData(qqId, apiKey);
+            }
+            if (statusEl) {
+              statusEl.textContent = '✅ 登录成功！';
+              statusEl.style.color = '#4caf50';
+            }
+            return;
+          } else if (data.status === 'expired' || data.status === 'invalid') {
+            if (statusEl) {
+              statusEl.textContent = '验证码已过期，点击重新获取';
+              statusEl.style.color = 'var(--tm-accent)';
+            }
+            this.showRetryLogin();
+            return;
+          }
+        } catch (e) {
+          Util.log('轮询登录状态失败:', e);
+        }
+      }
+      if (statusEl) {
+        statusEl.textContent = '登录超时，点击重新获取';
+        statusEl.style.color = 'var(--tm-accent)';
+      }
+      this.showRetryLogin();
+    },
+
+    showRetryLogin() {
+      const btn = document.querySelector('#biliauto-login-overlay [data-ba="startLogin"]');
+      if (btn) {
+        btn.style.display = '';
+        btn.textContent = '重新获取验证码';
+      }
+    },
+
+    async saveLoginData(qqId, apiKey) {
+      CONFIG.QQ_ID = qqId;
+      CONFIG.API_KEY = apiKey;
+      CONFIG.DEVICE_ID = qqId;
+      GM_setValue('qq_id', qqId);
+      GM_setValue('api_key', apiKey);
+      GM_setValue('device_id', qqId);
+      this.state.loginStatus = 'logged_in';
+      this.hideLoginOverlay();
+      const badge = document.querySelector('#biliauto-panel [data-ba="loginStatusBadge"]');
+      if (badge) {
+        badge.textContent = '✅ ' + qqId;
+        badge.style.display = '';
+      }
+      document.querySelectorAll('[data-ba="logout"]').forEach(el => el.style.display = '');
+      this.setStatus('✅ 已登录：' + qqId);
+      Util.info('登录完成，QQ:', qqId, 'API Key:', apiKey);
+      if (Util.notify) Util.notify('BiliAuto 登录成功', 'QQ: ' + qqId);
+      await new Promise(r => setTimeout(r, 500));
+      main();
+    },
+
+    jumpManual() {
+      const input = document.querySelector('#biliauto-panel [data-ba="manual"]');
+      this.jump(input && input.value.trim());
+    },
+
+    jump(taskId) {
+      const baseUrl = this.state.baseConfig && this.state.baseConfig.reward_base_url || 'https://www.bilibili.com/blackboard/era/award-exchange.html';
+      const url = Util.buildRewardUrl(baseUrl, taskId);
+      if (!url) {
+        this.setStatus('缺少 task_id 或基础 URL');
+        return;
+      }
+      location.href = url;
+    },
+
+    async copy(taskId) {
+      try {
+        await navigator.clipboard.writeText(taskId);
+        this.setStatus('已复制：' + taskId);
+      } catch {
+        this.setStatus('复制失败');
+      }
+    },
+
+    async runSelected(onlyTaskIds = null) {
+      if (this.state.running) return;
+      const selected = this.state.tasks.filter(task => {
+        const taskId = task.task_value;
+        const cfg = this.state.taskConfigs[taskId] || Util.defaultTaskConfig(taskId);
+        return onlyTaskIds ? onlyTaskIds.includes(taskId) : cfg.selected;
+      });
+      if (!selected.length) {
+        this.setStatus('没有选中的任务');
+        return;
+      }
+      this.state.running = true;
+      Util.info(`面板: 执行 ${selected.length} 个任务${onlyTaskIds ? ' (指定ID)' : ''}`);
+      this.setStatus(`准备执行 ${selected.length} 个任务...`);
+      const baseUrl = this.state.baseConfig && this.state.baseConfig.reward_base_url || 'https://www.bilibili.com/blackboard/era/award-exchange.html';
+      const currentTask = Util.extractTaskIdFromPage();
+      const current = selected.find(task => task.task_value === currentTask);
+      const others = selected.filter(task => task.task_value !== currentTask);
+      Util.log(`面板: 当前页面任务=${currentTask}, 其余=${others.length} 个将在新标签页打开`);
+      for (let i = 0; i < others.length; i++) {
+        const url = Util.buildRewardUrl(baseUrl, others[i].task_value);
+        Util.log(`面板: 打开新标签页 [${i + 1}/${others.length}]: ${others[i].task_value}`);
+        setTimeout(() => window.open(url, '_blank'), i * 2000);
+      }
+      if (current) {
+        Util.log(`面板: 执行当前页面任务: ${current.task_value}`);
+        await runCurrentPageTask(this.state.baseConfig, current.task_value, this.state.taskConfigs[current.task_value]);
+      }
+      this.state.running = false;
+      Util.info('面板: 全部执行触发完成');
+      this.setStatus('执行触发完成');
+    },
+
+    render() {
+      const panel = document.getElementById('biliauto-panel');
+      const fab = document.getElementById('biliauto-fab');
+      if (!panel || !fab) return;
+
+      panel.classList.toggle('tm-panel-visible', this.state.expanded);
+      fab.classList.toggle('tm-fab-hidden', this.state.expanded);
+      this.applyTheme();
+
+      const meta = panel.querySelector('[data-ba="meta"]');
+      const currentTask = Util.extractTaskIdFromPage() || '未识别';
+      const baseUrl = this.state.baseConfig && this.state.baseConfig.reward_base_url || '未加载';
+      if (meta) {
+        meta.innerHTML = `<div>当前 task_id：${this.escape(currentTask)}</div><div>服务端：${this.escape(CONFIG.API_BASE)}</div><div>奖励页：${this.escape(baseUrl)}</div>`;
+      }
+
+      const countEl = panel.querySelector('[data-ba="taskCount"]');
+      if (countEl) countEl.textContent = `${this.state.tasks.length} 个任务`;
+
+      const darkIcon = panel.querySelector('[data-ba="toggleDark"]');
+      if (darkIcon) darkIcon.textContent = this.state.darkMode ? '☀️' : '🌙';
+
+      this.renderList();
+    },
+
+    renderList() {
+      const list = document.querySelector('#biliauto-panel [data-ba="list"]');
+      if (!list) return;
+      const keyword = this.state.filter;
+      const tasks = this.state.tasks.filter(task => {
+        const text = `${task.task_key || ''} ${task.task_value || ''}`.toLowerCase();
+        return !keyword || text.includes(keyword);
+      });
+      if (!tasks.length) {
+        list.innerHTML = '<div class="tm-material-empty">暂无任务<br>点击「刷新」拉取或输入 task_id 添加</div>';
+        return;
+      }
+      list.innerHTML = tasks.map(task => {
+        const taskId = String(task.task_value || task.value || task.task_id || '');
+        const name = String(task.task_key || task.name || task.id || '未命名任务');
+        const cfg = this.state.taskConfigs[taskId] || Util.defaultTaskConfig(taskId);
+        return `
+          <div class="tm-material-item">
+            <label class="tm-material-check">
+              <input type="checkbox" data-ba="select" data-taskid="${this.escapeAttr(taskId)}" ${cfg.selected ? 'checked' : ''}>
+              ${this.escape(name)}
+            </label>
+            <div class="tm-material-item-id">${this.escape(taskId)}</div>
+            <div class="tm-material-item-config">
+              <input data-ba="taskConfig" data-field="start_time" data-taskid="${this.escapeAttr(taskId)}" value="${this.escapeAttr(cfg.start_time)}" placeholder="时间" title="开始时间">
+              <input data-ba="taskConfig" data-field="interval" data-taskid="${this.escapeAttr(taskId)}" value="${this.escapeAttr(cfg.interval)}" placeholder="间隔" title="点击间隔（秒）">
+              <input data-ba="taskConfig" data-field="duration" data-taskid="${this.escapeAttr(taskId)}" value="${this.escapeAttr(cfg.duration)}" placeholder="持续" title="持续时长（秒）">
+            </div>
+            <div class="tm-material-item-actions">
+              <button class="tm-material-btn tm-material-btn-sm" data-ba="runOne" data-taskid="${this.escapeAttr(taskId)}">执行</button>
+              <button class="tm-material-btn tm-material-btn-sm" data-ba="jump" data-taskid="${this.escapeAttr(taskId)}">跳转</button>
+              <button class="tm-material-btn tm-material-btn-sm" data-ba="copy" data-taskid="${this.escapeAttr(taskId)}">复制</button>
+              <button class="tm-material-btn tm-material-btn-sm tm-material-btn-accent" data-ba="removeTask" data-taskid="${this.escapeAttr(taskId)}">删除</button>
+            </div>
+          </div>
+        `;
       }).join('');
     },
 
