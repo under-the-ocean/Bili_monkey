@@ -803,87 +803,27 @@
       }
       overlay = document.createElement('div');
       overlay.id = 'biliauto-login-overlay';
-      overlay.style.cssText = 'position:fixed!important;inset:0!important;z-index:2147483648!important;background:radial-gradient(circle at bottom right,#dbeafe,#f8fafc,#f0fdfa)!important;display:flex!important;align-items:center!important;justify-content:center!important;width:100vw!important;height:100vh!important;margin:0!important;padding:0!important;overflow:auto!important;';
-      var html = '';
-      html+='<div style="width:100%;max-width:480px;margin:0 auto;padding:0.5rem;">';
-      html += '<div style="display:flex;flex-direction:column;align-items:center;width:100%;max-width:500px;margin:0 auto;">';
+      overlay.style.cssText = 'position:fixed!important;inset:0!important;z-index:2147483648!important;background:#fff!important;display:flex!important;align-items:center!important;justify-content:center!important;width:100vw!important;height:100vh!important;margin:0!important;padding:0!important;';
       
-      // Left side
-      html += '<div style="text-align:left;padding:1.5rem;padding-right:2rem;">';
-      html += '<div style="display:flex;align-items:center;gap:1rem;margin-bottom:2rem;">';
-      html += '<div style="width:64px;height:64px;flex-shrink:0;background:#50b6fe;border-radius:0.75rem;display:flex;align-items:center;justify-content:center;color:white;">';
-      html += '<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></div>';
-      html += '<div><h1 style="font-size:1.5rem;font-weight:700;color:#1e293b;margin:0;line-height:1.2;">授权登录</h1>';
-      html += '<p style="margin:0.25rem 0 0 0;font-size:0.875rem;color:#64748b;font-weight:500;"><strong style="color:#50b6fe;">BiliAuto 抢码系统</strong> 请求访问你的账号</p></div></div>';
+      var iframe = document.createElement('iframe');
+      iframe.style.cssText = 'width:100vw!important;height:100vh!important;border:none!important;margin:0!important;padding:0!important;';
+      iframe.id = 'biliauto-login-iframe';
       
-      html += '<div><p style="font-size:0.75rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.75rem;">请求的权限</p>';
-      
-      // Perm: openid
-      html += '<div style="display:flex;align-items:flex-start;gap:0.75rem;padding:0.75rem;background:#f8fafc;border-radius:0.75rem;margin-bottom:0.5rem;">';
-      html += '<div style="background:rgba(80,182,254,0.1);padding:0.375rem;border-radius:0.5rem;color:#50b6fe;flex-shrink:0;">';
-      html += '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div>';
-      html += '<div><p style="font-size:0.875rem;font-weight:600;color:#334155;margin:0;">openid</p><p style="font-size:0.75rem;color:#94a3b8;margin:0.125rem 0 0 0;">识别你的账号主体，用于登录鉴权。</p></div></div>';
-      
-      // Perm: profile
-      html += '<div style="display:flex;align-items:flex-start;gap:0.75rem;padding:0.75rem;background:#f8fafc;border-radius:0.75rem;margin-bottom:0.5rem;">';
-      html += '<div style="background:rgba(80,182,254,0.1);padding:0.375rem;border-radius:0.5rem;color:#50b6fe;flex-shrink:0;">';
-      html += '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div>';
-      html += '<div><p style="font-size:0.875rem;font-weight:600;color:#334155;margin:0;">profile</p><p style="font-size:0.75rem;color:#94a3b8;margin:0.125rem 0 0 0;">读取昵称等基础资料，用于展示个人信息。</p></div></div>';
-      
-      // Perm: API
-      html += '<div style="display:flex;align-items:flex-start;gap:0.75rem;padding:0.75rem;background:#f8fafc;border-radius:0.75rem;margin-bottom:0.5rem;">';
-      html += '<div style="background:rgba(80,182,254,0.1);padding:0.375rem;border-radius:0.5rem;color:#50b6fe;flex-shrink:0;">';
-      html += '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div>';
-      html += '<div><p style="font-size:0.875rem;font-weight:600;color:#334155;margin:0;">API 访问</p><p style="font-size:0.75rem;color:#94a3b8;margin:0.125rem 0 0 0;">使用抢码任务相关接口权限。</p></div></div></div></div>';
-      
-      // Right side
-      html += '<div style="text-align:center;width:100%;">';
-      html += '<div style="background:#50b6fe;border-radius:1.5rem;padding:1.5rem;margin-bottom:1rem;box-shadow:0 10px 15px -3px rgba(80,182,254,0.3);">';
-      html += '<p style="color:rgba(255,255,255,0.7);font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.2em;margin-bottom:0.75rem;">验证码</p>';
-      html += '<div data-ba="loginCodeDisplay" style="display:flex;justify-content:center;gap:0.15rem;flex-wrap:nowrap;">';
-      for (var ci = 0; ci < 6; ci++) {
-        html += '<span style="display:inline-block;width:2.2rem;height:3rem;line-height:3rem;background:white;border-radius:0.6rem;font-size:1.4rem;font-weight:800;color:#50b6fe;text-align:center;box-shadow:0 2px 4px -1px rgba(0,0,0,0.1);">-</span>';
-      }
-      html += '</div></div>';
-      
-      html += '<div style="display:flex;align-items:flex-start;gap:0.75rem;padding:1rem;background:rgba(80,182,254,0.05);border-radius:1rem;border:1px solid rgba(80,182,254,0.1);margin-bottom:1rem;text-align:left;">';
-      html += '<div style="background:#50b6fe;padding:0.375rem;border-radius:0.5rem;color:white;flex-shrink:0;">';
-      html += '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg></div>';
-      html += '<div><p style="font-size:0.75rem;font-weight:700;color:#50b6fe;text-transform:uppercase;letter-spacing:0.05em;margin:0;">发送到群聊</p>';
-      html += '<p style="font-size:0.875rem;font-weight:600;color:#334155;margin:0.25rem 0 0 0;">1082333812</p></div></div>';
-      
-      html += '<div data-ba="loginStatus" style="font-size:0.8125rem;color:#64748b;margin-bottom:0.75rem;min-height:1.25rem;">等待验证...</div>';
-      html += '<button class="bili-login-btn" data-ba="startLogin" style="display:inline-flex;align-items:center;height:2.5rem;padding:0 1.75rem;border:none;border-radius:0.75rem;background:#50b6fe;color:white;font-size:0.875rem;font-weight:600;cursor:pointer;">开始登录</button></div></div></div>';
-      
-            // Load from @resource verify.html
+      // Load verify.html content into iframe
       var tpl = '';
       if (typeof GM_getResourceText === 'function') {
         tpl = GM_getResourceText('LOGIN_HTML') || '';
       }
       if (tpl) {
-        // Extract body content from the full HTML
-        var bodyMatch = tpl.match(/<body[^>]*>([\s\S]*)<\/body>/i);
-        if (bodyMatch) {
-          // Inject the scripts too
-          var scripts = tpl.match(/<script[^>]*>([\s\S]*?)<\/script>/gi) || [];
-          var bodyContent = bodyMatch[1];
-          // Remove script tags from body (they're in the scripts array)
-          bodyContent = bodyContent.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
-          html = bodyContent;
-          // Also inject scripts
-          for (var si = 0; si < scripts.length; si++) {
-            var scriptMatch = scripts[si].match(/<script[^>]*>([\s\S]*?)<\/script>/i);
-            if (scriptMatch) {
-              var scriptTag = document.createElement('script');
-              scriptTag.textContent = scriptMatch[1];
-              overlay.appendChild(scriptTag);
-            }
-          }
-        } else {
-          html = tpl;
-        }
+        // Write the template into the iframe with document.write
+        iframe.onload = function() {
+          var doc = iframe.contentDocument || iframe.contentWindow.document;
+          doc.open();
+          doc.write(tpl);
+          doc.close();
+        };
       }
-      overlay.innerHTML = html;
+      overlay.appendChild(iframe);
       document.documentElement.appendChild(overlay);
       overlay.classList.add('tm-overlay-visible');
     },
