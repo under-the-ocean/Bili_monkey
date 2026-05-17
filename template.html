@@ -86,7 +86,10 @@
   z-index: 2147483646;
   width: 440px;
   max-width: calc(100vw - 48px);
-  max-height: calc(100vh - 100px);
+  max-height: min(calc(100vh - 80px), 90vh) !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   font-family: var(--tm-font);
   color: var(--tm-text);
   background: var(--tm-bg-card);
