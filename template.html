@@ -128,6 +128,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
 }
 .tm-material-header-badge {
   font-size: 11px;
@@ -458,7 +459,8 @@
   margin-top: 8px;
   line-height: 1.5;
 }
-/* ========== Login Overlay - OIDC 授权页风格 ========== */
+
+/* ========== Login Overlay - OIDC 授权页风格（移动端优化版） ========== */
 #biliauto-login-overlay {
   position: fixed; inset: 0; z-index: 2147483647;
   background: radial-gradient(circle at bottom right, #dbeafe, #f8fafc, #f0fdfa);
@@ -466,6 +468,8 @@
   opacity: 0; pointer-events: none;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   transition: opacity 0.35s cubic-bezier(.4,0,.2,1);
+  padding: 16px;
+  box-sizing: border-box;
 }
 #biliauto-login-overlay.tm-overlay-visible {
   opacity: 1; pointer-events: auto;
@@ -473,14 +477,15 @@
 .bili-login-glass {
   background: rgba(255,255,255,0.95);
   backdrop-filter: blur(10px);
-  border-radius: 2.5rem;
+  border-radius: 1.5rem;
   box-shadow: 0 25px 50px -12px rgba(59,130,246,0.3);
-  padding: 2rem;
+  padding: 1.5rem;
   border: 1px solid rgba(255,255,255,0.8);
   max-width: 800px;
-  width: 95%;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
   transform-origin: center center;
-  transform: scale(var(--bili-login-scale, 1));
 }
 .bili-login-grid {
   display: grid;
@@ -488,113 +493,232 @@
   gap: 0;
 }
 .bili-login-left {
-  text-align: left; padding: 1.5rem;
-  padding-right: 2rem;
+  text-align: left; padding: 1rem;
+  padding-right: 1.5rem;
 }
 .bili-login-header {
   display: flex; align-items: center; gap: 1rem;
-  margin-bottom: 2rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
 }
 .bili-login-icon {
-  width: 64px; height: 64px; flex-shrink: 0;
+  width: 56px; height: 56px; flex-shrink: 0;
   background: #50b6fe; border-radius: 0.75rem;
   display: flex; align-items: center; justify-content: center;
   color: white;
 }
 .bili-login-title {
-  font-size: 1.5rem; font-weight: 700;
+  font-size: 1.35rem; font-weight: 700;
   color: #1e293b; margin: 0; line-height: 1.2;
 }
 .bili-login-subtitle {
   margin: 0.25rem 0 0 0;
-  font-size: 0.875rem; color: #64748b; font-weight: 500;
+  font-size: 0.8rem; color: #64748b; font-weight: 500;
 }
 .bili-login-accent { color: #50b6fe; }
 .bili-login-perms-title {
-  font-size: 0.75rem; font-weight: 700;
+  font-size: 0.7rem; font-weight: 700;
   color: #64748b; text-transform: uppercase;
   letter-spacing: 0.05em; margin-bottom: 0.75rem;
 }
 .bili-login-perm-item {
   display: flex; align-items: flex-start; gap: 0.75rem;
-  padding: 0.75rem; background: #f8fafc;
+  padding: 0.6rem; background: #f8fafc;
   border-radius: 0.75rem; margin-bottom: 0.5rem;
 }
 .bili-login-perm-icon {
-  background: rgba(80,182,254,0.1); padding: 0.375rem;
+  background: rgba(80,182,254,0.1); padding: 0.3rem;
   border-radius: 0.5rem; color: #50b6fe; flex-shrink: 0;
 }
 .bili-login-perm-name {
-  font-size: 0.875rem; font-weight: 600;
+  font-size: 0.8rem; font-weight: 600;
   color: #334155; margin: 0;
 }
 .bili-login-perm-desc {
-  font-size: 0.75rem; color: #94a3b8; margin: 0.125rem 0 0 0;
+  font-size: 0.7rem; color: #94a3b8; margin: 0.125rem 0 0 0;
 }
 .bili-login-right {
-  text-align: center; padding: 1.5rem;
-  padding-left: 2rem;
+  text-align: center; padding: 1rem;
+  padding-left: 1.5rem;
 }
 .bili-login-code-section {
   background: #50b6fe;
-  border-radius: 1.5rem; padding: 1.5rem;
-  margin-bottom: 1.5rem;
+  border-radius: 1.25rem; padding: 1.25rem;
+  margin-bottom: 1.25rem;
   box-shadow: 0 10px 15px -3px rgba(80,182,254,0.3);
   position: relative; overflow: hidden;
 }
 .bili-login-code-label {
-  color: rgba(255,255,255,0.7); font-size: 0.75rem;
+  color: rgba(255,255,255,0.7); font-size: 0.7rem;
   font-weight: 700; text-transform: uppercase;
-  letter-spacing: 0.2em; margin-bottom: 0.75rem;
+  letter-spacing: 0.2em; margin-bottom: 0.6rem;
 }
 .bili-login-code-chars {
   display: flex; justify-content: center; gap: 0.25rem;
+  flex-wrap: wrap;
 }
 .bili-login-code-char {
   display: inline-block;
-  width: 2.5rem; height: 3.5rem; line-height: 3.5rem;
-  background: white; border-radius: 0.75rem;
-  font-size: 1.75rem; font-weight: 800;
+  width: 2.2rem; height: 3.2rem; line-height: 3.2rem;
+  background: white; border-radius: 0.6rem;
+  font-size: 1.5rem; font-weight: 800;
   color: #50b6fe; text-align: center;
   box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
 }
 .bili-login-send-info {
   display: flex; align-items: flex-start; gap: 0.75rem;
-  padding: 1rem; background: rgba(80,182,254,0.05);
+  padding: 0.8rem; background: rgba(80,182,254,0.05);
   border-radius: 1rem; border: 1px solid rgba(80,182,254,0.1);
   margin-bottom: 1rem; text-align: left;
 }
 .bili-login-send-icon {
-  background: #50b6fe; padding: 0.375rem;
+  background: #50b6fe; padding: 0.3rem;
   border-radius: 0.5rem; color: white; flex-shrink: 0;
 }
 .bili-login-send-title {
-  font-size: 0.75rem; font-weight: 700;
+  font-size: 0.7rem; font-weight: 700;
   color: #50b6fe; text-transform: uppercase;
   letter-spacing: 0.05em; margin: 0;
 }
 .bili-login-send-group {
-  font-size: 0.875rem; font-weight: 600;
-  color: #334155; margin: 0.25rem 0 0 0;
+  font-size: 0.8rem; font-weight: 600;
+  color: #334155; margin: 0.2rem 0 0 0;
 }
 .bili-login-status {
-  font-size: 0.8125rem; color: #64748b;
+  font-size: 0.75rem; color: #64748b;
   margin-bottom: 0.75rem; min-height: 1.25rem;
 }
 .bili-login-btn {
-  display: inline-flex; align-items: center; height: 2.5rem;
-  padding: 0 1.75rem; border: none; border-radius: 0.75rem;
+  display: inline-flex; align-items: center; height: 2.4rem;
+  padding: 0 1.5rem; border: none; border-radius: 0.75rem;
   background: #50b6fe; color: white;
-  font-size: 0.875rem; font-weight: 600;
+  font-size: 0.8rem; font-weight: 600;
   font-family: inherit; cursor: pointer;
   transition: opacity 0.2s;
 }
 .bili-login-btn:hover { opacity: 0.85; }
 .bili-login-btn:active { opacity: 0.7; }
-@media (max-width: 1023px) {
-  .bili-login-grid { grid-template-columns: 1fr; }
-  .bili-login-left { display: none; }
-  .bili-login-right { padding-left: 1.5rem; }
+
+/* ========== 移动端响应式优化 ========== */
+@media (max-width: 768px) {
+  .bili-login-glass {
+    padding: 1rem;
+    border-radius: 1.25rem;
+    max-height: 85vh;
+  }
+  .bili-login-grid {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+  .bili-login-left {
+    display: block !important;
+    padding: 0.5rem;
+    order: 2;
+  }
+  .bili-login-right {
+    padding: 0.5rem;
+    order: 1;
+  }
+  .bili-login-header {
+    justify-content: center;
+    text-align: center;
+  }
+  .bili-login-icon {
+    width: 48px;
+    height: 48px;
+  }
+  .bili-login-title {
+    font-size: 1.2rem;
+  }
+  .bili-login-subtitle {
+    font-size: 0.7rem;
+  }
+  .bili-login-perms {
+    max-height: 180px;
+    overflow-y: auto;
+  }
+  .bili-login-perm-item {
+    padding: 0.5rem;
+  }
+  .bili-login-perm-name {
+    font-size: 0.75rem;
+  }
+  .bili-login-perm-desc {
+    font-size: 0.65rem;
+  }
+  .bili-login-code-section {
+    padding: 1rem;
+  }
+  .bili-login-code-char {
+    width: 2rem;
+    height: 3rem;
+    line-height: 3rem;
+    font-size: 1.3rem;
+  }
+  .bili-login-send-info {
+    padding: 0.6rem;
+  }
+  .bili-login-send-group {
+    font-size: 0.75rem;
+  }
+  .bili-login-btn {
+    height: 2.2rem;
+    padding: 0 1.25rem;
+    font-size: 0.75rem;
+  }
+}
+
+@media (max-width: 480px) {
+  #biliauto-login-overlay {
+    padding: 8px;
+  }
+  .bili-login-glass {
+    padding: 0.75rem;
+    border-radius: 1rem;
+  }
+  .bili-login-code-char {
+    width: 1.8rem;
+    height: 2.6rem;
+    line-height: 2.6rem;
+    font-size: 1.1rem;
+    border-radius: 0.4rem;
+  }
+  .bili-login-code-section {
+    padding: 0.8rem;
+  }
+  .bili-login-perms {
+    max-height: 150px;
+  }
+  .bili-login-icon {
+    width: 40px;
+    height: 40px;
+  }
+  .bili-login-icon svg {
+    width: 20px;
+    height: 20px;
+  }
+  .bili-login-title {
+    font-size: 1rem;
+  }
+}
+
+/* ========== 横屏模式适配 ========== */
+@media (max-height: 600px) and (orientation: landscape) {
+  #biliauto-login-overlay {
+    align-items: flex-start;
+    padding-top: 8px;
+  }
+  .bili-login-glass {
+    max-height: 92vh;
+    overflow-y: auto;
+  }
+  .bili-login-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .bili-login-perms {
+    max-height: 180px;
+    overflow-y: auto;
+  }
 }
 
 /* ========== Login Status Badge in Header ========== */
@@ -606,6 +730,41 @@
   border-radius: 10px;
   margin-left: 6px;
   white-space: nowrap;
+}
+
+/* ========== 手机端面板额外优化 ========== */
+@media (max-width: 600px) {
+  #biliauto-panel {
+    width: calc(100vw - 24px);
+    max-width: none;
+    bottom: 16px;
+    left: 12px !important;
+    right: 12px !important;
+    transform: none !important;
+  }
+  .tm-material-header-title {
+    font-size: 14px;
+  }
+  .tm-material-item-config {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+  .tm-material-item-actions {
+    justify-content: flex-start;
+  }
+  .tm-material-toolbar {
+    flex-wrap: wrap;
+  }
+  .tm-material-btn {
+    min-width: 60px;
+    padding: 0 12px;
+    height: 36px;
+    font-size: 12px;
+  }
+  .tm-material-btn-sm {
+    min-width: 44px;
+    padding: 0 8px;
+  }
 }
 </style>
 
@@ -659,468 +818,3 @@ BiliAuto
 
   <div class="tm-material-status" data-ba="status"></div>
 </div>
-`;
-},
-
-bind() {
-  const panel = document.getElementById('biliauto-panel');
-  if (panel.dataset.bound) return;
-  panel.dataset.bound = '1';
-
-  panel.addEventListener('click', (e) => {
-    const target = e.target.closest('[data-ba]');
-    if (!target) return;
-    const action = target.getAttribute('data-ba');
-    if (action === 'closePanel') this.close();
-    else if (action === 'refresh') this.refresh();
-    else if (action === 'manualJump') this.jumpManual();
-    else if (action === 'jump') this.jump(target.getAttribute('data-taskid'));
-    else if (action === 'copy') this.copy(target.getAttribute('data-taskid'));
-    else if (action === 'select') this.updateTaskConfig(target.getAttribute('data-taskid'), 'selected', target.checked);
-    else if (action === 'runOne') this.runSelected([target.getAttribute('data-taskid')]);
-    else if (action === 'runAll') this.runSelected();
-    else if (action === 'addTask') this.addCustomTask();
-    else if (action === 'removeTask') this.removeTask(target.getAttribute('data-taskid'));
-    else if (action === 'defaults') this.applyDefaults();
-    else if (action === 'clearAll') this.clearAllTasks();
-    else if (action === 'copyPageInfo') this.copyPageInfo();
-    else if (action === 'toggleDark') this.toggleDarkMode();
-    else if (action === 'logout') this.logout();
-    else if (action === 'startLogin') this.startLogin();
-  });
-
-  panel.addEventListener('change', (e) => {
-    const target = e.target.closest('[data-ba]');
-    if (!target) return;
-    const action = target.getAttribute('data-ba');
-    if (action === 'taskConfig') {
-      this.updateTaskConfig(target.getAttribute('data-taskid'), target.getAttribute('data-field'), target.value);
-    }
-  });
-
-  panel.addEventListener('keydown', (e) => {
-    if (e.key !== 'Enter') return;
-    const target = e.target.closest('[data-ba]');
-    if (!target) return;
-    const action = target.getAttribute('data-ba');
-    if (action === 'addTaskInput') { e.preventDefault(); this.addCustomTask(); }
-    if (action === 'manual') { e.preventDefault(); this.jumpManual(); }
-  });
-
-  const filterInput = panel.querySelector('[data-ba="filter"]');
-  filterInput.addEventListener('input', () => {
-    this.state.filter = filterInput.value.trim().toLowerCase();
-    this.renderList();
-  });
-},
-
-setData(baseConfig, tasks) {
-  this.state.baseConfig = baseConfig || this.state.baseConfig;
-  this.state.tasks = Util.normalizeTasks(tasks || this.state.tasks);
-  this.state.taskConfigs = Util.loadTaskConfigs(this.state.tasks);
-  this.render();
-},
-
-saveTaskConfigs() {
-  GM_setValue('task_configs', this.state.taskConfigs);
-},
-
-updateTaskConfig(taskId, field, value) {
-  if (!taskId) return;
-  const current = this.state.taskConfigs[taskId] || Util.defaultTaskConfig(taskId);
-  this.state.taskConfigs[taskId] = { ...current, [field]: field === 'selected' ? Boolean(value) : value };
-  this.saveTaskConfigs();
-  this.renderList();
-},
-
-setStatus(text) {
-  const el = document.querySelector('#biliauto-panel [data-ba="status"]');
-  if (el) {
-    el.textContent = text || '';
-    el.style.color = text && text.includes('失败') ? 'var(--tm-accent)' : '';
-  }
-},
-
-toggle() {
-  this.state.expanded = !this.state.expanded;
-  GM_setValue('material_panel_visible', this.state.expanded);
-  Util.log(`面板 ${this.state.expanded ? '展开' : '收起'}`);
-  this.render();
-},
-
-close() {
-  this.state.expanded = false;
-  GM_setValue('material_panel_visible', false);
-  Util.log('面板已关闭');
-  this.render();
-},
-
-toggleDarkMode() {
-  this.state.darkMode = !this.state.darkMode;
-  GM_setValue('material_dark_mode', this.state.darkMode);
-  GM_setValue('material_dark_mode_manual', true);
-  this.applyTheme();
-  const icon = document.querySelector('#biliauto-panel [data-ba="toggleDark"]');
-  if (icon) icon.textContent = this.state.darkMode ? '☀️' : '🌙';
-},
-
-logout() {
-  if (!confirm('确认退出登录？')) return;
-  GM_setValue('qq_id', '');
-  GM_setValue('api_key', '');
-  GM_setValue('device_id', '');
-  CONFIG.QQ_ID = '';
-  CONFIG.API_KEY = '';
-  this.state.loginStatus = '';
-  const badge = document.querySelector('#biliauto-panel [data-ba="loginStatusBadge"]');
-  if (badge) badge.style.display = 'none';
-  document.querySelectorAll('[data-ba="logout"]').forEach(el => el.style.display = 'none');
-  this.setStatus('已退出登录');
-  this.showLoginOverlay();
-  Util.info('用户已退出登录');
-},
-
-async copyPageInfo() {
-  const title = document.title || '';
-  const url = window.location.href;
-  const text = `${title}\n${url}`;
-  try {
-    await navigator.clipboard.writeText(text);
-    this.setStatus('已复制页面标题和链接');
-  } catch {
-    this.setStatus('复制失败');
-  }
-},
-
-async refresh() {
-  this.setStatus('正在获取服务端列表...');
-  Util.info('面板: 获取服务端任务列表');
-  try {
-    const [baseResp, tasksResp] = await Promise.all([API.getBaseConfig(), API.getTasks()]);
-    const config = API.unwrapConfig(baseResp);
-    const tasks = tasksResp.status === 'success' ? tasksResp.data : [];
-    this.setData(config, tasks);
-    Util.info(`面板: 服务端列表获取完成 — ${tasks.length} 个任务`);
-    if (tasks.length === 0) Util.warn('面板: 服务端任务列表为空');
-    this.setStatus(`服务端列表：${this.state.tasks.length} 个任务`);
-  } catch (e) {
-    Util.warn('面板获取服务端列表失败:', e.message || e);
-    this.setStatus('获取服务端列表失败：' + (e.message || e));
-  }
-},
-
-addCustomTask() {
-  const input = document.querySelector('#biliauto-panel [data-ba="addTaskInput"]');
-  const taskId = input && input.value.trim();
-  if (!taskId) {
-    this.setStatus('请输入有效的 task_id');
-    return;
-  }
-  if (this.state.taskConfigs[taskId]) {
-    this.setStatus('任务已存在: ' + taskId);
-    return;
-  }
-  this.state.taskConfigs[taskId] = Util.defaultTaskConfig(taskId);
-  this.state.tasks.push({
-    task_key: '自定义任务',
-    task_value: taskId,
-    id: 'custom-' + taskId
-  });
-  this.saveTaskConfigs();
-  input.value = '';
-  this.renderList();
-  this.setStatus('已添加任务: ' + taskId);
-},
-
-removeTask(taskId) {
-  if (!taskId) return;
-  delete this.state.taskConfigs[taskId];
-  this.state.tasks = this.state.tasks.filter(task => task.task_value !== taskId);
-  this.saveTaskConfigs();
-  this.renderList();
-  this.setStatus('已删除任务: ' + taskId);
-},
-
-applyDefaults() {
-  if (!confirm('将所有任务的配置重置为默认值？')) return;
-  for (const taskId of Object.keys(this.state.taskConfigs)) {
-    this.state.taskConfigs[taskId] = {
-      ...Util.defaultTaskConfig(taskId),
-      selected: this.state.taskConfigs[taskId].selected
-    };
-  }
-  this.saveTaskConfigs();
-  this.renderList();
-  this.setStatus('已重置所有任务配置为默认值');
-},
-
-clearAllTasks() {
-  if (!confirm('清空所有任务？此操作不可恢复。')) return;
-  this.state.taskConfigs = {};
-  this.state.tasks = [];
-  this.saveTaskConfigs();
-  this.renderList();
-  this.setStatus('已清空所有任务');
-},
-
-
-showLoginOverlay() {
-  let overlay = document.getElementById('biliauto-login-overlay');
-  if (overlay) {
-    overlay.classList.add('tm-overlay-visible');
-    return;
-  }
-  overlay = document.createElement('div');
-  overlay.id = 'biliauto-login-overlay';
-  overlay.innerHTML = `
-    <div class="tm-overlay-card">
-      <div class="tm-overlay-title">🔑 登录 B站抢码系统</div>
-      <div class="tm-overlay-desc">
-        请将下方验证码发送到 QQ群<br>
-        <span class="tm-overlay-group">1082333812</span><br>
-        完成验证后自动登录
-      </div>
-      <div class="tm-overlay-code-box" data-ba="loginCodeBox" style="display:none">
-        <div class="tm-overlay-code-label">验证码</div>
-        <div class="tm-overlay-code" data-ba="loginCodeDisplay"></div>
-        <div class="tm-overlay-hint">发送验证码到 QQ群 1082333812</div>
-        <div class="tm-overlay-status" data-ba="loginStatus">正在获取验证码...</div>
-      </div>
-      <button class="tm-overlay-btn" data-ba="startLogin">开始登录</button>
-    </div>`;
-  overlay.addEventListener('click', (e) => {
-    const target = e.target.closest('[data-ba]');
-    if (!target) return;
-    if (target.getAttribute('data-ba') === 'startLogin') this.startLogin();
-  });
-  document.documentElement.appendChild(overlay);
-  overlay.classList.add('tm-overlay-visible');
-},
-
-hideLoginOverlay() {
-  const overlay = document.getElementById('biliauto-login-overlay');
-  if (overlay) {
-    overlay.classList.remove('tm-overlay-visible');
-    setTimeout(() => overlay.remove(), 400);
-  }
-},
-
-async startLogin() {
-  const btn = document.querySelector('#biliauto-login-overlay [data-ba="startLogin"]');
-  if (btn) btn.style.display = 'none';
-  const box = document.querySelector('#biliauto-login-overlay [data-ba="loginCodeBox"]');
-  const display = document.querySelector('#biliauto-login-overlay [data-ba="loginCodeDisplay"]');
-  const statusEl = document.querySelector('#biliauto-login-overlay [data-ba="loginStatus"]');
-  if (!box || !display || !statusEl) return;
-
-  box.style.display = 'block';
-  statusEl.textContent = '正在获取验证码...';
-  statusEl.style.color = '';
-
-  try {
-    const resp = await API.request('POST', '/api/auth/qq-login');
-    const code = resp && resp.data && resp.data.code;
-    if (!code) {
-      statusEl.textContent = '获取验证码失败，请重试';
-      statusEl.style.color = 'var(--tm-accent)';
-      return;
-    }
-    this.state.loginCode = code;
-    display.textContent = code;
-    statusEl.textContent = '等待验证...';
-    this.pollLoginStatus(code);
-  } catch (e) {
-    statusEl.textContent = '网络错误: ' + (e.message || '');
-    statusEl.style.color = 'var(--tm-accent)';
-  }
-},
-
-async pollLoginStatus(code) {
-  const statusEl = document.querySelector('#biliauto-login-overlay [data-ba="loginStatus"]');
-  for (let i = 0; i < 120; i++) {
-    await new Promise(r => setTimeout(r, 2500));
-    try {
-      const resp = await API.request('GET', '/api/auth/qq-status?code=' + code);
-      Util.log('轮询响应:', JSON.stringify(resp).slice(0, 300));
-      const data = resp && resp.data;
-      if (!data) {
-        if (statusEl) statusEl.textContent = '等待验证... (响应异常)';
-        continue;
-      }
-      if (data.status === 'verified') {
-        const qqId = data.qq_id || '';
-        const apiKey = data.api_key || '';
-        if (qqId && apiKey) {
-          await this.saveLoginData(qqId, apiKey);
-        }
-        if (statusEl) {
-          statusEl.textContent = '✅ 登录成功！';
-          statusEl.style.color = '#4caf50';
-        }
-        return;
-      } else if (data.status === 'expired' || data.status === 'invalid') {
-        if (statusEl) {
-          statusEl.textContent = '验证码已过期，点击重新获取';
-          statusEl.style.color = 'var(--tm-accent)';
-        }
-        this.showRetryLogin();
-        return;
-      }
-    } catch (e) {
-      Util.log('轮询登录状态失败:', e);
-    }
-  }
-  if (statusEl) {
-    statusEl.textContent = '登录超时，点击重新获取';
-    statusEl.style.color = 'var(--tm-accent)';
-  }
-  this.showRetryLogin();
-},
-
-showRetryLogin() {
-  const btn = document.querySelector('#biliauto-login-overlay [data-ba="startLogin"]');
-  if (btn) {
-    btn.style.display = '';
-    btn.textContent = '重新获取验证码';
-  }
-},
-
-async saveLoginData(qqId, apiKey) {
-  CONFIG.QQ_ID = qqId;
-  CONFIG.API_KEY = apiKey;
-  CONFIG.DEVICE_ID = qqId;
-  GM_setValue('qq_id', qqId);
-  GM_setValue('api_key', apiKey);
-  GM_setValue('device_id', qqId);
-  this.state.loginStatus = 'logged_in';
-  this.hideLoginOverlay();
-  const badge = document.querySelector('#biliauto-panel [data-ba="loginStatusBadge"]');
-  if (badge) {
-    badge.textContent = '✅ ' + qqId;
-    badge.style.display = '';
-  }
-  document.querySelectorAll('[data-ba="logout"]').forEach(el => el.style.display = '');
-  this.setStatus('✅ 已登录：' + qqId);
-  Util.info('登录完成，QQ:', qqId, 'API Key:', apiKey);
-  if (Util.notify) Util.notify('BiliAuto 登录成功', 'QQ: ' + qqId);
-  await new Promise(r => setTimeout(r, 500));
-  main();
-},
-
-jumpManual() {
-  const input = document.querySelector('#biliauto-panel [data-ba="manual"]');
-  this.jump(input && input.value.trim());
-},
-
-jump(taskId) {
-  const baseUrl = this.state.baseConfig && this.state.baseConfig.reward_base_url || 'https://www.bilibili.com/blackboard/era/award-exchange.html';
-  const url = Util.buildRewardUrl(baseUrl, taskId);
-  if (!url) {
-    this.setStatus('缺少 task_id 或基础 URL');
-    return;
-  }
-  location.href = url;
-},
-
-async copy(taskId) {
-  try {
-    await navigator.clipboard.writeText(taskId);
-    this.setStatus('已复制：' + taskId);
-  } catch {
-    this.setStatus('复制失败');
-  }
-},
-
-async runSelected(onlyTaskIds = null) {
-  if (this.state.running) return;
-  const selected = this.state.tasks.filter(task => {
-    const taskId = task.task_value;
-    const cfg = this.state.taskConfigs[taskId] || Util.defaultTaskConfig(taskId);
-    return onlyTaskIds ? onlyTaskIds.includes(taskId) : cfg.selected;
-  });
-  if (!selected.length) {
-    this.setStatus('没有选中的任务');
-    return;
-  }
-  this.state.running = true;
-  Util.info(`面板: 执行 ${selected.length} 个任务${onlyTaskIds ? ' (指定ID)' : ''}`);
-  this.setStatus(`准备执行 ${selected.length} 个任务...`);
-  const baseUrl = this.state.baseConfig && this.state.baseConfig.reward_base_url || 'https://www.bilibili.com/blackboard/era/award-exchange.html';
-  const currentTask = Util.extractTaskIdFromPage();
-  const current = selected.find(task => task.task_value === currentTask);
-  const others = selected.filter(task => task.task_value !== currentTask);
-  Util.log(`面板: 当前页面任务=${currentTask}, 其余=${others.length} 个将在新标签页打开`);
-  for (let i = 0; i < others.length; i++) {
-    const url = Util.buildRewardUrl(baseUrl, others[i].task_value);
-    Util.log(`面板: 打开新标签页 [${i + 1}/${others.length}]: ${others[i].task_value}`);
-    setTimeout(() => window.open(url, '_blank'), i * 2000);
-  }
-  if (current) {
-    Util.log(`面板: 执行当前页面任务: ${current.task_value}`);
-    await runCurrentPageTask(this.state.baseConfig, current.task_value, this.state.taskConfigs[current.task_value]);
-  }
-  this.state.running = false;
-  Util.info('面板: 全部执行触发完成');
-  this.setStatus('执行触发完成');
-},
-
-render() {
-  const panel = document.getElementById('biliauto-panel');
-  const fab = document.getElementById('biliauto-fab');
-  if (!panel || !fab) return;
-
-  panel.classList.toggle('tm-panel-visible', this.state.expanded);
-  fab.classList.toggle('tm-fab-hidden', this.state.expanded);
-  this.applyTheme();
-
-  const meta = panel.querySelector('[data-ba="meta"]');
-  const currentTask = Util.extractTaskIdFromPage() || '未识别';
-  const baseUrl = this.state.baseConfig && this.state.baseConfig.reward_base_url || '未加载';
-  if (meta) {
-    meta.innerHTML = `<div>当前 task_id：${this.escape(currentTask)}</div><div>服务端：${this.escape(CONFIG.API_BASE)}</div><div>奖励页：${this.escape(baseUrl)}</div>`;
-  }
-
-  const countEl = panel.querySelector('[data-ba="taskCount"]');
-  if (countEl) countEl.textContent = `${this.state.tasks.length} 个任务`;
-
-  const darkIcon = panel.querySelector('[data-ba="toggleDark"]');
-  if (darkIcon) darkIcon.textContent = this.state.darkMode ? '☀️' : '🌙';
-
-  this.renderList();
-},
-
-renderList() {
-  const list = document.querySelector('#biliauto-panel [data-ba="list"]');
-  if (!list) return;
-  const keyword = this.state.filter;
-  const tasks = this.state.tasks.filter(task => {
-    const text = `${task.task_key || ''} ${task.task_value || ''}`.toLowerCase();
-    return !keyword || text.includes(keyword);
-  });
-  if (!tasks.length) {
-    list.innerHTML = '<div class="tm-material-empty">暂无任务<br>点击「刷新」拉取或输入 task_id 添加</div>';
-    return;
-  }
-  list.innerHTML = tasks.map(task => {
-    const taskId = String(task.task_value || task.value || task.task_id || '');
-    const name = String(task.task_key || task.name || task.id || '未命名任务');
-    const cfg = this.state.taskConfigs[taskId] || Util.defaultTaskConfig(taskId);
-    return `
-      <div class="tm-material-item">
-        <label class="tm-material-check">
-          <input type="checkbox" data-ba="select" data-taskid="${this.escapeAttr(taskId)}" ${cfg.selected ? 'checked' : ''}>
-          ${this.escape(name)}
-        </label>
-        <div class="tm-material-item-id">${this.escape(taskId)}</div>
-        <div class="tm-material-item-config">
-          <input data-ba="taskConfig" data-field="start_time" data-taskid="${this.escapeAttr(taskId)}" value="${this.escapeAttr(cfg.start_time)}" placeholder="时间" title="开始时间">
-          <input data-ba="taskConfig" data-field="interval" data-taskid="${this.escapeAttr(taskId)}" value="${this.escapeAttr(cfg.interval)}" placeholder="间隔" title="点击间隔（秒）">
-          <input data-ba="taskConfig" data-field="duration" data-taskid="${this.escapeAttr(taskId)}" value="${this.escapeAttr(cfg.duration)}" placeholder="持续" title="持续时长（秒）">
-        </div>
-        <div class="tm-material-item-actions">
-          <button class="tm-material-btn tm-material-btn-sm" data-ba="runOne" data-taskid="${this.escapeAttr(taskId)}">执行</button>
-          <button class="tm-material-btn tm-material-btn-sm" data-ba="jump" data-taskid="${this.escapeAttr(taskId)}">跳转</button>
-          <button class="tm-material-btn tm-material-btn-sm" data-ba="copy" data-taskid="${this.escapeAttr(taskId)}">复制</button>
-          <button class="tm-material-btn tm-material-btn-sm tm-material-btn-accent" data-ba="removeTask" data-taskid="${this.escapeAttr(taskId)}">删除</button>
-        </div>
-      </div>
