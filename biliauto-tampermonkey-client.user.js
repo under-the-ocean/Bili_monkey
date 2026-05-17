@@ -802,7 +802,7 @@
       }
       overlay = document.createElement('div');
       overlay.id = 'biliauto-login-overlay';
-      overlay.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:radial-gradient(circle at bottom right,#dbeafe,#f8fafc,#f0fdfa);display:flex;align-items:center;justify-content:center;font-family:Inter,-apple-system,sans-serif;';
+      overlay.style.cssText = 'position:fixed!important;inset:0!important;z-index:2147483648!important;background:radial-gradient(circle at bottom right,#dbeafe,#f8fafc,#f0fdfa)!important;display:flex!important;align-items:center!important;justify-content:center!important;width:100vw!important;height:100vh!important;margin:0!important;padding:0!important;';
       var html = '';
       html += '<div style="width:100%;max-width:800px;margin:0 auto;padding:1rem;">';
       html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0;width:100%;">';
