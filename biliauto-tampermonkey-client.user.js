@@ -796,36 +796,57 @@
 
 
     showLoginOverlay() {
-      var overlay = document.getElementById('biliauto-login-overlay');
-      if (overlay) {
-        overlay.classList.add('tm-overlay-visible');
-        return;
-      }
-      overlay = document.createElement('div');
-      overlay.id = 'biliauto-login-overlay';
-      overlay.style.cssText = 'position:fixed!important;inset:0!important;z-index:2147483648!important;background:#fff!important;display:flex!important;align-items:center!important;justify-content:center!important;width:100vw!important;height:100vh!important;margin:0!important;padding:0!important;';
+      var o = document.getElementById('biliauto-login-overlay');
+      if (o) { o.classList.add('tm-overlay-visible'); return; }
+      o = document.createElement('div');
+      o.id = 'biliauto-login-overlay';
+      // Set all styles via cssText - NEVER use class-based styles that can be overridden
+      o.style.cssText = 'all:initial!important;position:fixed!important;left:0!important;top:0!important;width:100vw!important;height:100vh!important;z-index:2147483647!important;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%)!important;display:flex!important;align-items:center!important;justify-content:center!important;overflow:auto!important;';
       
-      var iframe = document.createElement('iframe');
-      iframe.style.cssText = 'width:100vw!important;height:100vh!important;border:none!important;margin:0!important;padding:0!important;';
-      iframe.id = 'biliauto-login-iframe';
+      // Create inner card with all inline styles
+      var card = document.createElement('div');
+      card.style.cssText = 'background:#fff!important;border-radius:16px!important;padding:32px!important;max-width:440px!important;width:92%!important;margin:16px!important;box-sizing:border-box!important;text-align:center!important;font-family:Arial,sans-serif!important;';
       
-      // Load verify.html content into iframe
-      var tpl = '';
-      if (typeof GM_getResourceText === 'function') {
-        tpl = GM_getResourceText('LOGIN_HTML') || '';
+      // Build content with string concat (NO template literals!)
+      var h = '';
+      // Icon
+      h += '<div style="width:64px;height:64px;margin:0 auto 16px;background:#667eea;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:28px;color:#fff;">B</div>';
+      // Title
+      h += '<div style="font-size:22px;font-weight:700;color:#1a1a2e;margin-bottom:4px;">授权登录</div>';
+      h += '<div style="font-size:14px;color:#666;margin-bottom:24px;"><strong style="color:#667eea;">BiliAuto 抢码系统</strong> 请求访问你的账号</div>';
+      // Permissions
+      h += '<div style="text-align:left;margin-bottom:20px;">';
+      h += '<div style="font-size:12px;font-weight:600;color:#999;text-transform:uppercase;margin-bottom:8px;">请求的权限</div>';
+      h += '<div style="display:flex;align-items:flex-start;gap:10px;padding:10px;background:#f8f9fa;border-radius:10px;margin-bottom:6px;"><div style="width:20px;height:20px;background:#667eea20;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#667eea;flex-shrink:0;font-size:12px;">✓</div><div><div style="font-size:13px;font-weight:600;color:#333;">openid</div><div style="font-size:12px;color:#999;">识别你的账号主体，用于登录鉴权。</div></div></div>';
+      h += '<div style="display:flex;align-items:flex-start;gap:10px;padding:10px;background:#f8f9fa;border-radius:10px;margin-bottom:6px;"><div style="width:20px;height:20px;background:#667eea20;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#667eea;flex-shrink:0;font-size:12px;">✓</div><div><div style="font-size:13px;font-weight:600;color:#333;">profile</div><div style="font-size:12px;color:#999;">读取昵称等基础资料，用于展示个人信息。</div></div></div>';
+      h += '<div style="display:flex;align-items:flex-start;gap:10px;padding:10px;background:#f8f9fa;border-radius:10px;"><div style="width:20px;height:20px;background:#667eea20;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#667eea;flex-shrink:0;font-size:12px;">✓</div><div><div style="font-size:13px;font-weight:600;color:#333;">API 访问</div><div style="font-size:12px;color:#999;">使用抢码任务相关接口权限。</div></div></div></div>';
+      // Code section
+      h += '<div style="background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);border-radius:16px;padding:20px;margin-bottom:16px;">';
+      h += '<div style="color:rgba(255,255,255,0.7);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:2px;margin-bottom:12px;">验证码</div>';
+      h += '<div data-ba="loginCodeDisplay" style="display:flex;justify-content:center;gap:6px;">';
+      for (var ci = 0; ci < 6; ci++) {
+        h += '<span style="display:inline-block;width:40px;height:52px;line-height:52px;background:#fff;border-radius:10px;font-size:24px;font-weight:800;color:#667eea;text-align:center;">-</span>';
       }
-      if (tpl) {
-        // Write the template into the iframe with document.write
-        iframe.onload = function() {
-          var doc = iframe.contentDocument || iframe.contentWindow.document;
-          doc.open();
-          doc.write(tpl);
-          doc.close();
-        };
-      }
-      overlay.appendChild(iframe);
-      document.documentElement.appendChild(overlay);
-      overlay.classList.add('tm-overlay-visible');
+      h += '</div></div>';
+      // Group info
+      h += '<div style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:#f0f4ff;border-radius:12px;margin-bottom:16px;text-align:left;">';
+      h += '<div style="background:#667eea;padding:6px;border-radius:8px;color:#fff;flex-shrink:0;font-size:12px;">👥</div>';
+      h += '<div><div style="font-size:11px;font-weight:600;color:#667eea;text-transform:uppercase;margin-bottom:2px;">发送到群聊</div><div style="font-size:14px;font-weight:600;color:#333;">1082333812</div></div></div>';
+      // Status
+      h += '<div data-ba="loginStatus" style="font-size:13px;color:#999;margin-bottom:12px;min-height:20px;">等待验证...</div>';
+      // Button
+      h += '<button class="bli-login-btn" data-ba="startLogin" style="width:100%;height:44px;border:none;border-radius:12px;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:#fff;font-size:15px;font-weight:600;cursor:pointer;">开始登录</button>';
+      
+      card.innerHTML = h;
+      o.appendChild(card);
+      document.documentElement.appendChild(o);
+      
+      // Bind login button
+      card.querySelector('[data-ba="startLogin"]').onclick = function() {
+        this.startLogin();
+      }.bind(this);
+      
+      o.classList.add('tm-overlay-visible');
     },
     hideLoginOverlay() {
       const overlay = document.getElementById('biliauto-login-overlay');
@@ -836,10 +857,10 @@
     },
 
     async startLogin() {
-      const btn = document.querySelector('#biliauto-login-overlay [data-ba="startLogin"]');
+      var btn = document.querySelector('#biliauto-login-overlay [data-ba="startLogin"]');
       if (btn) btn.style.display = 'none';
-      const display = document.querySelector('#biliauto-login-overlay [data-ba="loginCodeDisplay"]');
-      const statusEl = document.querySelector('#biliauto-login-overlay [data-ba="loginStatus"]');
+      var display = document.querySelector('#biliauto-login-overlay [data-ba="loginCodeDisplay"]');
+      var statusEl = document.querySelector('#biliauto-login-overlay [data-ba="loginStatus"]');
       if (!display || !statusEl) return;
 
       statusEl.textContent = '正在获取验证码...';
@@ -867,13 +888,13 @@
     },
 
     async pollLoginStatus(code) {
-      const statusEl = document.querySelector('#biliauto-login-overlay [data-ba="loginStatus"]');
-      for (let i = 0; i < 120; i++) {
-        await new Promise(r => setTimeout(r, 2500));
+      var statusEl = document.querySelector('#biliauto-login-overlay [data-ba="loginStatus"]');
+      for (var pi = 0; pi < 120; pi++) {
+        await new Promise(function(r) { setTimeout(r, 2500); });
         try {
-          const resp = await API.request('GET', '/api/auth/qq-status?code=' + code);
+          var resp = await API.request('GET', '/api/auth/qq-status?code=' + code);
           Util.log('轮询响应:', JSON.stringify(resp).slice(0, 300));
-          const data = resp && resp.data;
+          var data = resp && resp.data;
           if (!data) {
             if (statusEl) statusEl.textContent = '等待验证... (响应异常)';
             continue;
