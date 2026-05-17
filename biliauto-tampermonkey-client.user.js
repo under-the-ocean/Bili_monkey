@@ -597,32 +597,37 @@
 
     // 替换B站页面上的"领取须知"区域为抢码日志面板
     injectLogPanel() {
-      const notices = document.querySelectorAll('div, section');
+      // 精确查找包含"领取须知"文本的段落元素
+      const allEls = document.querySelectorAll('p, div, span');
       let targetEl = null;
-      for (const el of notices) {
-        if (el.textContent.includes('领取须知') && el.children.length >= 2 && el.children.length <= 5) {
+      for (const el of allEls) {
+        if (el.children.length === 0 && el.textContent.trim() === '领取须知') {
           targetEl = el;
           break;
         }
       }
+      if (!targetEl) {
+        // 兜底：找包含"领取须知"的父容器，只替换其内部内容
+        for (const el of allEls) {
+          if (el.textContent.includes('领取须知') && el.children.length <= 3) {
+            targetEl = el;
+            break;
+          }
+        }
+      }
       if (!targetEl) return;
+      // 保存原始内容
+      this._originalNoticeEl = targetEl;
       this._originalNoticeHTML = targetEl.innerHTML;
-      targetEl.innerHTML = `
-        <div style="padding:8px 0;font-size:13px;color:#666;">
-          <div style="font-weight:600;font-size:14px;color:#333;margin-bottom:6px;">📋 抢码运行状态</div>
-          <div id="tm-page-log" style="font-size:12px;line-height:1.8;">
-            <div>⏳ 等待任务开始...</div>
-            <div>📦 任务数：<span id="tm-log-taskCount">-</span></div>
-            <div>⏰ 距最近任务开始：<span id="tm-log-countdown">-</span></div>
-            <div>📊 日志：<span id="tm-log-status" style="color:#999;">等待中</span></div>
-          </div>
-        </div>
-      `;
+      // 替换内容而不是替换整个元素
+      targetEl.innerHTML = '<div style="font-size:12px;line-height:1.8;padding:4px 0;">' +
+        '<div style="font-weight:600;font-size:13px;margin-bottom:4px;">📋 抢码状态</div>' +
+        '<div>⏳ 任务数：<span id="tm-log-taskCount">-</span></div>' +
+        '<div>⏰ 倒计时：<span id="tm-log-countdown">-</span></div>' +
+        '<div>📊 <span id="tm-log-status" style="color:#999;">等待中</span></div></div>';
     },
 
     updatePageLog(text) {
-      const logEl = document.getElementById('tm-page-log');
-      if (!logEl) return;
       const statusEl = document.getElementById('tm-log-status');
       if (statusEl && text) statusEl.textContent = text;
       const countEl = document.getElementById('tm-log-taskCount');
