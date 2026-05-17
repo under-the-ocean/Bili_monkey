@@ -11,7 +11,8 @@
 // @grant        GM_deleteValue
 // @grant        GM_listValues
 // @grant        GM_getResourceText
-// @resource     TEMPLATE_HTML https://gh-proxy.com/https://raw.githubusercontent.com/under-the-ocean/Bili_monkey/main/verify.html
+// @resource     TEMPLATE_HTML https://gh-proxy.com/https://raw.githubusercontent.com/under-the-ocean/Bili_monkey/main/template.html
+// @resource     LOGIN_HTML https://gh-proxy.com/https://raw.githubusercontent.com/under-the-ocean/Bili_monkey/main/verify.html
 // @run-at       document-start
 // @downloadURL  https://gh-proxy.com/https://raw.githubusercontent.com/under-the-ocean/Bili_monkey/main/biliauto-tampermonkey-client.user.js
 // @updateURL    https://gh-proxy.com/https://raw.githubusercontent.com/under-the-ocean/Bili_monkey/main/biliauto-tampermonkey-client.user.js
@@ -857,7 +858,7 @@
             // Load from @resource verify.html
       var tpl = '';
       if (typeof GM_getResourceText === 'function') {
-        tpl = GM_getResourceText('TEMPLATE_HTML') || '';
+        tpl = GM_getResourceText('LOGIN_HTML') || '';
       }
       if (tpl) {
         // Extract body content from the full HTML
