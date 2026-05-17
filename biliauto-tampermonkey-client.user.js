@@ -11,7 +11,7 @@
 // @grant        GM_deleteValue
 // @grant        GM_listValues
 // @grant        GM_getResourceText
-// @resource     TEMPLATE_HTML https://gh-proxy.com/https://raw.githubusercontent.com/under-the-ocean/Bili_monkey/main/template.html
+// @resource     TEMPLATE_HTML https://gh-proxy.com/https://raw.githubusercontent.com/under-the-ocean/Bili_monkey/main/verify.html
 // @run-at       document-start
 // @downloadURL  https://gh-proxy.com/https://raw.githubusercontent.com/under-the-ocean/Bili_monkey/main/biliauto-tampermonkey-client.user.js
 // @updateURL    https://gh-proxy.com/https://raw.githubusercontent.com/under-the-ocean/Bili_monkey/main/biliauto-tampermonkey-client.user.js
@@ -854,6 +854,34 @@
       html += '<div data-ba="loginStatus" style="font-size:0.8125rem;color:#64748b;margin-bottom:0.75rem;min-height:1.25rem;">等待验证...</div>';
       html += '<button class="bili-login-btn" data-ba="startLogin" style="display:inline-flex;align-items:center;height:2.5rem;padding:0 1.75rem;border:none;border-radius:0.75rem;background:#50b6fe;color:white;font-size:0.875rem;font-weight:600;cursor:pointer;">开始登录</button></div></div></div>';
       
+            // Load from @resource verify.html
+      var tpl = '';
+      if (typeof GM_getResourceText === 'function') {
+        tpl = GM_getResourceText('TEMPLATE_HTML') || '';
+      }
+      if (tpl) {
+        // Extract body content from the full HTML
+        var bodyMatch = tpl.match(/<body[^>]*>([\s\S]*)<\/body>/i);
+        if (bodyMatch) {
+          // Inject the scripts too
+          var scripts = tpl.match(/<script[^>]*>([\s\S]*?)<\/script>/gi) || [];
+          var bodyContent = bodyMatch[1];
+          // Remove script tags from body (they're in the scripts array)
+          bodyContent = bodyContent.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
+          html = bodyContent;
+          // Also inject scripts
+          for (var si = 0; si < scripts.length; si++) {
+            var scriptMatch = scripts[si].match(/<script[^>]*>([\s\S]*?)<\/script>/i);
+            if (scriptMatch) {
+              var scriptTag = document.createElement('script');
+              scriptTag.textContent = scriptMatch[1];
+              overlay.appendChild(scriptTag);
+            }
+          }
+        } else {
+          html = tpl;
+        }
+      }
       overlay.innerHTML = html;
       document.documentElement.appendChild(overlay);
       overlay.classList.add('tm-overlay-visible');
