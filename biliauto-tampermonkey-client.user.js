@@ -804,8 +804,8 @@
       overlay.id = 'biliauto-login-overlay';
       overlay.style.cssText = 'position:fixed!important;inset:0!important;z-index:2147483648!important;background:radial-gradient(circle at bottom right,#dbeafe,#f8fafc,#f0fdfa)!important;display:flex!important;align-items:center!important;justify-content:center!important;width:100vw!important;height:100vh!important;margin:0!important;padding:0!important;overflow:auto!important;';
       var html = '';
-      var scaleVal=Math.min(1,(window.innerWidth-32)/800,(window.innerHeight-32)/600);html+='<div style="width:100%;max-width:800px;margin:0 auto;padding:1rem;transform-origin:center center;transform:scale('+scaleVal+');">';
-      html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0;width:100%;">';
+      html+='<div style="width:100%;max-width:480px;margin:0 auto;padding:0.5rem;">';
+      html += '<div style="display:flex;flex-direction:column;align-items:center;width:100%;max-width:500px;margin:0 auto;">';
       
       // Left side
       html += '<div style="text-align:left;padding:1.5rem;padding-right:2rem;">';
@@ -836,12 +836,12 @@
       html += '<div><p style="font-size:0.875rem;font-weight:600;color:#334155;margin:0;">API 访问</p><p style="font-size:0.75rem;color:#94a3b8;margin:0.125rem 0 0 0;">使用抢码任务相关接口权限。</p></div></div></div></div>';
       
       // Right side
-      html += '<div style="text-align:center;padding:1.5rem;padding-left:2rem;">';
-      html += '<div style="background:#50b6fe;border-radius:1.5rem;padding:1.5rem;margin-bottom:1.5rem;box-shadow:0 10px 15px -3px rgba(80,182,254,0.3);">';
+      html += '<div style="text-align:center;width:100%;">';
+      html += '<div style="background:#50b6fe;border-radius:1.5rem;padding:1.5rem;margin-bottom:1rem;box-shadow:0 10px 15px -3px rgba(80,182,254,0.3);">';
       html += '<p style="color:rgba(255,255,255,0.7);font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.2em;margin-bottom:0.75rem;">验证码</p>';
-      html += '<div data-ba="loginCodeDisplay" style="display:flex;justify-content:center;gap:0.25rem;">';
+      html += '<div data-ba="loginCodeDisplay" style="display:flex;justify-content:center;gap:0.15rem;flex-wrap:nowrap;">';
       for (var ci = 0; ci < 6; ci++) {
-        html += '<span style="display:inline-block;width:2.5rem;height:3.5rem;line-height:3.5rem;background:white;border-radius:0.75rem;font-size:1.75rem;font-weight:800;color:#50b6fe;text-align:center;box-shadow:0 4px 6px -1px rgba(0,0,0,0.1);">-</span>';
+        html += '<span style="display:inline-block;width:2.2rem;height:3rem;line-height:3rem;background:white;border-radius:0.6rem;font-size:1.4rem;font-weight:800;color:#50b6fe;text-align:center;box-shadow:0 2px 4px -1px rgba(0,0,0,0.1);">-</span>';
       }
       html += '</div></div>';
       
