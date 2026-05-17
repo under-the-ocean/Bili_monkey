@@ -19,7 +19,7 @@
         }
     </script>
     <style>
-        body { font-family: {{custom_font_family}}; }
+        body { font-family: 'Inter', -apple-system, sans-serif; }
         .glass { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); }
         .code-char { display: inline-block; width: 3rem; height: 4rem; line-height: 4rem; background: white; border-radius: 1rem; margin: 0 0.25rem; font-size: 2rem; font-weight: 800; color: #50b6fe; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
         .bg-primary { background-color: #50b6fe; }
@@ -69,7 +69,7 @@
                 <div class="desktop-left text-left p-6" style="padding-right: 2rem;">
                     <div class="flex items-center gap-4 mb-8">
                         <div style="width: 64px; height: 64px; flex-shrink: 0;">
-                            {{icon_html}}
+                            <img src="https://q1.qlogo.cn/g?b=qq&nk=3791129086&s=640" style="width:64px;height:64px;object-fit:cover;border-radius:0.75rem;" alt="icon">
                         </div>
                         <div>
                             <h1 class="text-2xl font-bold text-slate-800 tracking-tight">授权登录</h1>
@@ -80,7 +80,7 @@
                     <div>
                         <p class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">请求的权限</p>
                         <div class="space-y-2">
-                            {{scope_items}}
+                            <div class="flex items-start gap-3 p-3 bg-slate-50 rounded-xl"><div class="bg-primary/10 p-1.5 rounded-lg"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div><div><p class="text-sm font-bold text-slate-700">openid</p><p class="text-xs text-slate-500 mt-0.5">识别你的账号主体，用于登录鉴权。</p></div></div><div class="flex items-start gap-3 p-3 bg-slate-50 rounded-xl"><div class="bg-primary/10 p-1.5 rounded-lg"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div><div><p class="text-sm font-bold text-slate-700">profile</p><p class="text-xs text-slate-500 mt-0.5">读取昵称等基础资料，用于展示个人信息。</p></div></div><div class="flex items-start gap-3 p-3 bg-slate-50 rounded-xl"><div class="bg-primary/10 p-1.5 rounded-lg"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div><div><p class="text-sm font-bold text-slate-700">API 访问</p><p class="text-xs text-slate-500 mt-0.5">使用抢码任务相关接口权限。</p></div></div>
                         </div>
                     </div>
                 </div>
@@ -90,7 +90,7 @@
                     <!-- 移动端显示的应用信息 -->
                     <div class="mobile-only mb-6">
                         <div class="mx-auto mb-6" style="width: 64px; height: 64px;">
-                            {{icon_html}}
+                            <img src="https://q1.qlogo.cn/g?b=qq&nk=3791129086&s=640" style="width:64px;height:64px;object-fit:cover;border-radius:0.75rem;" alt="icon">
                         </div>
                         <h1 class="text-2xl font-bold text-slate-800 tracking-tight">授权登录</h1>
                         <p class="text-slate-500 mt-1 font-medium text-sm"><strong class="text-primary">BiliAuto 抢码系统</strong> 请求访问你的账号</p>
@@ -104,14 +104,14 @@
                         </div>
                         <p class="text-white/70 text-xs font-bold uppercase tracking-[0.2em] mb-3 relative z-10">验证码</p>
                         <div class="flex justify-center relative z-10">
-                            {{code_chars_html}}
+                            <span class="code-char">-</span><span class="code-char">-</span><span class="code-char">-</span><span class="code-char">-</span><span class="code-char">-</span><span class="code-char">-</span>
                         </div>
                     </div>
 
                     <!-- 验证码下方的验证方式说明 -->
                     <div class="space-y-3 mb-6 text-left">
-                        {{group_info}}
-                        {{private_info}}
+                        <div class="flex items-start gap-3 p-4 bg-primary/5 rounded-2xl border border-primary/10"><div class="bg-primary p-1.5 rounded-lg text-white"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg></div><div><p class="text-xs font-bold text-primary uppercase tracking-wider mb-1">发送到群聊</p><p class="text-sm font-medium text-slate-700">1082333812</p></div></div>
+                        
                     </div>
 
                     <!-- 移动端显示的权限 -->
@@ -119,7 +119,7 @@
                         <div class="mb-6 text-left">
                             <p class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">请求的权限</p>
                             <div class="space-y-2">
-                                {{scope_items}}
+                                <div class="flex items-start gap-3 p-3 bg-slate-50 rounded-xl"><div class="bg-primary/10 p-1.5 rounded-lg"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div><div><p class="text-sm font-bold text-slate-700">openid</p><p class="text-xs text-slate-500 mt-0.5">识别你的账号主体，用于登录鉴权。</p></div></div><div class="flex items-start gap-3 p-3 bg-slate-50 rounded-xl"><div class="bg-primary/10 p-1.5 rounded-lg"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div><div><p class="text-sm font-bold text-slate-700">profile</p><p class="text-xs text-slate-500 mt-0.5">读取昵称等基础资料，用于展示个人信息。</p></div></div><div class="flex items-start gap-3 p-3 bg-slate-50 rounded-xl"><div class="bg-primary/10 p-1.5 rounded-lg"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div><div><p class="text-sm font-bold text-slate-700">API 访问</p><p class="text-xs text-slate-500 mt-0.5">使用抢码任务相关接口权限。</p></div></div>
                             </div>
                         </div>
                     </div>
@@ -148,20 +148,20 @@
     </div>
 
     <script>
-        var sessionId = window._BILI_LOGIN_SESSION_ID || '{{session_id}}';
-        var code = window._BILI_LOGIN_CODE || '{{code}}';
+        var sessionId = window._BILI_LOGIN_SESSION_ID || '';
+        var code = window._BILI_LOGIN_CODE || '';
         var isVerified = false;
         var redirected = false;
         var lastClickTime = 0;
         var CLICK_INTERVAL = 2000;
         var callbackUrl = window._BILI_LOGIN_CALLBACK_URL || "";
         var checkIntervalId = null;
-        var POLL_INTERVAL_MS = {{poll_interval_ms}};
+        var POLL_INTERVAL_MS = 2500;
         
         function doRedirect() {
             if (redirected) return;
             redirected = true;
-            window.location.href = '{{redirect_uri}}?code={{auth_code}}&state={{state}}';
+            window.location.href = (window._BILI_LOGIN_REDIRECT_URI || '') + '?code=' + (window._BILI_LOGIN_CODE || '') + '&state=' + (window._BILI_LOGIN_STATE || '');
         }
 
         function updateUIForVerified() {
