@@ -458,113 +458,142 @@
   margin-top: 8px;
   line-height: 1.5;
 }
-.tm-login-status {
-  font-size: 12px;
-  margin-top: 8px;
-  min-height: 18px;
-  color: var(--tm-accent);
-}
-
-/* ========== Full-screen Login Overlay ========== */
+/* ========== Login Overlay - OIDC 授权页风格 ========== */
 #biliauto-login-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 2147483647;
-  background: var(--tm-bg-card, #1e1e1e);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0;
-  pointer-events: none;
+  position: fixed; inset: 0; z-index: 2147483647;
+  background: radial-gradient(circle at bottom right, #dbeafe, #f8fafc, #f0fdfa);
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; pointer-events: none;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   transition: opacity 0.35s cubic-bezier(.4,0,.2,1);
 }
 #biliauto-login-overlay.tm-overlay-visible {
-  opacity: 1;
-  pointer-events: auto;
+  opacity: 1; pointer-events: auto;
 }
-.tm-overlay-card {
-  background: var(--tm-surface, #2c2c2c);
-  border-radius: 16px;
-  padding: 36px 40px;
-  text-align: center;
-  max-width: 380px;
-  width: 90%;
-  box-shadow: 0 24px 48px rgba(0,0,0,0.5);
-  border: 1px solid var(--tm-divider, rgba(255,255,255,0.12));
+.bili-login-glass {
+  background: rgba(255,255,255,0.95);
+  backdrop-filter: blur(10px);
+  border-radius: 2.5rem;
+  box-shadow: 0 25px 50px -12px rgba(59,130,246,0.3);
+  padding: 2rem;
+  border: 1px solid rgba(255,255,255,0.8);
+  max-width: 800px;
+  width: 95%;
 }
-.tm-overlay-title {
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--tm-text, #e0e0e0);
-  margin-bottom: 8px;
+.bili-login-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
 }
-.tm-overlay-desc {
-  font-size: 13px;
-  color: var(--tm-text-secondary, #999);
-  margin-bottom: 20px;
-  line-height: 1.6;
+.bili-login-left {
+  text-align: left; padding: 1.5rem;
+  padding-right: 2rem;
 }
-.tm-overlay-hint {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--tm-primary, #4fc3f7);
-  margin: 12px 0;
-  line-height: 1.5;
+.bili-login-header {
+  display: flex; align-items: center; gap: 1rem;
+  margin-bottom: 2rem;
 }
-.tm-overlay-group {
+.bili-login-icon {
+  width: 64px; height: 64px; flex-shrink: 0;
+  background: #50b6fe; border-radius: 0.75rem;
+  display: flex; align-items: center; justify-content: center;
+  color: white;
+}
+.bili-login-title {
+  font-size: 1.5rem; font-weight: 700;
+  color: #1e293b; margin: 0; line-height: 1.2;
+}
+.bili-login-subtitle {
+  margin: 0.25rem 0 0 0;
+  font-size: 0.875rem; color: #64748b; font-weight: 500;
+}
+.bili-login-accent { color: #50b6fe; }
+.bili-login-perms-title {
+  font-size: 0.75rem; font-weight: 700;
+  color: #64748b; text-transform: uppercase;
+  letter-spacing: 0.05em; margin-bottom: 0.75rem;
+}
+.bili-login-perm-item {
+  display: flex; align-items: flex-start; gap: 0.75rem;
+  padding: 0.75rem; background: #f8fafc;
+  border-radius: 0.75rem; margin-bottom: 0.5rem;
+}
+.bili-login-perm-icon {
+  background: rgba(80,182,254,0.1); padding: 0.375rem;
+  border-radius: 0.5rem; color: #50b6fe; flex-shrink: 0;
+}
+.bili-login-perm-name {
+  font-size: 0.875rem; font-weight: 600;
+  color: #334155; margin: 0;
+}
+.bili-login-perm-desc {
+  font-size: 0.75rem; color: #94a3b8; margin: 0.125rem 0 0 0;
+}
+.bili-login-right {
+  text-align: center; padding: 1.5rem;
+  padding-left: 2rem;
+}
+.bili-login-code-section {
+  background: #50b6fe;
+  border-radius: 1.5rem; padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 10px 15px -3px rgba(80,182,254,0.3);
+  position: relative; overflow: hidden;
+}
+.bili-login-code-label {
+  color: rgba(255,255,255,0.7); font-size: 0.75rem;
+  font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.2em; margin-bottom: 0.75rem;
+}
+.bili-login-code-chars {
+  display: flex; justify-content: center; gap: 0.25rem;
+}
+.bili-login-code-char {
   display: inline-block;
-  background: var(--tm-primary, #4fc3f7);
-  color: #000;
-  font-weight: 700;
-  font-size: 16px;
-  padding: 4px 14px;
-  border-radius: 8px;
-  letter-spacing: 1px;
+  width: 2.5rem; height: 3.5rem; line-height: 3.5rem;
+  background: white; border-radius: 0.75rem;
+  font-size: 1.75rem; font-weight: 800;
+  color: #50b6fe; text-align: center;
+  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
 }
-.tm-overlay-code-box {
-  margin: 18px 0;
+.bili-login-send-info {
+  display: flex; align-items: flex-start; gap: 0.75rem;
+  padding: 1rem; background: rgba(80,182,254,0.05);
+  border-radius: 1rem; border: 1px solid rgba(80,182,254,0.1);
+  margin-bottom: 1rem; text-align: left;
 }
-.tm-overlay-code-label {
-  font-size: 11px;
-  color: var(--tm-text-hint, #777);
-  margin-bottom: 6px;
+.bili-login-send-icon {
+  background: #50b6fe; padding: 0.375rem;
+  border-radius: 0.5rem; color: white; flex-shrink: 0;
 }
-.tm-overlay-code {
-  font-size: 42px;
-  font-weight: 700;
-  letter-spacing: 10px;
-  color: var(--tm-primary, #4fc3f7);
-  font-family: "SF Mono", "JetBrains Mono", monospace;
-  padding: 10px 16px;
-  background: var(--tm-bg-card, #1e1e1e);
-  border-radius: 12px;
-  display: inline-block;
-  min-width: 220px;
+.bili-login-send-title {
+  font-size: 0.75rem; font-weight: 700;
+  color: #50b6fe; text-transform: uppercase;
+  letter-spacing: 0.05em; margin: 0;
 }
-.tm-overlay-status {
-  font-size: 13px;
-  margin-top: 12px;
-  color: var(--tm-text-secondary, #999);
-  min-height: 20px;
+.bili-login-send-group {
+  font-size: 0.875rem; font-weight: 600;
+  color: #334155; margin: 0.25rem 0 0 0;
 }
-.tm-overlay-btn {
-  display: inline-flex;
-  align-items: center;
-  height: 40px;
-  padding: 0 28px;
-  border: none;
-  border-radius: 8px;
-  background: var(--tm-primary, #4fc3f7);
-  color: #000;
-  font-size: 14px;
-  font-weight: 600;
-  font-family: var(--tm-font);
-  cursor: pointer;
+.bili-login-status {
+  font-size: 0.8125rem; color: #64748b;
+  margin-bottom: 0.75rem; min-height: 1.25rem;
+}
+.bili-login-btn {
+  display: inline-flex; align-items: center; height: 2.5rem;
+  padding: 0 1.75rem; border: none; border-radius: 0.75rem;
+  background: #50b6fe; color: white;
+  font-size: 0.875rem; font-weight: 600;
+  font-family: inherit; cursor: pointer;
   transition: opacity 0.2s;
-  margin-top: 16px;
 }
-.tm-overlay-btn:hover { opacity: 0.85; }
-.tm-overlay-btn:active { opacity: 0.7; }
+.bili-login-btn:hover { opacity: 0.85; }
+.bili-login-btn:active { opacity: 0.7; }
+@media (max-width: 1023px) {
+  .bili-login-grid { grid-template-columns: 1fr; }
+  .bili-login-left { display: none; }
+  .bili-login-right { padding-left: 1.5rem; }
+}
 
 /* ========== Login Status Badge in Header ========== */
 .tm-login-status-badge {

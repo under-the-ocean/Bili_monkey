@@ -724,20 +724,57 @@
       overlay = document.createElement('div');
       overlay.id = 'biliauto-login-overlay';
       overlay.innerHTML = `
-        <div class="tm-overlay-card">
-          <div class="tm-overlay-title">🔑 登录 B站抢码系统</div>
-          <div class="tm-overlay-desc">
-            请将下方验证码发送到 QQ群<br>
-            <span class="tm-overlay-group">1082333812</span><br>
-            完成验证后自动登录
+        <div id="biliauto-login-card" class="bili-login-glass">
+          <div class="bili-login-grid">
+            <div class="bili-login-left">
+              <div class="bili-login-header">
+                <div class="bili-login-icon">
+                  <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+                </div>
+                <div>
+                  <h1 class="bili-login-title">授权登录</h1>
+                  <p class="bili-login-subtitle"><strong class="bili-login-accent">BiliAuto 抢码系统</strong> 请求访问你的账号</p>
+                </div>
+              </div>
+              <div class="bili-login-perms">
+                <p class="bili-login-perms-title">请求的权限</p>
+                <div class="bili-login-perm-item">
+                  <div class="bili-login-perm-icon"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div>
+                  <div><p class="bili-login-perm-name">openid</p><p class="bili-login-perm-desc">识别你的账号主体，用于登录鉴权。</p></div>
+                </div>
+                <div class="bili-login-perm-item">
+                  <div class="bili-login-perm-icon"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div>
+                  <div><p class="bili-login-perm-name">profile</p><p class="bili-login-perm-desc">读取昵称等基础资料，用于展示个人信息。</p></div>
+                </div>
+                <div class="bili-login-perm-item">
+                  <div class="bili-login-perm-icon"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div>
+                  <div><p class="bili-login-perm-name">API 访问</p><p class="bili-login-perm-desc">使用抢码任务相关接口权限。</p></div>
+                </div>
+              </div>
+            </div>
+            <div class="bili-login-right">
+              <div class="bili-login-code-section">
+                <p class="bili-login-code-label">验证码</p>
+                <div class="bili-login-code-chars" data-ba="loginCodeDisplay">
+                  <span class="bili-login-code-char">-</span>
+                  <span class="bili-login-code-char">-</span>
+                  <span class="bili-login-code-char">-</span>
+                  <span class="bili-login-code-char">-</span>
+                  <span class="bili-login-code-char">-</span>
+                  <span class="bili-login-code-char">-</span>
+                </div>
+              </div>
+              <div class="bili-login-send-info">
+                <div class="bili-login-send-icon"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg></div>
+                <div>
+                  <p class="bili-login-send-title">发送到群聊</p>
+                  <p class="bili-login-send-group">1082333812</p>
+                </div>
+              </div>
+              <div data-ba="loginStatus" class="bili-login-status">等待验证...</div>
+              <button class="bili-login-btn" data-ba="startLogin">开始登录</button>
+            </div>
           </div>
-          <div class="tm-overlay-code-box" data-ba="loginCodeBox" style="display:none">
-            <div class="tm-overlay-code-label">验证码</div>
-            <div class="tm-overlay-code" data-ba="loginCodeDisplay"></div>
-            <div class="tm-overlay-hint">发送验证码到 QQ群 1082333812</div>
-            <div class="tm-overlay-status" data-ba="loginStatus">正在获取验证码...</div>
-          </div>
-          <button class="tm-overlay-btn" data-ba="startLogin">开始登录</button>
         </div>`;
       overlay.addEventListener('click', (e) => {
         const target = e.target.closest('[data-ba]');
@@ -759,12 +796,10 @@
     async startLogin() {
       const btn = document.querySelector('#biliauto-login-overlay [data-ba="startLogin"]');
       if (btn) btn.style.display = 'none';
-      const box = document.querySelector('#biliauto-login-overlay [data-ba="loginCodeBox"]');
       const display = document.querySelector('#biliauto-login-overlay [data-ba="loginCodeDisplay"]');
       const statusEl = document.querySelector('#biliauto-login-overlay [data-ba="loginStatus"]');
-      if (!box || !display || !statusEl) return;
+      if (!display || !statusEl) return;
 
-      box.style.display = 'block';
       statusEl.textContent = '正在获取验证码...';
       statusEl.style.color = '';
 
@@ -777,7 +812,10 @@
           return;
         }
         this.state.loginCode = code;
-        display.textContent = code;
+        // 逐位填入验证码
+        const chars = display.querySelectorAll('.bili-login-code-char');
+        const codeStr = String(code);
+        chars.forEach((el, i) => { el.textContent = codeStr[i] || '-'; });
         statusEl.textContent = '等待验证...';
         this.pollLoginStatus(code);
       } catch (e) {
