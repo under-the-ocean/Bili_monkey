@@ -1,8 +1,7 @@
 // ==UserScript==
 // @name         BiliAutoClicker - 油猴客户端
 // @namespace    https://github.com/under-the-ocean
-// @version      0.6.1
-// @description  远程读取任务、任务配置管理、领取接口监控、定时连点、批量上报（模板分离版）
+// @version      0.6.2
 // @author       under-the-ocean
 // @match        https://www.bilibili.com/blackboard/era/award-exchange.html?*
 // @connect      150.242.246.137
