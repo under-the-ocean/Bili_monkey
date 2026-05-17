@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BiliAutoClicker - 油猴客户端
 // @namespace    https://github.com/under-the-ocean
-// @version      0.7.0
+// @version      0.6.2
 // @author       under-the-ocean
 // @match        https://www.bilibili.com/blackboard/era/award-exchange.html?*
 // @connect      150.242.246.137
@@ -532,8 +532,6 @@
         else if (action === 'addTask') this.addCustomTask();
         else if (action === 'removeTask') this.removeTask(target.getAttribute('data-taskid'));
         else if (action === 'defaults') this.applyDefaults();
-        else if (action === 'pagePrev') { this.state._page = (this.state._page || 1) - 1; this.renderList(); }
-        else if (action === 'pageNext') { this.state._page = (this.state._page || 1) + 1; this.renderList(); }
         else if (action === 'clearAll') this.clearAllTasks();
         else if (action === 'copyPageInfo') this.copyPageInfo();
         else if (action === 'toggleDark') this.toggleDarkMode();
@@ -590,69 +588,6 @@
       if (el) {
         el.textContent = text || '';
         el.style.color = text && text.includes('失败') ? 'var(--tm-accent)' : '';
-      }
-      // 同时更新页面上替换的日志区域
-      this.updatePageLog(text);
-    },
-
-    // 替换B站页面上的"领取须知"区域为抢码日志面板
-    injectLogPanel() {
-      const notices = document.querySelectorAll('div, section');
-      let targetEl = null;
-      for (const el of notices) {
-        if (el.textContent.includes('领取须知') && el.children.length >= 2 && el.children.length <= 5) {
-          targetEl = el;
-          break;
-        }
-      }
-      if (!targetEl) return;
-      this._originalNoticeHTML = targetEl.innerHTML;
-      targetEl.innerHTML = `
-        <div style="padding:8px 0;font-size:13px;color:#666;">
-          <div style="font-weight:600;font-size:14px;color:#333;margin-bottom:6px;">📋 抢码运行状态</div>
-          <div id="tm-page-log" style="font-size:12px;line-height:1.8;">
-            <div>⏳ 等待任务开始...</div>
-            <div>📦 任务数：<span id="tm-log-taskCount">-</span></div>
-            <div>⏰ 距最近任务开始：<span id="tm-log-countdown">-</span></div>
-            <div>📊 日志：<span id="tm-log-status" style="color:#999;">等待中</span></div>
-          </div>
-        </div>
-      `;
-    },
-
-    updatePageLog(text) {
-      const logEl = document.getElementById('tm-page-log');
-      if (!logEl) return;
-      const statusEl = document.getElementById('tm-log-status');
-      if (statusEl && text) statusEl.textContent = text;
-      const countEl = document.getElementById('tm-log-taskCount');
-      if (countEl) countEl.textContent = String(this.state.tasks.length);
-      if (!this._countdownTimer) {
-        this._countdownTimer = setInterval(() => {
-          const el = document.getElementById('tm-log-countdown');
-          if (!el) { clearInterval(this._countdownTimer); this._countdownTimer = null; return; }
-          let minWait = '-';
-          const now = Date.now();
-          for (const task of this.state.tasks) {
-            const taskId = String(task.task_value || task.value || task.task_id || '');
-            const cfg = this.state.taskConfigs[taskId];
-            if (cfg && cfg.start_time) {
-              const parts = cfg.start_time.split(':');
-              if (parts.length === 3) {
-                const target = new Date();
-                target.setHours(+parts[0], +parts[1], +parts[2], 0);
-                if (target <= now) target.setDate(target.getDate() + 1);
-                const diff = Math.max(0, Math.floor((target - now) / 1000));
-                const h = Math.floor(diff / 3600);
-                const m = Math.floor((diff % 3600) / 60);
-                const s = diff % 60;
-                const wait = `${h}时${m}分${s}秒`;
-                if (minWait === '-' || diff < parseInt(now)) minWait = wait;
-              }
-            }
-          }
-          el.textContent = minWait;
-        }, 1000);
       }
     },
 
@@ -1064,29 +999,7 @@
         list.innerHTML = '<div class="tm-material-empty">暂无任务<br>点击「刷新」拉取或输入 task_id 添加</div>';
         return;
       }
-      list.innerHTML = (() => {
-        // 分页: 每页10个
-        const PER_PAGE = 10;
-        const totalPages = Math.max(1, Math.ceil(tasks.length / PER_PAGE));
-        let page = this.state._page || 1;
-        if (page > totalPages) page = totalPages;
-        if (page < 1) page = 1;
-        this.state._page = page;
-        const start = (page - 1) * PER_PAGE;
-        const pageTasks = tasks.slice(start, start + PER_PAGE);
-
-        let html = '';
-        // 分页导航
-        html += `<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;margin-bottom:4px;font-size:12px;color:var(--tm-text-secondary)">
-          <span>共 ${tasks.length} 个任务</span>
-          <span style="display:flex;gap:4px;align-items:center">
-            <button class="tm-material-btn tm-material-btn-xs" data-ba="pagePrev" ${page <= 1 ? 'disabled style="opacity:0.4"' : ''}>‹ 上一页</button>
-            <span>${page}/${totalPages}</span>
-            <button class="tm-material-btn tm-material-btn-xs" data-ba="pageNext" ${page >= totalPages ? 'disabled style="opacity:0.4"' : ''}>下一页 ›</button>
-          </span>
-        </div>`;
-
-        html += pageTasks.map(task => {
+      list.innerHTML = tasks.map(task => {
         const taskId = String(task.task_value || task.value || task.task_id || '');
         const name = String(task.task_key || task.name || task.id || '未命名任务');
         const cfg = this.state.taskConfigs[taskId] || Util.defaultTaskConfig(taskId);
@@ -1586,7 +1499,6 @@
     Util.info(`API 地址: ${CONFIG.API_BASE}`);
 
     Panel.init();
-    Panel.injectLogPanel();
 
     if (!isLoggedIn()) {
       Util.info('未登录，显示全屏登录界面');
