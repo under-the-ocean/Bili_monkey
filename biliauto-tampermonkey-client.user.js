@@ -442,6 +442,16 @@
       const handle = root.querySelector('.tm-material-header');
       if (!handle || handle.dataset.dragInitialized) return;
       handle.dataset.dragInitialized = '1';
+      // 如果之前有保存位置，用保存的位置覆盖css
+      const savedX = GM_getValue('material_panel_x', null);
+      const savedY = GM_getValue('material_panel_y', null);
+      if (savedX !== null && savedY !== null) {
+        root.style.left = savedX + 'px';
+        root.style.top = savedY + 'px';
+        root.style.right = 'auto';
+        root.style.bottom = 'auto';
+        root.style.transform = 'none';
+      }
       let isDragging = false, startX, startY, origX, origY;
       handle.addEventListener('mousedown', (e) => {
         if (e.button !== 0) return;
@@ -456,6 +466,7 @@
         root.style.top = origY + 'px';
         root.style.right = 'auto';
         root.style.bottom = 'auto';
+        root.style.transform = 'none';
         root.style.transition = 'none';
         e.preventDefault();
       });

@@ -79,10 +79,8 @@
 /* ========== Panel ========== */
 #biliauto-panel {
   position: fixed;
-  left: 50%!important;
-  right: auto!important;
-  transform: translateX(-50%)!important;
-  bottom: 88px;
+  right: 24px;
+  top: 80px;
   z-index: 2147483646;
   width: 440px;
   max-width: calc(100vw - 48px);
@@ -411,7 +409,7 @@
   flex: 1;
 }
 
-/* ========== Login Overlay - 仿 OIDC 风格（响应式缩放） ========== */
+/* ========== Login Overlay - 全屏显示 ========== */
 #biliauto-login-overlay {
   position: fixed;
   inset: 0;
@@ -424,18 +422,27 @@
   pointer-events: none;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   transition: opacity 0.35s cubic-bezier(.4,0,.2,1);
-  padding: 16px;
   box-sizing: border-box;
 }
 #biliauto-login-overlay.tm-overlay-visible {
   opacity: 1;
   pointer-events: auto;
 }
-
-/* 桌面端容器 */
-.bili-login-glass {
-  background: rgba(255,255,255,0.95);
-  backdrop-filter: blur(10px);
+#biliauto-login-overlay .bili-login-glass {
+  width: 100vw;
+  min-height: 100vh;
+  border-radius: 0;
+  box-shadow: none;
+  border: none;
+  padding: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#biliauto-login-overlay .bili-login-glass .bili-login-inner {
+  max-width: 800px;
+  width: 100%;
+}
   border-radius: 2.5rem;
   box-shadow: 0 25px 50px -12px rgba(80,182,254,0.3);
   padding: 1.5rem;
