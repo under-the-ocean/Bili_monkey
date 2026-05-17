@@ -1,8 +1,7 @@
 // ==UserScript==
 // @name         BiliAutoClicker - 油猴客户端
 // @namespace    https://github.com/under-the-ocean
-// @version      0.7.0
-// @author       under-the-ocean
+// @version      0.7.1
 // @match        https://www.bilibili.com/blackboard/era/award-exchange.html?*
 // @connect      150.242.246.137
 // @grant        GM_xmlhttpRequest
