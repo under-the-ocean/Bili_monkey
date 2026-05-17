@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BiliAutoClicker - 油猴客户端
 // @namespace    https://github.com/under-the-ocean
-// @version      0.7.1
+// @version      0.7.3
 // @match        https://www.bilibili.com/blackboard/era/award-exchange.html?*
 // @connect      150.242.246.137
 // @grant        GM_xmlhttpRequest
@@ -12,11 +12,9 @@
 // @grant        GM_listValues
 // @grant        GM_getResourceText
 // @resource     TEMPLATE_HTML https://gh-proxy.com/https://raw.githubusercontent.com/under-the-ocean/Bili_monkey/main/template.html
-// @resource     LOGIN_HTML https://gh-proxy.com/https://raw.githubusercontent.com/under-the-ocean/Bili_monkey/main/verify.html
 // @run-at       document-start
 // @downloadURL  https://gh-proxy.com/https://raw.githubusercontent.com/under-the-ocean/Bili_monkey/main/biliauto-tampermonkey-client.user.js
 // @updateURL    https://gh-proxy.com/https://raw.githubusercontent.com/under-the-ocean/Bili_monkey/main/biliauto-tampermonkey-client.user.js
-// ==/UserScript==
 // ==/UserScript==
 
 (function () {
@@ -36,7 +34,7 @@
     DEFAULT_START_TIME: '00:29:57',
     MAX_RELOAD_ATTEMPTS: 3,
 
-    VERSION: '0.5.0',
+    VERSION: '0.7.3',
     RETRY_COUNT: 2,
     DEBUG: true
   };
@@ -606,48 +604,47 @@
       this.updatePageLog(text);
     },
 
-    // 替换B站页面上的"领取须知"区域为抢码日志面板
+    // 替换B站页面指定公告段落为滚动抢码日志面板
     injectLogPanel() {
-      // 精确查找包含"领取须知"文本的段落元素
-      const allEls = document.querySelectorAll('p, div, span');
-      let targetEl = null;
-      for (const el of allEls) {
-        if (el.children.length === 0 && el.textContent.trim() === '领取须知') {
-          targetEl = el;
-          break;
-        }
-      }
-      if (!targetEl) {
-        // 兜底：找包含"领取须知"的父容器，只替换其内部内容
-        for (const el of allEls) {
-          if (el.textContent.includes('领取须知') && el.children.length <= 3) {
-            targetEl = el;
-            break;
-          }
-        }
-      }
+      const targetEl = document.querySelector('#app > div > div.home-wrap.select-disable > section.notice-wrap > p.content');
       if (!targetEl) return;
-      // 保存原始内容
-      this._originalNoticeEl = targetEl;
-      this._originalNoticeHTML = targetEl.innerHTML;
-      // 替换内容而不是替换整个元素
-      targetEl.innerHTML = '<div style="font-size:12px;line-height:1.8;padding:4px 0;">' +
-        '<div style="font-weight:600;font-size:13px;margin-bottom:4px;">📋 抢码状态</div>' +
-        '<div>⏳ 任务数：<span id="tm-log-taskCount">-</span></div>' +
-        '<div>⏰ 倒计时：<span id="tm-log-countdown">-</span></div>' +
-        '<div>📊 <span id="tm-log-status" style="color:#999;">等待中</span></div></div>';
+      if (targetEl.dataset.biliautoLogInjected === '1') return;
+      targetEl.dataset.biliautoLogInjected = '1';
+      this._pageLogs = this._pageLogs || [];
+      targetEl.innerHTML = '<div id="tm-page-log-panel" style="font-size:12px;line-height:1.55;padding:6px 0;color:inherit;">' +
+        '<div style="font-weight:700;font-size:13px;margin-bottom:6px;display:flex;justify-content:space-between;gap:8px;">' +
+          '<span>📋 抢码滚动日志</span><span>任务 <b id="tm-log-taskCount">-</b></span>' +
+        '</div>' +
+        '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:6px;color:#666;">' +
+          '<span>倒计时：<b id="tm-log-countdown">-</b></span>' +
+          '<span>状态：<b id="tm-log-status">等待中</b></span>' +
+        '</div>' +
+        '<div id="tm-log-scroll" style="height:96px;overflow-y:auto;border:1px solid rgba(0,0,0,.10);border-radius:8px;background:rgba(255,255,255,.58);padding:6px;white-space:pre-wrap;font-family:Consolas,Menlo,monospace;"></div>' +
+      '</div>';
+      this.updatePageLog('日志面板已接管公告区域');
     },
 
     updatePageLog(text) {
+      if (text) {
+        this._pageLogs = this._pageLogs || [];
+        const time = new Date().toLocaleTimeString();
+        this._pageLogs.push('[' + time + '] ' + text);
+        if (this._pageLogs.length > 80) this._pageLogs = this._pageLogs.slice(-80);
+      }
       const statusEl = document.getElementById('tm-log-status');
       if (statusEl && text) statusEl.textContent = text;
       const countEl = document.getElementById('tm-log-taskCount');
       if (countEl) countEl.textContent = String(this.state.tasks.length);
+      const scrollEl = document.getElementById('tm-log-scroll');
+      if (scrollEl) {
+        scrollEl.textContent = (this._pageLogs && this._pageLogs.length) ? this._pageLogs.join('\n') : '[--:--:--] 等待中';
+        scrollEl.scrollTop = scrollEl.scrollHeight;
+      }
       if (!this._countdownTimer) {
         this._countdownTimer = setInterval(() => {
           const el = document.getElementById('tm-log-countdown');
           if (!el) { clearInterval(this._countdownTimer); this._countdownTimer = null; return; }
-          let minWait = '-';
+          let bestDiff = null;
           const now = Date.now();
           for (const task of this.state.tasks) {
             const taskId = String(task.task_value || task.value || task.task_id || '');
@@ -657,17 +654,17 @@
               if (parts.length === 3) {
                 const target = new Date();
                 target.setHours(+parts[0], +parts[1], +parts[2], 0);
-                if (target <= now) target.setDate(target.getDate() + 1);
-                const diff = Math.max(0, Math.floor((target - now) / 1000));
-                const h = Math.floor(diff / 3600);
-                const m = Math.floor((diff % 3600) / 60);
-                const s = diff % 60;
-                const wait = `${h}时${m}分${s}秒`;
-                if (minWait === '-' || diff < parseInt(now)) minWait = wait;
+                if (target.getTime() <= now) target.setDate(target.getDate() + 1);
+                const diff = Math.max(0, Math.floor((target.getTime() - now) / 1000));
+                if (bestDiff === null || diff < bestDiff) bestDiff = diff;
               }
             }
           }
-          el.textContent = minWait;
+          if (bestDiff === null) { el.textContent = '-'; return; }
+          const h = Math.floor(bestDiff / 3600);
+          const m = Math.floor((bestDiff % 3600) / 60);
+          const sec = bestDiff % 60;
+          el.textContent = h + '时' + m + '分' + sec + '秒';
         }, 1000);
       }
     },
@@ -703,9 +700,6 @@
       CONFIG.QQ_ID = '';
       CONFIG.API_KEY = '';
       this.state.loginStatus = '';
-      const badge = document.querySelector('#biliauto-panel [data-ba="loginStatusBadge"]');
-      if (badge) badge.style.display = 'none';
-      document.querySelectorAll('[data-ba="logout"]').forEach(el => el.style.display = 'none');
       this.setStatus('已退出登录');
       this.showLoginOverlay();
       Util.info('用户已退出登录');
@@ -795,59 +789,29 @@
     },
 
 
-    showLoginOverlay() {
-      var o = document.getElementById('biliauto-login-overlay');
-      if (o) { o.classList.add('tm-overlay-visible'); return; }
+    showLoginOverlay(reason) {
+      let o = document.getElementById('biliauto-login-overlay');
+      if (o) { o.style.display = 'flex'; return; }
       o = document.createElement('div');
       o.id = 'biliauto-login-overlay';
-      // Set all styles via cssText - NEVER use class-based styles that can be overridden
-      o.style.cssText = 'all:initial!important;position:fixed!important;left:0!important;top:0!important;width:100vw!important;height:100vh!important;z-index:2147483647!important;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%)!important;display:flex!important;align-items:center!important;justify-content:center!important;overflow:auto!important;';
-      
-      // Create inner card with all inline styles
-      var card = document.createElement('div');
-      card.style.cssText = 'background:#fff!important;border-radius:16px!important;padding:32px!important;max-width:440px!important;width:92%!important;margin:16px!important;box-sizing:border-box!important;text-align:center!important;font-family:Arial,sans-serif!important;';
-      
-      // Build content with string concat (NO template literals!)
-      var h = '';
-      // Icon
-      h += '<div style="width:64px;height:64px;margin:0 auto 16px;background:#667eea;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:28px;color:#fff;">B</div>';
-      // Title
-      h += '<div style="font-size:22px;font-weight:700;color:#1a1a2e;margin-bottom:4px;">授权登录</div>';
-      h += '<div style="font-size:14px;color:#666;margin-bottom:24px;"><strong style="color:#667eea;">BiliAuto 抢码系统</strong> 请求访问你的账号</div>';
-      // Permissions
-      h += '<div style="text-align:left;margin-bottom:20px;">';
-      h += '<div style="font-size:12px;font-weight:600;color:#999;text-transform:uppercase;margin-bottom:8px;">请求的权限</div>';
-      h += '<div style="display:flex;align-items:flex-start;gap:10px;padding:10px;background:#f8f9fa;border-radius:10px;margin-bottom:6px;"><div style="width:20px;height:20px;background:#667eea20;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#667eea;flex-shrink:0;font-size:12px;">✓</div><div><div style="font-size:13px;font-weight:600;color:#333;">openid</div><div style="font-size:12px;color:#999;">识别你的账号主体，用于登录鉴权。</div></div></div>';
-      h += '<div style="display:flex;align-items:flex-start;gap:10px;padding:10px;background:#f8f9fa;border-radius:10px;margin-bottom:6px;"><div style="width:20px;height:20px;background:#667eea20;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#667eea;flex-shrink:0;font-size:12px;">✓</div><div><div style="font-size:13px;font-weight:600;color:#333;">profile</div><div style="font-size:12px;color:#999;">读取昵称等基础资料，用于展示个人信息。</div></div></div>';
-      h += '<div style="display:flex;align-items:flex-start;gap:10px;padding:10px;background:#f8f9fa;border-radius:10px;"><div style="width:20px;height:20px;background:#667eea20;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#667eea;flex-shrink:0;font-size:12px;">✓</div><div><div style="font-size:13px;font-weight:600;color:#333;">API 访问</div><div style="font-size:12px;color:#999;">使用抢码任务相关接口权限。</div></div></div></div>';
-      // Code section
-      h += '<div style="background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);border-radius:16px;padding:20px;margin-bottom:16px;">';
-      h += '<div style="color:rgba(255,255,255,0.7);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:2px;margin-bottom:12px;">验证码</div>';
-      h += '<div data-ba="loginCodeDisplay" style="display:flex;justify-content:center;gap:6px;">';
-      for (var ci = 0; ci < 6; ci++) {
-        h += '<span style="display:inline-block;width:40px;height:52px;line-height:52px;background:#fff;border-radius:10px;font-size:24px;font-weight:800;color:#667eea;text-align:center;">-</span>';
-      }
-      h += '</div></div>';
-      // Group info
-      h += '<div style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:#f0f4ff;border-radius:12px;margin-bottom:16px;text-align:left;">';
-      h += '<div style="background:#667eea;padding:6px;border-radius:8px;color:#fff;flex-shrink:0;font-size:12px;">👥</div>';
-      h += '<div><div style="font-size:11px;font-weight:600;color:#667eea;text-transform:uppercase;margin-bottom:2px;">发送到群聊</div><div style="font-size:14px;font-weight:600;color:#333;">1082333812</div></div></div>';
-      // Status
-      h += '<div data-ba="loginStatus" style="font-size:13px;color:#999;margin-bottom:12px;min-height:20px;">等待验证...</div>';
-      // Button
-      h += '<button class="bli-login-btn" data-ba="startLogin" style="width:100%;height:44px;border:none;border-radius:12px;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:#fff;font-size:15px;font-weight:600;cursor:pointer;">开始登录</button>';
-      
-      card.innerHTML = h;
-      o.appendChild(card);
+      o.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:rgba(0,0,0,.62);display:flex;align-items:center;justify-content:center;font-family:Arial,sans-serif;padding:16px;';
+      const c = document.createElement('div');
+      c.style.cssText = 'width:min(420px,96vw);background:#fff;color:#111;border-radius:10px;padding:18px;box-shadow:0 12px 40px rgba(0,0,0,.22);text-align:left;';
+      c.innerHTML =
+        '<div style="font-size:18px;font-weight:700;margin-bottom:8px;">BiliAuto 登录</div>' +
+        '<div style="font-size:13px;color:#666;line-height:1.7;margin-bottom:10px;">未登录或登录已失效。点击按钮获取验证码，然后把验证码发送到群聊 <b>1082333812</b>。</div>' +
+        (reason ? '<div style="font-size:12px;color:#d33;margin-bottom:8px;">' + this.escape(reason) + '</div>' : '') +
+        '<div data-ba="loginCodeDisplay" style="font-size:34px;font-weight:800;letter-spacing:8px;text-align:center;margin:12px 0;font-family:Consolas,monospace;">------</div>' +
+        '<div data-ba="loginStatus" style="font-size:12px;color:#777;margin-bottom:12px;min-height:18px;">等待获取验证码</div>' +
+        '<button data-ba="startLogin" style="width:100%;height:38px;border:0;border-radius:7px;background:#1677ff;color:#fff;font-size:14px;font-weight:700;cursor:pointer;">获取验证码</button>';
+      o.appendChild(c);
       document.documentElement.appendChild(o);
-      
-      // Bind login button
-      card.querySelector('[data-ba="startLogin"]').onclick = function() {
-        this.startLogin();
-      }.bind(this);
-      
-      o.classList.add('tm-overlay-visible');
+      o.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-ba="startLogin"]');
+        if (btn) this.startLogin();
+      });
     },
+
     hideLoginOverlay() {
       const overlay = document.getElementById('biliauto-login-overlay');
       if (overlay) {
@@ -858,7 +822,7 @@
 
     async startLogin() {
       var btn = document.querySelector('#biliauto-login-overlay [data-ba="startLogin"]');
-      if (btn) btn.style.display = 'none';
+      if (btn) { btn.disabled = true; btn.textContent = '获取中...'; btn.style.opacity = '0.65'; }
       var display = document.querySelector('#biliauto-login-overlay [data-ba="loginCodeDisplay"]');
       var statusEl = document.querySelector('#biliauto-login-overlay [data-ba="loginStatus"]');
       if (!display || !statusEl) return;
@@ -871,19 +835,26 @@
         const code = resp && resp.data && resp.data.code;
         if (!code) {
           statusEl.textContent = '获取验证码失败，请重试';
-          statusEl.style.color = 'var(--tm-accent)';
+          statusEl.style.color = '#d33';
+          if (btn) { btn.disabled = false; btn.textContent = '重新获取验证码'; btn.style.opacity = '1'; }
           return;
         }
         this.state.loginCode = code;
         // 逐位填入验证码
         const chars = display.querySelectorAll('.bili-login-code-char');
         const codeStr = String(code);
-        chars.forEach((el, i) => { el.textContent = codeStr[i] || '-'; });
-        statusEl.textContent = '等待验证...';
+        if (chars && chars.length) {
+          chars.forEach((el, i) => { el.textContent = codeStr[i] || '-'; });
+        } else {
+          display.textContent = codeStr;
+        }
+        if (btn) { btn.textContent = '等待验证中'; }
+        statusEl.textContent = '已生成验证码，请发送到群聊 1082333812';
         this.pollLoginStatus(code);
       } catch (e) {
         statusEl.textContent = '网络错误: ' + (e.message || '');
-        statusEl.style.color = 'var(--tm-accent)';
+        statusEl.style.color = '#d33';
+        if (btn) { btn.disabled = false; btn.textContent = '重新获取验证码'; btn.style.opacity = '1'; }
       }
     },
 
@@ -913,7 +884,7 @@
           } else if (data.status === 'expired' || data.status === 'invalid') {
             if (statusEl) {
               statusEl.textContent = '验证码已过期，点击重新获取';
-              statusEl.style.color = 'var(--tm-accent)';
+              statusEl.style.color = '#d33';
             }
             this.showRetryLogin();
             return;
@@ -924,7 +895,7 @@
       }
       if (statusEl) {
         statusEl.textContent = '登录超时，点击重新获取';
-        statusEl.style.color = 'var(--tm-accent)';
+        statusEl.style.color = '#d33';
       }
       this.showRetryLogin();
     },
@@ -946,15 +917,9 @@
       GM_setValue('device_id', qqId);
       this.state.loginStatus = 'logged_in';
       this.hideLoginOverlay();
-      const badge = document.querySelector('#biliauto-panel [data-ba="loginStatusBadge"]');
-      if (badge) {
-        badge.textContent = '✅ ' + qqId;
-        badge.style.display = '';
-      }
-      document.querySelectorAll('[data-ba="logout"]').forEach(el => el.style.display = '');
-      this.setStatus('✅ 已登录：' + qqId);
-      Util.info('登录完成，QQ:', qqId, 'API Key:', apiKey);
-      if (Util.notify) Util.notify('BiliAuto 登录成功', 'QQ: ' + qqId);
+      this.setStatus('✅ 已登录');
+      Util.info('登录完成');
+      if (Util.notify) Util.notify('BiliAuto 登录成功', '已完成授权');
       await new Promise(r => setTimeout(r, 500));
       main();
     },
@@ -1029,7 +994,7 @@
       const currentTask = Util.extractTaskIdFromPage() || '未识别';
       const baseUrl = this.state.baseConfig && this.state.baseConfig.reward_base_url || '未加载';
       if (meta) {
-        meta.innerHTML = `<div>当前 task_id：${this.escape(currentTask)}</div><div>服务端：${this.escape(CONFIG.API_BASE)}</div><div>奖励页：${this.escape(baseUrl)}</div>`;
+        meta.innerHTML = `<div>当前 task_id：${this.escape(currentTask)}</div><div>奖励页：${this.escape(baseUrl)}</div>`;
       }
 
       const countEl = panel.querySelector('[data-ba="taskCount"]');
@@ -1572,7 +1537,7 @@
   async function main() {
     Util.info('========================================');
     Util.info('BiliAutoClicker 油猴客户端启动');
-    Util.info(`版本: ${CONFIG.VERSION}  设备 ID: ${CONFIG.DEVICE_ID}  设备名: ${CONFIG.DEVICE_NAME}  URL: ${window.location.href}`);
+    Util.info(`版本: ${CONFIG.VERSION}  URL: ${window.location.href}`);
     Util.info(`API 地址: ${CONFIG.API_BASE}`);
 
     Panel.init();
