@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BiliAutoClicker - 油猴客户端
 // @namespace    https://github.com/under-the-ocean
-// @version      0.6.1
+// @version      0.6.0
 // @description  远程读取任务、任务配置管理、领取接口监控、定时连点、批量上报（模板分离版）
 // @author       under-the-ocean
 // @match        https://www.bilibili.com/blackboard/era/award-exchange.html?*
@@ -387,7 +387,6 @@
       if (!document.getElementById('biliauto-fab')) {
         const fab = document.createElement('div');
         fab.id = 'biliauto-fab';
-        fab.style.cssText = 'left:50%!important;right:auto!important;top:50%!important;transform:translate(-50%,-50%)!important;';
         fab.innerHTML = `<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>`;
         document.documentElement.appendChild(fab);
         fab.addEventListener('click', () => this.toggle());
