@@ -722,6 +722,16 @@
       }
       overlay = document.createElement('div');
       overlay.id = 'biliauto-login-overlay';
+      // 根据视口宽度计算缩放比例
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      let scale = 1;
+      if (vw < 500) {
+        scale = Math.min(0.85, vw / 420);
+      } else if (vw < 900) {
+        scale = Math.min(0.9, vw / 500);
+      }
+      overlay.style.setProperty('--bili-login-scale', scale);
       overlay.innerHTML = `
         <div id="biliauto-login-card" class="bili-login-glass">
           <div class="bili-login-grid">
