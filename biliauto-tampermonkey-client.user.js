@@ -795,85 +795,69 @@
 
 
     showLoginOverlay() {
-      let overlay = document.getElementById('biliauto-login-overlay');
+      var overlay = document.getElementById('biliauto-login-overlay');
       if (overlay) {
         overlay.classList.add('tm-overlay-visible');
         return;
       }
       overlay = document.createElement('div');
       overlay.id = 'biliauto-login-overlay';
-      // 根据视口宽度计算缩放比例
-      const vw = window.innerWidth;
-      const vh = window.innerHeight;
-      let scale = 1;
-      if (vw < 500) {
-        scale = Math.min(0.85, vw / 420);
-      } else if (vw < 900) {
-        scale = Math.min(0.9, vw / 500);
+      overlay.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:radial-gradient(circle at bottom right,#dbeafe,#f8fafc,#f0fdfa);display:flex;align-items:center;justify-content:center;font-family:Inter,-apple-system,sans-serif;';
+      var html = '';
+      html += '<div style="width:100%;max-width:800px;margin:0 auto;padding:1rem;">';
+      html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0;width:100%;">';
+      
+      // Left side
+      html += '<div style="text-align:left;padding:1.5rem;padding-right:2rem;">';
+      html += '<div style="display:flex;align-items:center;gap:1rem;margin-bottom:2rem;">';
+      html += '<div style="width:64px;height:64px;flex-shrink:0;background:#50b6fe;border-radius:0.75rem;display:flex;align-items:center;justify-content:center;color:white;">';
+      html += '<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></div>';
+      html += '<div><h1 style="font-size:1.5rem;font-weight:700;color:#1e293b;margin:0;line-height:1.2;">授权登录</h1>';
+      html += '<p style="margin:0.25rem 0 0 0;font-size:0.875rem;color:#64748b;font-weight:500;"><strong style="color:#50b6fe;">BiliAuto 抢码系统</strong> 请求访问你的账号</p></div></div>';
+      
+      html += '<div><p style="font-size:0.75rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.75rem;">请求的权限</p>';
+      
+      // Perm: openid
+      html += '<div style="display:flex;align-items:flex-start;gap:0.75rem;padding:0.75rem;background:#f8fafc;border-radius:0.75rem;margin-bottom:0.5rem;">';
+      html += '<div style="background:rgba(80,182,254,0.1);padding:0.375rem;border-radius:0.5rem;color:#50b6fe;flex-shrink:0;">';
+      html += '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div>';
+      html += '<div><p style="font-size:0.875rem;font-weight:600;color:#334155;margin:0;">openid</p><p style="font-size:0.75rem;color:#94a3b8;margin:0.125rem 0 0 0;">识别你的账号主体，用于登录鉴权。</p></div></div>';
+      
+      // Perm: profile
+      html += '<div style="display:flex;align-items:flex-start;gap:0.75rem;padding:0.75rem;background:#f8fafc;border-radius:0.75rem;margin-bottom:0.5rem;">';
+      html += '<div style="background:rgba(80,182,254,0.1);padding:0.375rem;border-radius:0.5rem;color:#50b6fe;flex-shrink:0;">';
+      html += '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div>';
+      html += '<div><p style="font-size:0.875rem;font-weight:600;color:#334155;margin:0;">profile</p><p style="font-size:0.75rem;color:#94a3b8;margin:0.125rem 0 0 0;">读取昵称等基础资料，用于展示个人信息。</p></div></div>';
+      
+      // Perm: API
+      html += '<div style="display:flex;align-items:flex-start;gap:0.75rem;padding:0.75rem;background:#f8fafc;border-radius:0.75rem;margin-bottom:0.5rem;">';
+      html += '<div style="background:rgba(80,182,254,0.1);padding:0.375rem;border-radius:0.5rem;color:#50b6fe;flex-shrink:0;">';
+      html += '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div>';
+      html += '<div><p style="font-size:0.875rem;font-weight:600;color:#334155;margin:0;">API 访问</p><p style="font-size:0.75rem;color:#94a3b8;margin:0.125rem 0 0 0;">使用抢码任务相关接口权限。</p></div></div></div></div>';
+      
+      // Right side
+      html += '<div style="text-align:center;padding:1.5rem;padding-left:2rem;">';
+      html += '<div style="background:#50b6fe;border-radius:1.5rem;padding:1.5rem;margin-bottom:1.5rem;box-shadow:0 10px 15px -3px rgba(80,182,254,0.3);">';
+      html += '<p style="color:rgba(255,255,255,0.7);font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.2em;margin-bottom:0.75rem;">验证码</p>';
+      html += '<div data-ba="loginCodeDisplay" style="display:flex;justify-content:center;gap:0.25rem;">';
+      for (var ci = 0; ci < 6; ci++) {
+        html += '<span style="display:inline-block;width:2.5rem;height:3.5rem;line-height:3.5rem;background:white;border-radius:0.75rem;font-size:1.75rem;font-weight:800;color:#50b6fe;text-align:center;box-shadow:0 4px 6px -1px rgba(0,0,0,0.1);">-</span>';
       }
-      overlay.style.setProperty('--bili-login-scale', scale);
-      overlay.innerHTML = `
-        <div id="biliauto-login-card" class="bili-login-glass">
-          <div class="bili-login-grid">
-            <div class="bili-login-left">
-              <div class="bili-login-header">
-                <div class="bili-login-icon">
-                  <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
-                </div>
-                <div>
-                  <h1 class="bili-login-title">授权登录</h1>
-                  <p class="bili-login-subtitle"><strong class="bili-login-accent">BiliAuto 抢码系统</strong> 请求访问你的账号</p>
-                </div>
-              </div>
-              <div class="bili-login-perms">
-                <p class="bili-login-perms-title">请求的权限</p>
-                <div class="bili-login-perm-item">
-                  <div class="bili-login-perm-icon"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div>
-                  <div><p class="bili-login-perm-name">openid</p><p class="bili-login-perm-desc">识别你的账号主体，用于登录鉴权。</p></div>
-                </div>
-                <div class="bili-login-perm-item">
-                  <div class="bili-login-perm-icon"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div>
-                  <div><p class="bili-login-perm-name">profile</p><p class="bili-login-perm-desc">读取昵称等基础资料，用于展示个人信息。</p></div>
-                </div>
-                <div class="bili-login-perm-item">
-                  <div class="bili-login-perm-icon"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div>
-                  <div><p class="bili-login-perm-name">API 访问</p><p class="bili-login-perm-desc">使用抢码任务相关接口权限。</p></div>
-                </div>
-              </div>
-            </div>
-            <div class="bili-login-right">
-              <div class="bili-login-code-section">
-                <p class="bili-login-code-label">验证码</p>
-                <div class="bili-login-code-chars" data-ba="loginCodeDisplay">
-                  <span class="bili-login-code-char">-</span>
-                  <span class="bili-login-code-char">-</span>
-                  <span class="bili-login-code-char">-</span>
-                  <span class="bili-login-code-char">-</span>
-                  <span class="bili-login-code-char">-</span>
-                  <span class="bili-login-code-char">-</span>
-                </div>
-              </div>
-              <div class="bili-login-send-info">
-                <div class="bili-login-send-icon"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg></div>
-                <div>
-                  <p class="bili-login-send-title">发送到群聊</p>
-                  <p class="bili-login-send-group">1082333812</p>
-                </div>
-              </div>
-              <div data-ba="loginStatus" class="bili-login-status">等待验证...</div>
-              <button class="bili-login-btn" data-ba="startLogin">开始登录</button>
-            </div>
-          </div>
-        </div>`;
-      overlay.addEventListener('click', (e) => {
-        const target = e.target.closest('[data-ba]');
-        if (!target) return;
-        if (target.getAttribute('data-ba') === 'startLogin') this.startLogin();
-      });
+      html += '</div></div>';
+      
+      html += '<div style="display:flex;align-items:flex-start;gap:0.75rem;padding:1rem;background:rgba(80,182,254,0.05);border-radius:1rem;border:1px solid rgba(80,182,254,0.1);margin-bottom:1rem;text-align:left;">';
+      html += '<div style="background:#50b6fe;padding:0.375rem;border-radius:0.5rem;color:white;flex-shrink:0;">';
+      html += '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg></div>';
+      html += '<div><p style="font-size:0.75rem;font-weight:700;color:#50b6fe;text-transform:uppercase;letter-spacing:0.05em;margin:0;">发送到群聊</p>';
+      html += '<p style="font-size:0.875rem;font-weight:600;color:#334155;margin:0.25rem 0 0 0;">1082333812</p></div></div>';
+      
+      html += '<div data-ba="loginStatus" style="font-size:0.8125rem;color:#64748b;margin-bottom:0.75rem;min-height:1.25rem;">等待验证...</div>';
+      html += '<button class="bili-login-btn" data-ba="startLogin" style="display:inline-flex;align-items:center;height:2.5rem;padding:0 1.75rem;border:none;border-radius:0.75rem;background:#50b6fe;color:white;font-size:0.875rem;font-weight:600;cursor:pointer;">开始登录</button></div></div></div>';
+      
+      overlay.innerHTML = html;
       document.documentElement.appendChild(overlay);
       overlay.classList.add('tm-overlay-visible');
     },
-
     hideLoginOverlay() {
       const overlay = document.getElementById('biliauto-login-overlay');
       if (overlay) {
