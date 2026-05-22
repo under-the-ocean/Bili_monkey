@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         BiliAutoClicker - 油猴客户端
 // @namespace    https://github.com/under-the-ocean
-// @version      0.7.3
+// @version      0.7.4
 // @match        https://www.bilibili.com/blackboard/era/award-exchange.html?*
-// @connect      150.242.246.137
+// @connect      https://bili.982835785.xyz
 // @grant        GM_xmlhttpRequest
 // @grant        GM_notification
 // @grant        GM_setValue
@@ -21,7 +21,7 @@
   'use strict';
 
   const CONFIG = {
-    API_BASE: GM_getValue('api_base', 'http://150.242.246.137:18080'),
+    API_BASE: GM_getValue('api_base', 'https://bili.982835785.xyz'),
 
     API_KEY: GM_getValue('api_key', ''),
     QQ_ID: GM_getValue('qq_id', ''),
