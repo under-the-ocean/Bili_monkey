@@ -3,7 +3,7 @@
 // @namespace    https://github.com/under-the-ocean
 // @version      0.7.4
 // @match        https://www.bilibili.com/blackboard/era/award-exchange.html?*
-// @connect      https://bili.982835785.xyz
+// @connect      bili.982835785.xyz
 // @grant        GM_xmlhttpRequest
 // @grant        GM_notification
 // @grant        GM_setValue
