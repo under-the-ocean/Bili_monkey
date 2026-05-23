@@ -374,6 +374,7 @@
       darkMode: GM_getValue('material_dark_mode', null),
       panelX: GM_getValue('material_panel_x', null),
       panelY: GM_getValue('material_panel_y', null),
+      zoom: GM_getValue('material_panel_zoom', 1),
       loginCode: '',
       loginStatus: isLoggedIn() ? 'logged_in' : ''
     },
@@ -399,9 +400,30 @@
       this.applyDarkModeOptions();
       this.applyTheme();
       this.setupPanelPosition();
+      this.applyZoom();
       this.setupDrag();
       this.bind();
       this.render();
+    },
+
+    applyZoom() {
+      const panel = document.getElementById('biliauto-panel');
+      if (!panel) return;
+      panel.style.transform = `scale(${this.state.zoom})`;
+      panel.style.transformOrigin = 'top right';
+      GM_setValue('material_panel_zoom', this.state.zoom);
+    },
+
+    zoomIn() {
+      this.state.zoom = Math.min(1.5, this.state.zoom + 0.1);
+      this.applyZoom();
+      Util.log(`面板放大: ${(this.state.zoom * 100).toFixed(0)}%`);
+    },
+
+    zoomOut() {
+      this.state.zoom = Math.max(0.6, this.state.zoom - 0.1);
+      this.applyZoom();
+      Util.log(`面板缩小: ${(this.state.zoom * 100).toFixed(0)}%`);
     },
 
     applyDarkModeOptions() {
@@ -484,14 +506,26 @@
     },
 
     template() {
+      Util.log('=== 模板加载开始 ===');
+      Util.log('尝试从 @resource TEMPLATE_HTML 获取模板...');
       const tpl = GM_getResourceText('TEMPLATE_HTML');
+      Util.log(`模板获取结果: ${tpl ? `成功，长度=${tpl.length}字符` : '失败（返回空或undefined）'}`);
+
       if (!tpl) {
+        Util.error('模板加载失败！原因: GM_getResourceText 返回空值');
+        Util.log('远程模板地址: https://gh-proxy.com/https://raw.githubusercontent.com/under-the-ocean/Bili_monkey/main/template.html');
+        Util.log('请检查：1. 网络连接 2. GitHub访问是否正常 3. 代理服务是否可用');
         return `<div style="padding:20px;color:red;font-size:18px;text-align:center;font-family:sans-serif;">
           <p>⚠️ 模板加载失败</p>
           <p style="font-size:14px;color:#999;">请检查网络或刷新重试</p>
+          <p style="font-size:12px;color:#666;margin-top:10px;">错误详情: GM_getResourceText 返回空值</p>
+          <p style="font-size:12px;color:#666;">资源地址: TEMPLATE_HTML</p>
         </div>`;
       }
-      return tpl
+
+      Util.log('模板加载成功，开始替换变量...');
+      const beforeLength = tpl.length;
+      let result = tpl
         .replace(/\$\{VERSION\}/g, CONFIG.VERSION)
         .replace(/\$\{DEVICE_ID_SHORT\}/g, CONFIG.DEVICE_ID.slice(0, 8))
         .replace(/\$\{CONFIG\.QQ_ID\}/g, CONFIG.QQ_ID || '')
@@ -519,6 +553,10 @@
         .replace(/\$\{url\}/g, '')
         .replace(/\$\{title\}/g, '')
         .replace(/\$\{onlyTaskIds \? ' \(指定ID\)' : ''\}/g, '');
+
+      Util.log(`模板变量替换完成: 处理前=${beforeLength}字符, 处理后=${result.length}字符`);
+      Util.log('=== 模板加载完成 ===');
+      return result;
     },
 
     bind() {
@@ -550,6 +588,8 @@
         else if (action === 'startLogin') this.startLogin();
         else if (action === 'testClick') this.testClick();
         else if (action === 'runCurrent') this.runCurrent();
+        else if (action === 'zoomIn') this.zoomIn();
+        else if (action === 'zoomOut') this.zoomOut();
       });
 
       panel.addEventListener('change', (e) => {
@@ -574,10 +614,12 @@
       });
 
       const filterInput = panel.querySelector('[data-ba="filter"]');
-      filterInput.addEventListener('input', () => {
-        this.state.filter = filterInput.value.trim().toLowerCase();
-        this.renderList();
-      });
+      if (filterInput) {
+        filterInput.addEventListener('input', () => {
+          this.state.filter = filterInput.value.trim().toLowerCase();
+          this.renderList();
+        });
+      }
     },
 
     setData(baseConfig, tasks) {
@@ -596,7 +638,10 @@
       const current = this.state.taskConfigs[taskId] || Util.defaultTaskConfig(taskId);
       this.state.taskConfigs[taskId] = { ...current, [field]: field === 'selected' ? Boolean(value) : value };
       this.saveTaskConfigs();
-      this.renderList();
+      // 只有当改变的是 selected 状态时才重新渲染列表
+      if (field === 'selected') {
+        this.renderList();
+      }
     },
 
     setStatus(text) {
@@ -1045,6 +1090,18 @@
         meta.innerHTML = `<div>当前 task_id：${this.escape(currentTask)}</div><div>奖励页：${this.escape(baseUrl)}</div>`;
       }
 
+      // 渲染当前页面配置
+      const currentConfigEl = panel.querySelector('[data-ba="currentConfig"]');
+      if (currentConfigEl && currentTask !== '未识别') {
+        const cfg = this.state.taskConfigs[currentTask] || Util.defaultTaskConfig(currentTask);
+        const startTimeInput = currentConfigEl.querySelector('[data-field="start_time"]');
+        const intervalInput = currentConfigEl.querySelector('[data-field="interval"]');
+        const durationInput = currentConfigEl.querySelector('[data-field="duration"]');
+        if (startTimeInput) startTimeInput.value = cfg.start_time || CONFIG.DEFAULT_START_TIME;
+        if (intervalInput) intervalInput.value = cfg.interval || CONFIG.DEFAULT_CLICK_INTERVAL_MS / 1000;
+        if (durationInput) durationInput.value = cfg.duration || CONFIG.DEFAULT_CLICK_DURATION_MS / 1000;
+      }
+
       const countEl = panel.querySelector('[data-ba="taskCount"]');
       if (countEl) countEl.textContent = `${this.state.tasks.length} 个任务`;
 
@@ -1096,12 +1153,8 @@
         var name = String(task.task_key || task.name || task.id || '未命名任务');
         html += '<div class="tm-material-item">';
         html += '<span class="tm-material-item-title">' + this.escape(name) + '</span>';
-        html += '<span class="tm-material-item-id">' + this.escape(taskId) + '</span>';
-        html += '<div class="tm-material-item-actions">';
         html += '<button class="tm-material-btn tm-material-btn-sm" data-ba="jump" data-taskid="' + this.escapeAttr(taskId) + '">跳转</button>';
-        html += '<button class="tm-material-btn tm-material-btn-sm" data-ba="copy" data-taskid="' + this.escapeAttr(taskId) + '">复制</button>';
-        html += '<button class="tm-material-btn tm-material-btn-sm tm-material-btn-accent" data-ba="removeTask" data-taskid="' + this.escapeAttr(taskId) + '">删除</button>';
-        html += '</div></div>';
+        html += '</div>';
       }
       list.innerHTML = html;
     },
