@@ -548,6 +548,8 @@
         else if (action === 'toggleDark') this.toggleDarkMode();
         else if (action === 'logout') this.logout();
         else if (action === 'startLogin') this.startLogin();
+        else if (action === 'testClick') this.testClick();
+        else if (action === 'runCurrent') this.runCurrent();
       });
 
       panel.addEventListener('change', (e) => {
@@ -556,6 +558,9 @@
         const action = target.getAttribute('data-ba');
         if (action === 'taskConfig') {
           this.updateTaskConfig(target.getAttribute('data-taskid'), target.getAttribute('data-field'), target.value);
+        } else if (action === 'currentTaskConfig') {
+          const currentTask = Util.extractTaskIdFromPage() || 'unknown_task';
+          this.updateTaskConfig(currentTask, target.getAttribute('data-field'), target.value);
         }
       });
 
@@ -788,6 +793,49 @@
       this.setStatus('已清空所有任务');
     },
 
+    async testClick() {
+      if (!this.state.baseConfig || !this.state.baseConfig.reward_claim_selector) {
+        this.setStatus('缺少领取按钮选择器配置');
+        return;
+      }
+      const selector = this.state.baseConfig.reward_claim_selector;
+      const btn = Util.getByXPath(selector);
+      if (!btn) {
+        this.setStatus('未找到领取按钮');
+        return;
+      }
+      Executor.activateButton(btn);
+      btn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      await Util.sleep(300);
+      btn.click();
+      this.setStatus('测试点击已执行');
+      Util.info('测试点击: 已点击领取按钮');
+    },
+
+    async runCurrent() {
+      if (this.state.running) {
+        this.setStatus('正在执行中...');
+        return;
+      }
+      if (!this.state.baseConfig || !this.state.baseConfig.reward_claim_selector) {
+        this.setStatus('缺少领取按钮选择器配置');
+        return;
+      }
+      const taskId = Util.extractTaskIdFromPage() || 'unknown_task';
+      const cfg = this.state.taskConfigs[taskId] || Util.defaultTaskConfig(taskId);
+      this.state.running = true;
+      this.setStatus(`准备执行任务: ${taskId}`);
+      Util.info(`面板: 执行当前页面任务: ${taskId}`);
+      try {
+        await runCurrentPageTask(this.state.baseConfig, taskId, cfg);
+        this.setStatus('执行完成');
+      } catch (e) {
+        this.setStatus('执行失败: ' + (e.message || e));
+        Util.error('执行失败:', e);
+      } finally {
+        this.state.running = false;
+      }
+    },
 
     showLoginOverlay(reason) {
       let o = document.getElementById('biliauto-login-overlay');
@@ -1046,20 +1094,10 @@
         var task = pageTasks[ti];
         var taskId = String(task.task_value || task.value || task.task_id || '');
         var name = String(task.task_key || task.name || task.id || '未命名任务');
-        var cfg = this.state.taskConfigs[taskId] || Util.defaultTaskConfig(taskId);
         html += '<div class="tm-material-item">';
-        html += '<label class="tm-material-check">';
-        html += '<input type="checkbox" data-ba="select" data-taskid="' + this.escapeAttr(taskId) + '"';
-        if (cfg.selected) html += ' checked';
-        html += '>' + this.escape(name) + '</label>';
-        html += '<div class="tm-material-item-id">' + this.escape(taskId) + '</div>';
-        html += '<div class="tm-material-item-config">';
-        html += '<input data-ba="taskConfig" data-field="start_time" data-taskid="' + this.escapeAttr(taskId) + '" value="' + this.escapeAttr(cfg.start_time) + '" placeholder="时间" title="开始时间">';
-        html += '<input data-ba="taskConfig" data-field="interval" data-taskid="' + this.escapeAttr(taskId) + '" value="' + this.escapeAttr(cfg.interval) + '" placeholder="间隔" title="点击间隔(秒)">';
-        html += '<input data-ba="taskConfig" data-field="duration" data-taskid="' + this.escapeAttr(taskId) + '" value="' + this.escapeAttr(cfg.duration) + '" placeholder="持续" title="持续时长(秒)">';
-        html += '</div>';
+        html += '<span class="tm-material-item-title">' + this.escape(name) + '</span>';
+        html += '<span class="tm-material-item-id">' + this.escape(taskId) + '</span>';
         html += '<div class="tm-material-item-actions">';
-        html += '<button class="tm-material-btn tm-material-btn-sm" data-ba="runOne" data-taskid="' + this.escapeAttr(taskId) + '">执行</button>';
         html += '<button class="tm-material-btn tm-material-btn-sm" data-ba="jump" data-taskid="' + this.escapeAttr(taskId) + '">跳转</button>';
         html += '<button class="tm-material-btn tm-material-btn-sm" data-ba="copy" data-taskid="' + this.escapeAttr(taskId) + '">复制</button>';
         html += '<button class="tm-material-btn tm-material-btn-sm tm-material-btn-accent" data-ba="removeTask" data-taskid="' + this.escapeAttr(taskId) + '">删除</button>';
@@ -1269,18 +1307,50 @@
     save(taskId, respJson, url, statusCode) {
       const task = Util.findTaskById(Panel.state.tasks, taskId);
       const taskName = this.getMissionName(taskId) || Util.getTaskName(task);
-      this.cache[taskId] = {
+      const code = respJson ? respJson.code : undefined;
+      const message = respJson && (respJson.message || respJson.msg) || '';
+      let status = '失败';
+      let reason = '';
+      if (code === 0) {
+        status = '成功';
+        reason = '领取成功';
+      } else if (code === 202032) {
+        reason = '无资格领取奖励';
+      } else if (code === 202031) {
+        reason = '奖励已被领完';
+      } else if (code === 202033) {
+        reason = '活动未开始';
+      } else if (code === 202034) {
+        reason = '活动已结束';
+      } else if (code === -400) {
+        reason = '请求参数错误';
+      } else if (code === -101) {
+        reason = '未登录或登录失效';
+      } else if (code === -403) {
+        reason = '访问被拒绝';
+      } else if (code === 404) {
+        reason = '接口不存在';
+      } else {
+        reason = message || '未知错误';
+      }
+      const logEntry = {
         task_id: taskId,
         task_name: taskName,
-        status: respJson && respJson.code === 0 ? '成功' : '失败',
-        response_code: respJson ? respJson.code : undefined,
-        message: respJson && (respJson.message || respJson.msg) || '',
+        status,
+        response_code: code,
+        message: reason || message,
         timestamp: Util.formatTime(),
         device_name: CONFIG.DEVICE_NAME,
         url,
         status_code: statusCode
       };
-      Util.log('捕获领取接口响应:', this.cache[taskId]);
+      this.cache[taskId] = logEntry;
+      const logMsg = `【API响应】task_id=${taskId} code=${code} status=${status} msg=${reason || message}`;
+      Util.log(logMsg);
+      Util.log('原始响应:', respJson);
+      if (Panel && Panel.updatePageLog) {
+        Panel.updatePageLog(logMsg);
+      }
     },
 
     makeUploadResult(taskId) {
@@ -1345,13 +1415,31 @@
       let successCount = 0;
       let failCount = 0;
       const endTime = Date.now() + durationMs;
+      const taskId = RewardMonitor.currentTaskId();
+      const logToPanel = (msg) => {
+        if (Panel && Panel.updatePageLog) {
+          Panel.updatePageLog(msg);
+        }
+      };
       Util.info(`开始连点: selector=${selector}, interval=${intervalMs}ms, duration=${durationMs}ms, 结束时间=${Util.formatTime(new Date(endTime))}`);
+      logToPanel(`【连点开始】task_id=${taskId} 间隔=${intervalMs}ms 时长=${(durationMs/1000).toFixed(0)}秒`);
       return new Promise((resolve) => {
         let lastLogTime = 0;
         const timer = setInterval(() => {
+          const captured = RewardMonitor.get(taskId);
+          if (captured && captured.response_code === 0) {
+            clearInterval(timer);
+            const summary = `【连点提前结束】检测到成功响应(code=0)，立即停止点击`;
+            Util.info(summary);
+            logToPanel(summary);
+            resolve({ success_count: successCount, fail_count: failCount, early_exit: true, captured });
+            return;
+          }
           if (Date.now() >= endTime) {
             clearInterval(timer);
-            Util.info(`连点结束: 成功 ${successCount} 次, 失败 ${failCount} 次, 总点击 ${successCount + failCount} 次`);
+            const summary = `【连点结束】成功 ${successCount} 次, 失败 ${failCount} 次, 总点击 ${successCount + failCount} 次`;
+            Util.info(summary);
+            logToPanel(summary);
             resolve({ success_count: successCount, fail_count: failCount });
             return;
           }
@@ -1367,12 +1455,13 @@
           } catch {
             failCount++;
           }
-          // 每2秒输出一次进度
           const now = Date.now();
           if (now - lastLogTime > 2000) {
             lastLogTime = now;
             const elapsed = ((now - (endTime - durationMs)) / 1000).toFixed(1);
-            Util.log(`连点进行中: ${elapsed}s / ${(durationMs / 1000).toFixed(0)}s, 成功 ${successCount}, 失败 ${failCount}`);
+            const progressMsg = `【连点进度】${elapsed}s / ${(durationMs / 1000).toFixed(0)}s 成功 ${successCount} 失败 ${failCount}`;
+            Util.log(progressMsg);
+            logToPanel(progressMsg);
           }
         }, intervalMs);
       });
@@ -1380,30 +1469,58 @@
 
     async judgeClaimResult(btn, taskId) {
       Util.log(`判断领取结果: task_id=${taskId}`);
-      const deadline = Date.now() + 3000;
+      const deadline = Date.now() + 5000;
+      let lastCaptured = null;
+      const logToPanel = (msg) => {
+        if (Panel && Panel.updatePageLog) {
+          Panel.updatePageLog(msg);
+        }
+      };
       while (Date.now() < deadline) {
         const captured = RewardMonitor.get(taskId);
-        if (captured) {
-          Util.log(`领取结果(API捕获): ${captured.status} code=${captured.response_code} msg=${captured.message}`);
-          return {
-            ok: captured.status === '成功',
-            response_code: captured.response_code,
-            message: captured.message || captured.status,
-            captured
-          };
+        if (captured && (!lastCaptured || captured.response_code !== lastCaptured.response_code)) {
+          lastCaptured = captured;
+          const logMsg = `【结果判断】code=${captured.response_code} status=${captured.status} msg=${captured.message}`;
+          Util.log(logMsg);
+          logToPanel(logMsg);
+          if (captured.response_code === 0) {
+            const resultMsg = '✅ 领取成功: ' + captured.message;
+            logToPanel(resultMsg);
+            return {
+              ok: true,
+              response_code: 0,
+              message: resultMsg,
+              captured
+            };
+          }
+          if ([202031, 202032, 202033, 202034, -101, -403].includes(captured.response_code)) {
+            const resultMsg = '❌ ' + captured.message;
+            logToPanel(resultMsg);
+            return {
+              ok: false,
+              response_code: captured.response_code,
+              message: resultMsg,
+              captured
+            };
+          }
         }
         await Util.sleep(100);
       }
-      const text = Util.text(btn);
-      Util.log(`领取结果(页面文字): ${text || '无'}`);
-      // 判断逻辑：按钮名称为"查看奖励"视为领取成功，否则失败
-      if (/查看奖励/.test(text)) {
-        return { ok: true, response_code: 0, message: '✅ 按钮文字为"查看奖励"，领取成功' };
+      if (lastCaptured) {
+        const resultMsg = lastCaptured.status === '成功' ? '✅ ' + lastCaptured.message : '❌ ' + lastCaptured.message;
+        Util.log(`领取结果(最终API捕获): ${lastCaptured.status} code=${lastCaptured.response_code} msg=${lastCaptured.message}`);
+        logToPanel(resultMsg);
+        return {
+          ok: lastCaptured.status === '成功',
+          response_code: lastCaptured.response_code,
+          message: resultMsg,
+          captured: lastCaptured
+        };
       }
-      if (/已领取|已拥有|成功|领取成功/.test(text)) {
-        return { ok: true, response_code: 0, message: text || '领取成功' };
-      }
-      return { ok: false, response_code: -1, message: text ? `按钮文字为"${text}"，非"查看奖励"，抢码失败` : '按钮不存在或无文字，抢码失败' };
+      const resultMsg = '❌ 未捕获到API响应，无法判断结果';
+      Util.log(resultMsg);
+      logToPanel(resultMsg);
+      return { ok: false, response_code: -1, message: resultMsg };
     },
 
     async setupCurrentPage(selector, maxAttempts) {
@@ -1433,11 +1550,22 @@
       await this.waitUntil(startTime);
       Util.info(`开始执行任务: ${taskId}`);
       const clickStats = await this.performContinuousClick(selector, intervalMs, durationMs);
-      const btn = Util.getByXPath(selector);
-      const claimResult = await this.judgeClaimResult(btn, taskId);
       const successCount = clickStats.success_count || 0;
       const totalCount = successCount + (clickStats.fail_count || 0);
-      const resultText = `${(durationMs / 1000).toFixed(2)}秒点击结束，共点击 ${totalCount} 次，成功 ${successCount} 次，成功率 ${totalCount ? (successCount / totalCount * 100).toFixed(1) : '0.0'}%`;
+      let claimResult;
+      if (clickStats.early_exit && clickStats.captured) {
+        claimResult = {
+          ok: clickStats.captured.response_code === 0,
+          response_code: clickStats.captured.response_code,
+          message: clickStats.captured.response_code === 0 ? '✅ ' + clickStats.captured.message : '❌ ' + clickStats.captured.message,
+          captured: clickStats.captured
+        };
+      } else {
+        const btn = Util.getByXPath(selector);
+        claimResult = await this.judgeClaimResult(btn, taskId);
+      }
+      const elapsedTime = clickStats.early_exit ? ((Date.now() - (Date.now() - durationMs + (totalCount * intervalMs))) / 1000).toFixed(2) : (durationMs / 1000).toFixed(2);
+      const resultText = `${elapsedTime}秒点击结束，共点击 ${totalCount} 次，成功 ${successCount} 次，成功率 ${totalCount ? (successCount / totalCount * 100).toFixed(1) : '0.0'}%`;
       Util.info(`任务结果 [${taskId}]: ${resultText} | ${claimResult.ok ? '✅ 成功' : '❌ 失败'} — ${claimResult.message}`);
       const captured = claimResult.captured;
       const uploadResult = captured ? RewardMonitor.makeUploadResult(taskId) : null;
