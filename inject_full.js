@@ -2293,7 +2293,8 @@ BiliAuto
         Util.log(`fetch API 可用，正在覆盖 window.fetch`);
         window.fetch = async (...args) => {
           const response = await originalFetch.apply(window, args);
-          this.captureFetch(args[0], response);
+          const cloned = response.clone();
+          this.captureFetch(args[0], cloned);
           return response;
         };
       } else {
@@ -2351,11 +2352,18 @@ BiliAuto
       }
       if (url.includes(this.RECEIVE_API_PATH)) {
         Util.log(`捕获 fetch receive API: ${url} status=${response.status}`);
-        response.clone().text().then(text => Util.log(`  receive 响应内容(${text.length}字符): ${text.slice(0, 300)}`)).catch(() => {});
-        response.json().then(json => this.save(this.currentTaskId(), json, url, response.status)).catch(() => {});
+        response.text().then(text => {
+          Util.log(`  receive 响应内容(${text.length}字符): ${text.slice(0, 300)}`);
+          try {
+            const json = JSON.parse(text);
+            this.save(this.currentTaskId(), json, url, response.status);
+          } catch (e) {
+            Util.warn(`  receive 响应JSON解析失败: ${e.message}`);
+          }
+        }).catch(e => Util.warn(`  receive 响应读取失败: ${e.message}`));
       } else if (url.includes(this.INFO_API_PATH)) {
         Util.log(`捕获 fetch info API: ${url} status=${response.status}`);
-        response.clone().text().then(text => {
+        response.text().then(text => {
           Util.log(`  info 响应内容(${text.length}字符): ${text.slice(0, 500)}`);
           try {
             const parsed = JSON.parse(text);

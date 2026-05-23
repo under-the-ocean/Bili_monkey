@@ -225,7 +225,6 @@
   margin-top: 0;
 }
 
-
 /* ========== Button ========== */
 .tm-material-btn {
   position: relative;
@@ -419,8 +418,6 @@
   flex: 1;
 }
 
-/* login styles removed: plain login is rendered by script */
-
 @media (max-width: 600px) {
   #biliauto-panel {
     width: calc(100vw - 24px);
@@ -474,6 +471,21 @@ BiliAuto
   <div class="tm-material-meta" data-ba="meta"></div>
 
   <div class="tm-material-toolbar">
+<div class="tm-material-input" style="flex:1;padding:10px 12px;font-size:12px;color:var(--tm-text-secondary);background:var(--tm-surface);border-radius:var(--tm-radius-btn);" data-ba="currentConfig">
+<div style="margin-bottom:8px;font-weight:600;">🎯 当前页面抢码配置</div>
+<div style="display:flex;gap:8px;align-items:center;">
+<input data-ba="currentTaskConfig" data-field="start_time" placeholder="开始时间" style="flex:1;padding:6px 8px;border:1px solid rgba(0,0,0,.12);border-radius:4px;font-size:12px;" title="开始时间，支持格式: 00:30:00 或 +30">
+<input data-ba="currentTaskConfig" data-field="interval" placeholder="间隔" style="width:60px;padding:6px 8px;border:1px solid rgba(0,0,0,.12);border-radius:4px;font-size:12px;text-align:center;" title="点击间隔(秒)">
+<input data-ba="currentTaskConfig" data-field="duration" placeholder="持续" style="width:60px;padding:6px 8px;border:1px solid rgba(0,0,0,.12);border-radius:4px;font-size:12px;text-align:center;" title="持续时长(秒)">
+</div>
+<div style="display:flex;gap:8px;margin-top:8px;">
+<button class="tm-material-btn" data-ba="testClick" style="flex:1;">👆 测试点击</button>
+<button class="tm-material-btn tm-material-btn-primary" data-ba="runCurrent" style="flex:1;">🚀 开始抢码</button>
+</div>
+</div>
+  </div>
+
+  <div class="tm-material-toolbar">
 <input class="tm-material-input" data-ba="addTaskInput" placeholder="添加 task_id" style="flex:1">
 <button class="tm-material-btn" data-ba="addTask">添加</button>
   </div>
@@ -486,15 +498,9 @@ BiliAuto
 
   <div class="tm-material-list" data-ba="list"></div>
 
-  <div class="tm-material-toolbar" style="margin-top:8px;justify-content:space-between">
+  <div class="tm-material-toolbar" style="margin-top:8px;justify-content:flex-end">
 <div style="display:flex;gap:4px">
-  <button class="tm-material-btn tm-material-btn-primary tm-material-btn-sm" data-ba="runAll">执行全部</button>
   <button class="tm-material-btn tm-material-btn-sm" data-ba="refresh">刷新</button>
-</div>
-<div style="display:flex;gap:4px">
-  <button class="tm-material-btn tm-material-btn-sm" data-ba="defaults">重置</button>
-  <button class="tm-material-btn tm-material-btn-accent tm-material-btn-sm" data-ba="clearAll">清空</button>
-  <button class="tm-material-btn tm-material-btn-accent tm-material-btn-sm" data-ba="logout">退出</button>
 </div>
   </div>
 
@@ -504,3 +510,68 @@ BiliAuto
 
   <div class="tm-material-status" data-ba="status"></div>
 </div>
+
+<!-- ===================================================== -->
+<!-- 子模板：供 JS 通过 getSubTemplate() 提取 -->
+<!-- ===================================================== -->
+<template id="tmpl-fab">
+<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+</template>
+
+<template id="tmpl-error">
+<div style="padding:20px;color:red;font-size:18px;text-align:center;font-family:sans-serif;">
+  <p>⚠️ 模板加载失败</p>
+  <p style="font-size:14px;color:#999;">请检查网络或刷新重试</p>
+  <p style="font-size:12px;color:#666;margin-top:10px;">错误详情: {{ERROR_MSG}}</p>
+  <p style="font-size:12px;color:#666;">资源地址: TEMPLATE_HTML</p>
+</div>
+</template>
+
+<template id="tmpl-logPanel">
+<div id="tm-page-log-panel" style="font-size:12px;line-height:1.55;padding:6px 0;color:inherit;">
+  <div style="font-weight:700;font-size:13px;margin-bottom:6px;display:flex;justify-content:space-between;gap:8px;">
+    <span>📋 抢码滚动日志</span><span>任务 <b id="tm-log-taskCount">-</b></span>
+  </div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:6px;color:#666;">
+    <span>倒计时：<b id="tm-log-countdown">-</b></span>
+    <span>状态：<b id="tm-log-status">等待中</b></span>
+  </div>
+  <div id="tm-log-scroll" style="height:96px;overflow-y:auto;border:1px solid rgba(0,0,0,.10);border-radius:8px;background:rgba(255,255,255,.58);padding:6px;white-space:pre-wrap;font-family:Consolas,Menlo,monospace;"></div>
+</div>
+</template>
+
+<template id="tmpl-loginOverlay">
+<div style="font-size:18px;font-weight:700;margin-bottom:8px;">BiliAuto 登录</div>
+<div style="font-size:13px;color:#666;line-height:1.7;margin-bottom:10px;">未登录或登录已失效。点击按钮获取验证码，然后把验证码发送到群聊 <b>1082333812</b>。</div>
+<div id="tmpl-loginReason" style="font-size:12px;color:#d33;margin-bottom:8px;"></div>
+<div data-ba="loginCodeDisplay" style="font-size:34px;font-weight:800;letter-spacing:8px;text-align:center;margin:12px 0;font-family:Consolas,monospace;">------</div>
+<div data-ba="loginStatus" style="font-size:12px;color:#777;margin-bottom:12px;min-height:18px;">等待获取验证码</div>
+<button data-ba="startLogin" style="width:100%;height:38px;border:0;border-radius:7px;background:#1677ff;color:#fff;font-size:14px;font-weight:700;cursor:pointer;">获取验证码</button>
+</template>
+
+<template id="tmpl-emptyList">
+<div class="tm-material-empty">暂无任务<br>点击「刷新」拉取或输入 task_id 添加</div>
+</template>
+
+<template id="tmpl-pagination">
+<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;margin-bottom:4px;font-size:12px;color:var(--tm-text-secondary)">
+  <span>共 {{COUNT}} 个任务</span>
+  <span style="display:flex;gap:4px;align-items:center">
+    <button class="tm-material-btn tm-material-btn-xs" data-ba="pagePrev" {{PREV_DISABLED}}>上一页</button>
+    <span>{{PAGE}}/{{TOTAL_PAGES}}</span>
+    <button class="tm-material-btn tm-material-btn-xs" data-ba="pageNext" {{NEXT_DISABLED}}>下一页</button>
+  </span>
+</div>
+</template>
+
+<template id="tmpl-listItem">
+<div class="tm-material-item">
+  <span class="tm-material-item-title">{{NAME}}</span>
+  <button class="tm-material-btn tm-material-btn-sm" data-ba="jump" data-taskid="{{TASK_ID}}">跳转</button>
+</div>
+</template>
+
+<template id="tmpl-meta">
+<div>当前 task_id：${CURRENT_TASK}</div>
+<div>奖励页：${BASE_URL}</div>
+</template>

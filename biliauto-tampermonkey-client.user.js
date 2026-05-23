@@ -384,7 +384,7 @@
       if (!document.getElementById('biliauto-fab')) {
         const fab = document.createElement('div');
         fab.id = 'biliauto-fab';
-        fab.innerHTML = `<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>`;
+        fab.innerHTML = Panel.getSubTemplate('fab');
         document.documentElement.appendChild(fab);
         fab.addEventListener('click', () => this.toggle());
       }
@@ -484,14 +484,21 @@
     },
 
     template() {
+      Util.log('=== 模板加载开始 ===');
+      Util.log('尝试从 @resource TEMPLATE_HTML 获取模板...');
       const tpl = GM_getResourceText('TEMPLATE_HTML');
+      Util.log(`模板获取结果: ${tpl ? `成功，长度=${tpl.length}字符` : '失败（返回空或undefined）'}`);
+      
       if (!tpl) {
-        return `<div style="padding:20px;color:red;font-size:18px;text-align:center;font-family:sans-serif;">
-          <p>⚠️ 模板加载失败</p>
-          <p style="font-size:14px;color:#999;">请检查网络或刷新重试</p>
-        </div>`;
+        Util.error('模板加载失败！原因: GM_getResourceText 返回空值');
+        Util.log('远程模板地址: https://gh-proxy.com/https://raw.githubusercontent.com/under-the-ocean/Bili_monkey/main/template.html');
+        Util.log('请检查：1. 网络连接 2. GitHub访问是否正常 3. 代理服务是否可用');
+        return this.getSubTemplate('error', { ERROR_MSG: 'GM_getResourceText 返回空值' });
       }
-      return tpl
+      
+      Util.log('模板加载成功，开始替换变量...');
+      const beforeLength = tpl.length;
+      let result = tpl
         .replace(/\$\{VERSION\}/g, CONFIG.VERSION)
         .replace(/\$\{DEVICE_ID_SHORT\}/g, CONFIG.DEVICE_ID.slice(0, 8))
         .replace(/\$\{CONFIG\.QQ_ID\}/g, CONFIG.QQ_ID || '')
@@ -519,6 +526,10 @@
         .replace(/\$\{url\}/g, '')
         .replace(/\$\{title\}/g, '')
         .replace(/\$\{onlyTaskIds \? ' \(指定ID\)' : ''\}/g, '');
+      
+      Util.log(`模板变量替换完成: 处理前=${beforeLength}字符, 处理后=${result.length}字符`);
+      Util.log('=== 模板加载完成 ===');
+      return result;
     },
 
     bind() {
@@ -548,6 +559,8 @@
         else if (action === 'toggleDark') this.toggleDarkMode();
         else if (action === 'logout') this.logout();
         else if (action === 'startLogin') this.startLogin();
+        else if (action === 'testClick') this.testClick();
+        else if (action === 'runCurrent') this.runCurrent();
       });
 
       panel.addEventListener('change', (e) => {
@@ -556,6 +569,9 @@
         const action = target.getAttribute('data-ba');
         if (action === 'taskConfig') {
           this.updateTaskConfig(target.getAttribute('data-taskid'), target.getAttribute('data-field'), target.value);
+        } else if (action === 'currentTaskConfig') {
+          const currentTask = Util.extractTaskIdFromPage() || 'unknown_task';
+          this.updateTaskConfig(currentTask, target.getAttribute('data-field'), target.value);
         }
       });
 
@@ -569,10 +585,12 @@
       });
 
       const filterInput = panel.querySelector('[data-ba="filter"]');
-      filterInput.addEventListener('input', () => {
-        this.state.filter = filterInput.value.trim().toLowerCase();
-        this.renderList();
-      });
+      if (filterInput) {
+        filterInput.addEventListener('input', () => {
+          this.state.filter = filterInput.value.trim().toLowerCase();
+          this.renderList();
+        });
+      }
     },
 
     setData(baseConfig, tasks) {
@@ -591,7 +609,10 @@
       const current = this.state.taskConfigs[taskId] || Util.defaultTaskConfig(taskId);
       this.state.taskConfigs[taskId] = { ...current, [field]: field === 'selected' ? Boolean(value) : value };
       this.saveTaskConfigs();
-      this.renderList();
+      // 只有当改变的是 selected 状态时才重新渲染列表
+      if (field === 'selected') {
+        this.renderList();
+      }
     },
 
     setStatus(text) {
@@ -611,16 +632,7 @@
       if (targetEl.dataset.biliautoLogInjected === '1') return;
       targetEl.dataset.biliautoLogInjected = '1';
       this._pageLogs = this._pageLogs || [];
-      targetEl.innerHTML = '<div id="tm-page-log-panel" style="font-size:12px;line-height:1.55;padding:6px 0;color:inherit;">' +
-        '<div style="font-weight:700;font-size:13px;margin-bottom:6px;display:flex;justify-content:space-between;gap:8px;">' +
-          '<span>📋 抢码滚动日志</span><span>任务 <b id="tm-log-taskCount">-</b></span>' +
-        '</div>' +
-        '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:6px;color:#666;">' +
-          '<span>倒计时：<b id="tm-log-countdown">-</b></span>' +
-          '<span>状态：<b id="tm-log-status">等待中</b></span>' +
-        '</div>' +
-        '<div id="tm-log-scroll" style="height:96px;overflow-y:auto;border:1px solid rgba(0,0,0,.10);border-radius:8px;background:rgba(255,255,255,.58);padding:6px;white-space:pre-wrap;font-family:Consolas,Menlo,monospace;"></div>' +
-      '</div>';
+      targetEl.innerHTML = Panel.getSubTemplate('logPanel');
       this.updatePageLog('日志面板已接管公告区域');
     },
 
@@ -788,6 +800,49 @@
       this.setStatus('已清空所有任务');
     },
 
+    async testClick() {
+      if (!this.state.baseConfig || !this.state.baseConfig.reward_claim_selector) {
+        this.setStatus('缺少领取按钮选择器配置');
+        return;
+      }
+      const selector = this.state.baseConfig.reward_claim_selector;
+      const btn = Util.getByXPath(selector);
+      if (!btn) {
+        this.setStatus('未找到领取按钮');
+        return;
+      }
+      Executor.activateButton(btn);
+      btn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      await Util.sleep(300);
+      btn.click();
+      this.setStatus('测试点击已执行');
+      Util.info('测试点击: 已点击领取按钮');
+    },
+
+    async runCurrent() {
+      if (this.state.running) {
+        this.setStatus('正在执行中...');
+        return;
+      }
+      if (!this.state.baseConfig || !this.state.baseConfig.reward_claim_selector) {
+        this.setStatus('缺少领取按钮选择器配置');
+        return;
+      }
+      const taskId = Util.extractTaskIdFromPage() || 'unknown_task';
+      const cfg = this.state.taskConfigs[taskId] || Util.defaultTaskConfig(taskId);
+      this.state.running = true;
+      this.setStatus(`准备执行任务: ${taskId}`);
+      Util.info(`面板: 执行当前页面任务: ${taskId}`);
+      try {
+        await runCurrentPageTask(this.state.baseConfig, taskId, cfg);
+        this.setStatus('执行完成');
+      } catch (e) {
+        this.setStatus('执行失败: ' + (e.message || e));
+        Util.error('执行失败:', e);
+      } finally {
+        this.state.running = false;
+      }
+    },
 
     showLoginOverlay(reason) {
       let o = document.getElementById('biliauto-login-overlay');
@@ -797,13 +852,9 @@
       o.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:rgba(0,0,0,.62);display:flex;align-items:center;justify-content:center;font-family:Arial,sans-serif;padding:16px;';
       const c = document.createElement('div');
       c.style.cssText = 'width:min(420px,96vw);background:#fff;color:#111;border-radius:10px;padding:18px;box-shadow:0 12px 40px rgba(0,0,0,.22);text-align:left;';
-      c.innerHTML =
-        '<div style="font-size:18px;font-weight:700;margin-bottom:8px;">BiliAuto 登录</div>' +
-        '<div style="font-size:13px;color:#666;line-height:1.7;margin-bottom:10px;">未登录或登录已失效。点击按钮获取验证码，然后把验证码发送到群聊 <b>1082333812</b>。</div>' +
-        (reason ? '<div style="font-size:12px;color:#d33;margin-bottom:8px;">' + this.escape(reason) + '</div>' : '') +
-        '<div data-ba="loginCodeDisplay" style="font-size:34px;font-weight:800;letter-spacing:8px;text-align:center;margin:12px 0;font-family:Consolas,monospace;">------</div>' +
-        '<div data-ba="loginStatus" style="font-size:12px;color:#777;margin-bottom:12px;min-height:18px;">等待获取验证码</div>' +
-        '<button data-ba="startLogin" style="width:100%;height:38px;border:0;border-radius:7px;background:#1677ff;color:#fff;font-size:14px;font-weight:700;cursor:pointer;">获取验证码</button>';
+      c.innerHTML = Panel.getSubTemplate('loginOverlay');
+      const reasonEl = c.querySelector('#tmpl-loginReason');
+      if (reason && reasonEl) reasonEl.textContent = this.escape(reason);
       o.appendChild(c);
       document.documentElement.appendChild(o);
       o.addEventListener('click', (e) => {
@@ -994,7 +1045,22 @@
       const currentTask = Util.extractTaskIdFromPage() || '未识别';
       const baseUrl = this.state.baseConfig && this.state.baseConfig.reward_base_url || '未加载';
       if (meta) {
-        meta.innerHTML = `<div>当前 task_id：${this.escape(currentTask)}</div><div>奖励页：${this.escape(baseUrl)}</div>`;
+        meta.innerHTML = this.getSubTemplate('meta', {
+          CURRENT_TASK: this.escape(currentTask),
+          BASE_URL: this.escape(baseUrl)
+        });
+      }
+
+      // 渲染当前页面配置
+      const currentConfigEl = panel.querySelector('[data-ba="currentConfig"]');
+      if (currentConfigEl && currentTask !== '未识别') {
+        const cfg = this.state.taskConfigs[currentTask] || Util.defaultTaskConfig(currentTask);
+        const startTimeInput = currentConfigEl.querySelector('[data-field="start_time"]');
+        const intervalInput = currentConfigEl.querySelector('[data-field="interval"]');
+        const durationInput = currentConfigEl.querySelector('[data-field="duration"]');
+        if (startTimeInput) startTimeInput.value = cfg.start_time || CONFIG.DEFAULT_START_TIME;
+        if (intervalInput) intervalInput.value = cfg.interval || CONFIG.DEFAULT_CLICK_INTERVAL_MS / 1000;
+        if (durationInput) durationInput.value = cfg.duration || CONFIG.DEFAULT_CLICK_DURATION_MS / 1000;
       }
 
       const countEl = panel.querySelector('[data-ba="taskCount"]');
@@ -1020,7 +1086,7 @@
         }
       }
       if (!filtered.length) {
-        list.innerHTML = '<div class="tm-material-empty">暂无任务<br>点击「刷新」拉取或输入 task_id 添加</div>';
+        list.innerHTML = this.getSubTemplate('emptyList');
         return;
       }
       var PER_PAGE = 10;
@@ -1032,38 +1098,21 @@
       var startIdx = (page - 1) * PER_PAGE;
       var pageTasks = filtered.slice(startIdx, startIdx + PER_PAGE);
       var html = '';
-      html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;margin-bottom:4px;font-size:12px;color:var(--tm-text-secondary)">';
-      html += '<span>共 ' + filtered.length + ' 个任务</span>';
-      html += '<span style="display:flex;gap:4px;align-items:center">';
-      html += '<button class="tm-material-btn tm-material-btn-xs" data-ba="pagePrev"';
-      if (page <= 1) html += ' disabled style="opacity:0.4"';
-      html += '>上一页</button>';
-      html += '<span>' + page + '/' + totalPages + '</span>';
-      html += '<button class="tm-material-btn tm-material-btn-xs" data-ba="pageNext"';
-      if (page >= totalPages) html += ' disabled style="opacity:0.4"';
-      html += '>下一页</button></span></div>';
+      html += this.getSubTemplate('pagination', {
+        COUNT: filtered.length,
+        PAGE: page,
+        TOTAL_PAGES: totalPages,
+        PREV_DISABLED: page <= 1 ? ' disabled style="opacity:0.4"' : '',
+        NEXT_DISABLED: page >= totalPages ? ' disabled style="opacity:0.4"' : ''
+      });
       for (var ti = 0; ti < pageTasks.length; ti++) {
         var task = pageTasks[ti];
         var taskId = String(task.task_value || task.value || task.task_id || '');
         var name = String(task.task_key || task.name || task.id || '未命名任务');
-        var cfg = this.state.taskConfigs[taskId] || Util.defaultTaskConfig(taskId);
-        html += '<div class="tm-material-item">';
-        html += '<label class="tm-material-check">';
-        html += '<input type="checkbox" data-ba="select" data-taskid="' + this.escapeAttr(taskId) + '"';
-        if (cfg.selected) html += ' checked';
-        html += '>' + this.escape(name) + '</label>';
-        html += '<div class="tm-material-item-id">' + this.escape(taskId) + '</div>';
-        html += '<div class="tm-material-item-config">';
-        html += '<input data-ba="taskConfig" data-field="start_time" data-taskid="' + this.escapeAttr(taskId) + '" value="' + this.escapeAttr(cfg.start_time) + '" placeholder="时间" title="开始时间">';
-        html += '<input data-ba="taskConfig" data-field="interval" data-taskid="' + this.escapeAttr(taskId) + '" value="' + this.escapeAttr(cfg.interval) + '" placeholder="间隔" title="点击间隔(秒)">';
-        html += '<input data-ba="taskConfig" data-field="duration" data-taskid="' + this.escapeAttr(taskId) + '" value="' + this.escapeAttr(cfg.duration) + '" placeholder="持续" title="持续时长(秒)">';
-        html += '</div>';
-        html += '<div class="tm-material-item-actions">';
-        html += '<button class="tm-material-btn tm-material-btn-sm" data-ba="runOne" data-taskid="' + this.escapeAttr(taskId) + '">执行</button>';
-        html += '<button class="tm-material-btn tm-material-btn-sm" data-ba="jump" data-taskid="' + this.escapeAttr(taskId) + '">跳转</button>';
-        html += '<button class="tm-material-btn tm-material-btn-sm" data-ba="copy" data-taskid="' + this.escapeAttr(taskId) + '">复制</button>';
-        html += '<button class="tm-material-btn tm-material-btn-sm tm-material-btn-accent" data-ba="removeTask" data-taskid="' + this.escapeAttr(taskId) + '">删除</button>';
-        html += '</div></div>';
+        html += this.getSubTemplate('listItem', {
+          NAME: this.escape(name),
+          TASK_ID: this.escapeAttr(taskId)
+        });
       }
       list.innerHTML = html;
     },
@@ -1074,6 +1123,24 @@
 
     escapeAttr(text) {
       return this.escape(text).replace(/'/g, '&#39;');
+    },
+
+    getSubTemplate(name, vars) {
+      if (!this._parsedTemplates) {
+        this._parsedTemplates = {};
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(this.template(), 'text/html');
+        doc.querySelectorAll('template[id^="tmpl-"]').forEach(el => {
+          this._parsedTemplates[el.id.replace('tmpl-', '')] = el.innerHTML;
+        });
+      }
+      let html = this._parsedTemplates[name] || '';
+      if (vars) {
+        Object.keys(vars).forEach(key => {
+          html = html.replace(new RegExp('\\{\\{' + key + '\\}\\}', 'g'), vars[key]);
+        });
+      }
+      return html;
     }
   };
 
@@ -1088,33 +1155,8 @@
     installed: false,
 
     install() {
-      if (this.installed) return;
       this.installed = true;
-      Util.info('RewardMonitor 已安装 — 监控 receive/info API');
-      const originalFetch = window.fetch;
-      if (originalFetch) {
-        Util.log(`fetch API 可用，正在覆盖 window.fetch`);
-        window.fetch = async (...args) => {
-          const response = await originalFetch.apply(window, args);
-          this.captureFetch(args[0], response);
-          return response;
-        };
-      } else {
-        Util.warn('window.fetch 不可用（可能太早），跳过 fetch hook');
-      }
-      const originalOpen = XMLHttpRequest.prototype.open;
-      const originalSend = XMLHttpRequest.prototype.send;
-      XMLHttpRequest.prototype.open = function (method, url, ...rest) {
-        this.__biliautoUrl = url;
-        return originalOpen.call(this, method, url, ...rest);
-      };
-      XMLHttpRequest.prototype.send = function (...args) {
-        this.addEventListener('load', () => RewardMonitor.captureXhr(this));
-        return originalSend.apply(this, args);
-      };
-      Util.log('XHR prototype 已覆盖');
-
-      this._setupPerformanceObserver();
+      Util.info('RewardMonitor 已安装（DOM 模式，不监控 API）');
     },
 
     _setupPerformanceObserver() {
@@ -1154,11 +1196,18 @@
       }
       if (url.includes(this.RECEIVE_API_PATH)) {
         Util.log(`捕获 fetch receive API: ${url} status=${response.status}`);
-        response.clone().text().then(text => Util.log(`  receive 响应内容(${text.length}字符): ${text.slice(0, 300)}`)).catch(() => {});
-        response.json().then(json => this.save(this.currentTaskId(), json, url, response.status)).catch(() => {});
+        response.text().then(text => {
+          Util.log(`  receive 响应内容(${text.length}字符): ${text.slice(0, 300)}`);
+          try {
+            const json = JSON.parse(text);
+            this.save(this.currentTaskId(), json, url, response.status);
+          } catch (e) {
+            Util.warn(`  receive 响应JSON解析失败: ${e.message}`);
+          }
+        }).catch(e => Util.warn(`  receive 响应读取失败: ${e.message}`));
       } else if (url.includes(this.INFO_API_PATH)) {
         Util.log(`捕获 fetch info API: ${url} status=${response.status}`);
-        response.clone().text().then(text => {
+        response.text().then(text => {
           Util.log(`  info 响应内容(${text.length}字符): ${text.slice(0, 500)}`);
           try {
             const parsed = JSON.parse(text);
@@ -1269,18 +1318,50 @@
     save(taskId, respJson, url, statusCode) {
       const task = Util.findTaskById(Panel.state.tasks, taskId);
       const taskName = this.getMissionName(taskId) || Util.getTaskName(task);
-      this.cache[taskId] = {
+      const code = respJson ? respJson.code : undefined;
+      const message = respJson && (respJson.message || respJson.msg) || '';
+      let status = '失败';
+      let reason = '';
+      if (code === 0) {
+        status = '成功';
+        reason = '领取成功';
+      } else if (code === 202032) {
+        reason = '无资格领取奖励';
+      } else if (code === 202031) {
+        reason = '奖励已被领完';
+      } else if (code === 202033) {
+        reason = '活动未开始';
+      } else if (code === 202034) {
+        reason = '活动已结束';
+      } else if (code === -400) {
+        reason = '请求参数错误';
+      } else if (code === -101) {
+        reason = '未登录或登录失效';
+      } else if (code === -403) {
+        reason = '访问被拒绝';
+      } else if (code === 404) {
+        reason = '接口不存在';
+      } else {
+        reason = message || '未知错误';
+      }
+      const logEntry = {
         task_id: taskId,
         task_name: taskName,
-        status: respJson && respJson.code === 0 ? '成功' : '失败',
-        response_code: respJson ? respJson.code : undefined,
-        message: respJson && (respJson.message || respJson.msg) || '',
+        status,
+        response_code: code,
+        message: reason || message,
         timestamp: Util.formatTime(),
         device_name: CONFIG.DEVICE_NAME,
         url,
         status_code: statusCode
       };
-      Util.log('捕获领取接口响应:', this.cache[taskId]);
+      this.cache[taskId] = logEntry;
+      const logMsg = `【API响应】task_id=${taskId} code=${code} status=${status} msg=${reason || message}`;
+      Util.log(logMsg);
+      Util.log('原始响应:', respJson);
+      if (Panel && Panel.updatePageLog) {
+        Panel.updatePageLog(logMsg);
+      }
     },
 
     makeUploadResult(taskId) {
@@ -1345,20 +1426,38 @@
       let successCount = 0;
       let failCount = 0;
       const endTime = Date.now() + durationMs;
+      const taskId = RewardMonitor.currentTaskId();
+      const logToPanel = (msg) => {
+        if (Panel && Panel.updatePageLog) {
+          Panel.updatePageLog(msg);
+        }
+      };
       Util.info(`开始连点: selector=${selector}, interval=${intervalMs}ms, duration=${durationMs}ms, 结束时间=${Util.formatTime(new Date(endTime))}`);
+      logToPanel(`【连点开始】task_id=${taskId} 间隔=${intervalMs}ms 时长=${(durationMs/1000).toFixed(0)}秒`);
+      const btn = Util.getByXPath(selector);
+      const isSuccessText = (el) => el && (el.textContent || '').includes('查看奖励');
+      if (btn) Executor.activateButton(btn);
       return new Promise((resolve) => {
         let lastLogTime = 0;
         const timer = setInterval(() => {
+          if (isSuccessText(btn)) {
+            clearInterval(timer);
+            const summary = `【连点提前结束】按钮文字已变为"查看奖励"，领取成功`;
+            Util.info(summary);
+            logToPanel(summary);
+            resolve({ success_count: successCount, fail_count: failCount, early_exit: true });
+            return;
+          }
           if (Date.now() >= endTime) {
             clearInterval(timer);
-            Util.info(`连点结束: 成功 ${successCount} 次, 失败 ${failCount} 次, 总点击 ${successCount + failCount} 次`);
+            const summary = `【连点结束】成功 ${successCount} 次, 失败 ${failCount} 次, 总点击 ${successCount + failCount} 次`;
+            Util.info(summary);
+            logToPanel(summary);
             resolve({ success_count: successCount, fail_count: failCount });
             return;
           }
           try {
-            const btn = Util.getByXPath(selector);
             if (btn) {
-              Executor.activateButton(btn);
               btn.click();
               successCount++;
             } else {
@@ -1367,43 +1466,39 @@
           } catch {
             failCount++;
           }
-          // 每2秒输出一次进度
           const now = Date.now();
           if (now - lastLogTime > 2000) {
             lastLogTime = now;
             const elapsed = ((now - (endTime - durationMs)) / 1000).toFixed(1);
-            Util.log(`连点进行中: ${elapsed}s / ${(durationMs / 1000).toFixed(0)}s, 成功 ${successCount}, 失败 ${failCount}`);
+            const progressMsg = `【连点进度】${elapsed}s / ${(durationMs / 1000).toFixed(0)}s 成功 ${successCount} 失败 ${failCount}`;
+            Util.log(progressMsg);
+            logToPanel(progressMsg);
           }
         }, intervalMs);
       });
     },
 
     async judgeClaimResult(btn, taskId) {
-      Util.log(`判断领取结果: task_id=${taskId}`);
-      const deadline = Date.now() + 3000;
+      Util.log(`判断领取结果: task_id=${taskId}（DOM 模式）`);
+      const logToPanel = (msg) => {
+        if (Panel && Panel.updatePageLog) {
+          Panel.updatePageLog(msg);
+        }
+      };
+      const deadline = Date.now() + 5000;
       while (Date.now() < deadline) {
-        const captured = RewardMonitor.get(taskId);
-        if (captured) {
-          Util.log(`领取结果(API捕获): ${captured.status} code=${captured.response_code} msg=${captured.message}`);
-          return {
-            ok: captured.status === '成功',
-            response_code: captured.response_code,
-            message: captured.message || captured.status,
-            captured
-          };
+        if (btn && (btn.textContent || '').includes('查看奖励')) {
+          const resultMsg = '✅ 领取成功: 按钮文字已变为"查看奖励"';
+          Util.log(resultMsg);
+          logToPanel(resultMsg);
+          return { ok: true, response_code: 0, message: resultMsg };
         }
         await Util.sleep(100);
       }
-      const text = Util.text(btn);
-      Util.log(`领取结果(页面文字): ${text || '无'}`);
-      // 判断逻辑：按钮名称为"查看奖励"视为领取成功，否则失败
-      if (/查看奖励/.test(text)) {
-        return { ok: true, response_code: 0, message: '✅ 按钮文字为"查看奖励"，领取成功' };
-      }
-      if (/已领取|已拥有|成功|领取成功/.test(text)) {
-        return { ok: true, response_code: 0, message: text || '领取成功' };
-      }
-      return { ok: false, response_code: -1, message: text ? `按钮文字为"${text}"，非"查看奖励"，抢码失败` : '按钮不存在或无文字，抢码失败' };
+      const resultMsg = '❌ 超时未检测到"查看奖励"，领取可能失败';
+      Util.log(resultMsg);
+      logToPanel(resultMsg);
+      return { ok: false, response_code: -1, message: resultMsg };
     },
 
     async setupCurrentPage(selector, maxAttempts) {
@@ -1433,28 +1528,28 @@
       await this.waitUntil(startTime);
       Util.info(`开始执行任务: ${taskId}`);
       const clickStats = await this.performContinuousClick(selector, intervalMs, durationMs);
-      const btn = Util.getByXPath(selector);
-      const claimResult = await this.judgeClaimResult(btn, taskId);
       const successCount = clickStats.success_count || 0;
       const totalCount = successCount + (clickStats.fail_count || 0);
-      const resultText = `${(durationMs / 1000).toFixed(2)}秒点击结束，共点击 ${totalCount} 次，成功 ${successCount} 次，成功率 ${totalCount ? (successCount / totalCount * 100).toFixed(1) : '0.0'}%`;
-      Util.info(`任务结果 [${taskId}]: ${resultText} | ${claimResult.ok ? '✅ 成功' : '❌ 失败'} — ${claimResult.message}`);
-      const captured = claimResult.captured;
-      const uploadResult = captured ? RewardMonitor.makeUploadResult(taskId) : null;
-      if (uploadResult) {
-        results[taskId] = uploadResult;
+      let claimResult;
+      if (clickStats.early_exit) {
+        claimResult = { ok: true, response_code: 0, message: '✅ 按钮文字已变为"查看奖励"' };
       } else {
-        const task = Util.findTaskById(Panel.state.tasks, taskId);
-        results[taskId] = {
-          task_id: taskId,
-          task_name: RewardMonitor.getMissionName(taskId) || Util.getTaskName(task),
-          status: claimResult.ok ? '成功' : '失败',
-          response_code: claimResult.response_code,
-          message: `${resultText}；${claimResult.message}`,
-          timestamp: Util.formatTime(),
-          device_name: CONFIG.DEVICE_NAME
-        };
+        const btn = Util.getByXPath(selector);
+        claimResult = await this.judgeClaimResult(btn, taskId);
       }
+      const elapsedTime = clickStats.early_exit ? ((totalCount * intervalMs) / 1000).toFixed(2) : (durationMs / 1000).toFixed(2);
+      const resultText = `${elapsedTime}秒点击结束，共点击 ${totalCount} 次，成功 ${successCount} 次，成功率 ${totalCount ? (successCount / totalCount * 100).toFixed(1) : '0.0'}%`;
+      Util.info(`任务结果 [${taskId}]: ${resultText} | ${claimResult.ok ? '✅ 成功' : '❌ 失败'} — ${claimResult.message}`);
+      const task = Util.findTaskById(Panel.state.tasks, taskId);
+      results[taskId] = {
+        task_id: taskId,
+        task_name: Util.getTaskName(task),
+        status: claimResult.ok ? '成功' : '失败',
+        response_code: claimResult.response_code,
+        message: `${resultText}；${claimResult.message}`,
+        timestamp: Util.formatTime(),
+        device_name: CONFIG.DEVICE_NAME
+      };
       return results[taskId];
     },
 
@@ -1592,26 +1687,7 @@
           });
         }
       } else {
-        // DOM 提取失败时，尝试等 hook 捕获
-        taskName = await RewardMonitor.waitForTaskName(taskId, 1500);
-        const missionPageInfo = RewardMonitor.getMissionPageInfo(taskId);
-        if (missionPageInfo && taskId && taskId !== 'unknown_task') {
-          const payload = {
-            task_id: taskId,
-            device_name: CONFIG.DEVICE_NAME,
-            section_title: missionPageInfo.section_title,
-            award_info: missionPageInfo.award_info,
-            extract_time: Util.formatTime()
-          };
-          Util.log(`上传页面信息(Hook): task_id=${taskId} section_title="${missionPageInfo.section_title}" award_info="${missionPageInfo.award_info}"`);
-          API.uploadPageInfo(payload).then(resp => {
-            Util.log(`页面信息上传成功:`, resp && resp.status);
-          }).catch(e => {
-            Util.log(`页面信息上传失败（不影响主流程）:`, e.message || e);
-          });
-        } else {
-          Util.log('DOM 和 Hook 均未捕获到页面信息，跳过上传');
-        }
+        Util.log('DOM 提取页面信息失败，跳过上传');
       }
 
       Util.info('获取服务端任务列表并显示...');
@@ -1688,10 +1764,6 @@
       }
     }
   }
-
-  // 立即安装 API Hook，不等待页面加载
-  RewardMonitor.install();
-  Util.log('API Hook 已安装（document-start 模式）');
 
   // 等待 DOM 准备好后再执行主流程
   Util.log('油猴脚本已注入，等待页面加载...');
