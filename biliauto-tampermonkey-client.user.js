@@ -374,7 +374,6 @@
       darkMode: GM_getValue('material_dark_mode', null),
       panelX: GM_getValue('material_panel_x', null),
       panelY: GM_getValue('material_panel_y', null),
-      zoom: GM_getValue('material_panel_zoom', 1),
       loginCode: '',
       loginStatus: isLoggedIn() ? 'logged_in' : ''
     },
@@ -400,30 +399,9 @@
       this.applyDarkModeOptions();
       this.applyTheme();
       this.setupPanelPosition();
-      this.applyZoom();
       this.setupDrag();
       this.bind();
       this.render();
-    },
-
-    applyZoom() {
-      const panel = document.getElementById('biliauto-panel');
-      if (!panel) return;
-      panel.style.transform = `scale(${this.state.zoom})`;
-      panel.style.transformOrigin = 'top right';
-      GM_setValue('material_panel_zoom', this.state.zoom);
-    },
-
-    zoomIn() {
-      this.state.zoom = Math.min(1.5, this.state.zoom + 0.1);
-      this.applyZoom();
-      Util.log(`面板放大: ${(this.state.zoom * 100).toFixed(0)}%`);
-    },
-
-    zoomOut() {
-      this.state.zoom = Math.max(0.6, this.state.zoom - 0.1);
-      this.applyZoom();
-      Util.log(`面板缩小: ${(this.state.zoom * 100).toFixed(0)}%`);
     },
 
     applyDarkModeOptions() {
@@ -588,8 +566,6 @@
         else if (action === 'startLogin') this.startLogin();
         else if (action === 'testClick') this.testClick();
         else if (action === 'runCurrent') this.runCurrent();
-        else if (action === 'zoomIn') this.zoomIn();
-        else if (action === 'zoomOut') this.zoomOut();
       });
 
       panel.addEventListener('change', (e) => {
