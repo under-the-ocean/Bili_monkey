@@ -713,6 +713,8 @@
       CONFIG.API_KEY = '';
       this.state.loginStatus = '';
       this.setStatus('已退出登录');
+      const badge = document.querySelector('#biliauto-panel [data-ba="loginStatusBadge"]');
+      if (badge) badge.style.display = 'none';
       this.showLoginOverlay();
       Util.info('用户已退出登录');
     },
@@ -892,7 +894,7 @@
         }
         this.state.loginCode = code;
         // 逐位填入验证码
-        const chars = display.querySelectorAll('.bili-login-code-char');
+        const chars = display.querySelectorAll('.cyber-login-code-char');
         const codeStr = String(code);
         if (chars && chars.length) {
           chars.forEach((el, i) => { el.textContent = codeStr[i] || '-'; });
@@ -968,6 +970,11 @@
       GM_setValue('device_id', qqId);
       this.state.loginStatus = 'logged_in';
       this.hideLoginOverlay();
+      const badge = document.querySelector('#biliauto-panel [data-ba="loginStatusBadge"]');
+      if (badge) {
+        badge.textContent = '✅ ' + qqId;
+        badge.style.display = '';
+      }
       this.setStatus('✅ 已登录');
       Util.info('登录完成');
       if (Util.notify) Util.notify('BiliAuto 登录成功', '已完成授权');
@@ -1052,7 +1059,7 @@
       }
 
       // 渲染当前页面配置
-      const currentConfigEl = panel.querySelector('[data-ba="currentConfig"]');
+      const currentConfigEl = panel.querySelector('[data-ba="currentTaskConfig"]');
       if (currentConfigEl && currentTask !== '未识别') {
         const cfg = this.state.taskConfigs[currentTask] || Util.defaultTaskConfig(currentTask);
         const startTimeInput = currentConfigEl.querySelector('[data-field="start_time"]');

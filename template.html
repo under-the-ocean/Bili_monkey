@@ -448,7 +448,13 @@
   font-family: var(--tm-font);
   padding: 16px;
   box-sizing: border-box;
-  animation: tm-fade-in 0.3s ease;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.35s cubic-bezier(.4,0,.2,1);
+}
+#biliauto-login-overlay.tm-overlay-visible {
+  opacity: 1;
+  pointer-events: auto;
 }
 #biliauto-login-overlay * {
   box-sizing: border-box;
@@ -773,6 +779,68 @@
   }
 }
 </style>
+
+<!-- ========== Main Panel Skeleton ========== -->
+<div class="tm-cyber-header">
+  <span class="tm-cyber-header-title">
+    <span class="tm-cyber-brand">BiliAuto</span>
+    <span class="tm-cyber-header-badge">v${CONFIG.VERSION}</span>
+    <span class="tm-cyber-status-badge" data-ba="loginStatusBadge" style="display:${CONFIG.QQ_ID?'':'none'}">✅ ${CONFIG.QQ_ID}</span>
+  </span>
+  <span class="tm-cyber-header-actions">
+    <button class="tm-cyber-icon-btn" data-ba="logout" title="退出登录" style="display:${CONFIG.QQ_ID?'':'none'}">🚪</button>
+    <button class="tm-cyber-icon-btn" data-ba="copyPageInfo" title="复制当前页面信息">📋</button>
+    <button class="tm-cyber-icon-btn" data-ba="toggleDark" title="切换夜间模式">🌙</button>
+    <button class="tm-cyber-icon-btn" data-ba="closePanel" title="关闭面板">✕</button>
+  </span>
+</div>
+
+<div class="tm-cyber-body">
+
+  <div class="tm-cyber-meta" data-ba="meta"></div>
+
+  <div class="tm-cyber-input-row">
+    <input class="tm-cyber-input" data-ba="addTaskInput" placeholder="添加 task_id" style="flex:1">
+    <button class="tm-cyber-btn" data-ba="addTask">添加</button>
+  </div>
+
+  <div class="tm-cyber-input-row">
+    <input class="tm-cyber-input" data-ba="manual" placeholder="输入 task_id 后跳转">
+    <button class="tm-cyber-btn" data-ba="manualJump">跳转</button>
+  </div>
+
+  <div data-ba="currentTaskConfig" style="display:flex;gap:6px;margin-bottom:10px;">
+    <input class="tm-cyber-input" data-field="start_time" placeholder="时间" title="开始时间" style="flex:1;text-align:center;font-size:12px;padding:6px 8px;">
+    <input class="tm-cyber-input" data-field="interval" placeholder="间隔" title="点击间隔(秒)" style="flex:1;text-align:center;font-size:12px;padding:6px 8px;">
+    <input class="tm-cyber-input" data-field="duration" placeholder="持续" title="持续时长(秒)" style="flex:1;text-align:center;font-size:12px;padding:6px 8px;">
+  </div>
+
+  <input class="tm-cyber-input" data-ba="filter" placeholder="筛选任务名称或 ID">
+
+  <div class="tm-cyber-list" data-ba="list"></div>
+
+  <div class="tm-cyber-toolbar" style="margin-top:10px;justify-content:space-between">
+    <div style="display:flex;gap:6px">
+      <button class="tm-cyber-btn tm-cyber-btn-primary tm-cyber-btn-sm" data-ba="runAll">执行选中</button>
+      <button class="tm-cyber-btn tm-cyber-btn-sm" data-ba="runCurrent">执行当前</button>
+    </div>
+    <div style="display:flex;gap:6px">
+      <button class="tm-cyber-btn tm-cyber-btn-sm" data-ba="refresh">刷新</button>
+      <button class="tm-cyber-btn tm-cyber-btn-sm" data-ba="defaults">重置</button>
+      <button class="tm-cyber-btn tm-cyber-btn-sm tm-cyber-btn-accent" data-ba="testClick">测试</button>
+      <button class="tm-cyber-btn tm-cyber-btn-sm tm-cyber-btn-accent" data-ba="clearAll">清空</button>
+      <button class="tm-cyber-btn tm-cyber-btn-sm tm-cyber-btn-accent" data-ba="logout" style="display:${CONFIG.QQ_ID?'':'none'}">退出</button>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
+    <span class="tm-cyber-chip" data-ba="taskCount">0 个任务</span>
+  </div>
+
+  <div class="tm-cyber-status" data-ba="status"></div>
+</div>
+
+<!-- ========== Sub Templates ========== -->
 
 <template id="tmpl-fab">
 <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
