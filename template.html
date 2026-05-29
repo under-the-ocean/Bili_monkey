@@ -1,36 +1,27 @@
 <style>
-/* ========== Material Design Tokens ========== */
+/* ========== Cyber Dark Design Tokens ========== */
 :root {
-  --tm-primary: #50b6fe;
-  --tm-primary-dark: #3a9ae0;
-  --tm-accent: #ff5252;
-  --tm-accent-dark: #d50000;
-  --tm-bg: #ffffff;
-  --tm-bg-card: #ffffff;
-  --tm-text: rgba(0,0,0,0.87);
-  --tm-text-secondary: rgba(0,0,0,0.54);
-  --tm-text-hint: rgba(0,0,0,0.38);
-  --tm-divider: rgba(0,0,0,0.12);
-  --tm-input-bg: #f5f5f5;
-  --tm-surface: #f5f5f5;
-  --tm-shadow: 0 25px 50px -12px rgba(80,182,254,0.3);
-  --tm-shadow-btn: 0 3px 1px -2px rgba(0,0,0,0.2), 0 2px 2px 0 rgba(0,0,0,0.14), 0 1px 5px 0 rgba(0,0,0,0.12);
-  --tm-radius: 10px;
-  --tm-radius-btn: 6px;
-  --tm-radius-chip: 32px;
-  --tm-font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --tm-transition: 0.3s cubic-bezier(.4,0,.2,1);
-}
-#biliauto-panel.tm-material-dark {
-  --tm-bg: #121212;
-  --tm-bg-card: #1e1e1e;
+  --tm-primary: #06b6d4;
+  --tm-primary-dark: #0891b2;
+  --tm-primary-light: #22d3ee;
+  --tm-accent: #f87171;
+  --tm-accent-dark: #dc2626;
+  --tm-bg: #050816;
+  --tm-bg-card: rgba(15, 23, 42, 0.92);
   --tm-text: rgba(255,255,255,0.87);
   --tm-text-secondary: rgba(255,255,255,0.54);
   --tm-text-hint: rgba(255,255,255,0.38);
-  --tm-divider: rgba(255,255,255,0.12);
-  --tm-input-bg: #2c2c2c;
-  --tm-surface: #1e1e1e;
-  --tm-shadow: 0 11px 15px -7px rgba(0,0,0,0.4), 0 24px 38px 3px rgba(0,0,0,0.3), 0 9px 46px 8px rgba(0,0,0,0.25);
+  --tm-divider: rgba(255,255,255,0.08);
+  --tm-input-bg: rgba(255,255,255,0.06);
+  --tm-surface: rgba(255,255,255,0.04);
+  --tm-surface-hover: rgba(255,255,255,0.08);
+  --tm-shadow: 0 25px 50px -12px rgba(6,182,212,0.15);
+  --tm-shadow-btn: 0 4px 6px -1px rgba(0,0,0,0.3), 0 2px 4px -2px rgba(0,0,0,0.2);
+  --tm-radius: 12px;
+  --tm-radius-btn: 8px;
+  --tm-radius-chip: 32px;
+  --tm-font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --tm-transition: 0.2s cubic-bezier(.4,0,.2,1);
 }
 
 /* ========== FAB ========== */
@@ -41,115 +32,127 @@
   top: 50%!important;
   transform: translate(-50%, -50%)!important;
   z-index: 2147483647;
-  width: 60px;
-  height: 60px;
+  width: 56px;
+  height: 56px;
   border-radius: 50%;
-  background: var(--tm-primary);
+  background: linear-gradient(135deg, #06b6d4, #0891b2);
   color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  box-shadow: 0 6px 10px 0 rgba(0,0,0,0.14), 0 1px 18px 0 rgba(0,0,0,0.12), 0 3px 5px -1px rgba(0,0,0,0.2);
-  transition: opacity 0.25s cubic-bezier(.4,0,.2,1), transform 0.25s cubic-bezier(.4,0,.2,1), box-shadow 0.25s, background 0.25s;
+  box-shadow: 0 8px 24px rgba(6,182,212,0.3);
+  transition: opacity 0.25s cubic-bezier(.4,0,.2,1), transform 0.25s cubic-bezier(.4,0,.2,1), box-shadow 0.25s;
   user-select: none;
   -webkit-user-select: none;
   opacity: 1;
-  transform: scale(1);
+  transform: translate(-50%, -50%) scale(1);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,0.15);
 }
 #biliauto-fab.tm-fab-hidden {
   opacity: 0;
-  transform: scale(0.4);
+  transform: translate(-50%, -50%) scale(0.4);
   pointer-events: none;
 }
 #biliauto-fab:hover {
-  box-shadow: 0 8px 12px 0 rgba(0,0,0,0.18), 0 3px 20px 0 rgba(0,0,0,0.16), 0 3px 5px -1px rgba(0,0,0,0.24);
-  background: var(--tm-primary-dark);
+  box-shadow: 0 12px 32px rgba(6,182,212,0.45);
+  transform: translate(-50%, -50%) scale(1.08);
 }
 #biliauto-fab:active {
-  transform: scale(0.92);
+  transform: translate(-50%, -50%) scale(0.92);
 }
 #biliauto-fab svg {
   display: block;
-}
-#biliauto-fab.tm-material-dark {
-  background: #1e88e5;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.2));
 }
 
 /* ========== Panel ========== */
 #biliauto-panel {
   position: fixed;
-  right: 24px;
-  top: 80px;
+  left: 50%!important;
+  right: auto!important;
+  top: 50%!important;
+  transform: translate(-50%, -50%) scale(0.96)!important;
   z-index: 2147483646;
   width: 440px;
-  max-width: calc(100vw - 48px);
-  max-height: calc(100vh - 100px);
+  max-width: calc(100vw - 32px);
+  max-height: min(calc(100vh - 40px), 90vh) !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   font-family: var(--tm-font);
   color: var(--tm-text);
   background: var(--tm-bg-card);
   border-radius: var(--tm-radius);
   box-shadow: var(--tm-shadow);
+  border: 1px solid rgba(255,255,255,0.08);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   overflow: hidden;
   display: flex;
   flex-direction: column;
   opacity: 0;
-  transform: translateY(12px) scale(0.96);
   pointer-events: none;
   transition: opacity 0.25s cubic-bezier(.4,0,.2,1), transform 0.25s cubic-bezier(.4,0,.2,1);
 }
 #biliauto-panel.tm-panel-visible {
   opacity: 1;
-  transform: translateY(0) scale(1);
+  transform: translate(-50%, -50%) scale(1)!important;
   pointer-events: auto;
 }
 #biliauto-panel * { box-sizing: border-box; }
 
 /* ========== Header ========== */
-.tm-material-header {
+.tm-cyber-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
-  min-height: 44px;
+  padding: 14px 18px;
+  min-height: 48px;
   cursor: grab;
   user-select: none;
   -webkit-user-select: none;
   border-bottom: 1px solid var(--tm-divider);
   flex-shrink: 0;
+  background: rgba(6,182,212,0.04);
 }
-.tm-material-header:active { cursor: grabbing; }
-.tm-material-header-title {
+.tm-cyber-header:active { cursor: grabbing; }
+.tm-cyber-header-title {
   font-size: 16px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--tm-text);
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
+  letter-spacing: 0.3px;
 }
-.tm-material-header-badge {
+.tm-cyber-header-title .tm-cyber-brand {
+  color: var(--tm-primary);
+}
+.tm-cyber-header-badge {
   font-size: 11px;
-  font-weight: 400;
-  color: var(--tm-text-secondary);
-  background: var(--tm-input-bg);
-  padding: 2px 8px;
+  font-weight: 500;
+  color: var(--tm-primary-light);
+  background: rgba(6,182,212,0.12);
+  padding: 2px 10px;
   border-radius: var(--tm-radius-chip);
+  border: 1px solid rgba(6,182,212,0.2);
 }
-.tm-material-header-actions {
+.tm-cyber-header-actions {
   display: flex;
-  gap: 4px;
+  gap: 2px;
   cursor: default;
 }
 
 /* ========== Icon Button ========== */
-.tm-material-icon-btn {
+.tm-cyber-icon-btn {
   position: relative;
   overflow: hidden;
-  width: 36px;
-  height: 36px;
+  width: 34px;
+  height: 34px;
   border: none;
-  border-radius: 50%;
+  border-radius: 8px;
   background: transparent;
   color: var(--tm-text-secondary);
   cursor: pointer;
@@ -157,88 +160,77 @@
   align-items: center;
   justify-content: center;
   padding: 0;
-  transition: background 0.15s;
-  font-size: 18px;
+  transition: background 0.15s, color 0.15s;
+  font-size: 16px;
   line-height: 1;
 }
-.tm-material-icon-btn::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  background: currentColor;
-  opacity: 0;
-  transition: opacity 0.3s cubic-bezier(.4,0,.2,1);
-  pointer-events: none;
+.tm-cyber-icon-btn:hover {
+  background: rgba(255,255,255,0.08);
+  color: var(--tm-text);
 }
-.tm-material-icon-btn:hover::after { opacity: 0.08; }
-.tm-material-icon-btn:active::after { opacity: 0.16; transition: opacity 0.05s; }
+.tm-cyber-icon-btn:active {
+  background: rgba(255,255,255,0.12);
+  transform: scale(0.92);
+}
 
 /* ========== Body ========== */
-.tm-material-body {
-  padding: 14px 16px;
-  overflow-y: auto;
+.tm-cyber-body {
+  padding: 16px 18px;
+  overflow-y: visible;
   flex: 1;
 }
-.tm-material-meta {
+.tm-cyber-meta {
   font-size: 12px;
   color: var(--tm-text-secondary);
-  line-height: 1.6;
-  margin-bottom: 12px;
+  line-height: 1.7;
+  margin-bottom: 14px;
   word-break: break-all;
   background: var(--tm-surface);
-  padding: 10px 12px;
+  padding: 10px 14px;
   border-radius: var(--tm-radius-btn);
+  border: 1px solid var(--tm-divider);
+  font-family: "SF Mono", "Cascadia Code", monospace;
 }
 
 /* ========== Input ========== */
-.tm-material-input {
+.tm-cyber-input {
   width: 100%;
-  border: none;
+  border: 1px solid var(--tm-divider);
   border-radius: var(--tm-radius-btn);
   background: var(--tm-input-bg);
   color: var(--tm-text);
-  padding: 10px 12px;
+  padding: 10px 14px;
   outline: none;
   font-size: 13px;
   font-family: var(--tm-font);
-  transition: background 0.15s;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
-.tm-material-input:focus {
-  background: var(--tm-input-bg);
-  box-shadow: 0 0 0 2px var(--tm-primary);
+.tm-cyber-input:focus {
+  border-color: var(--tm-primary);
+  box-shadow: 0 0 0 3px rgba(6,182,212,0.15);
 }
-.tm-material-input::placeholder { color: var(--tm-text-hint); }
-.tm-material-input-row {
+.tm-cyber-input::placeholder { color: var(--tm-text-hint); }
+.tm-cyber-input-row {
   display: flex;
-  gap: 6px;
-  margin-bottom: 8px;
+  gap: 8px;
+  margin-bottom: 10px;
 }
-.tm-material-input-row .tm-material-input { flex: 1; }
-.tm-material-compact-controls {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 6px;
-  margin-bottom: 6px;
-}
-.tm-material-compact-controls + .tm-material-input {
-  margin-top: 0;
-}
+.tm-cyber-input-row .tm-cyber-input { flex: 1; }
 
 /* ========== Button ========== */
-.tm-material-btn {
+.tm-cyber-btn {
   position: relative;
   overflow: hidden;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 40px;
+  height: 38px;
   min-width: 72px;
   padding: 0 18px;
-  border: none;
+  border: 1px solid var(--tm-divider);
   border-radius: var(--tm-radius-btn);
   background: transparent;
-  color: var(--tm-primary);
+  color: var(--tm-text-secondary);
   font-size: 13px;
   font-weight: 500;
   font-family: var(--tm-font);
@@ -246,69 +238,86 @@
   user-select: none;
   -webkit-user-select: none;
   transition: var(--tm-transition);
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
   white-space: nowrap;
+  transform: translateZ(0);
 }
-.tm-material-btn::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: var(--tm-radius-btn);
-  background: currentColor;
-  opacity: 0;
-  transition: opacity 0.3s cubic-bezier(.4,0,.2,1);
-  pointer-events: none;
+.tm-cyber-btn:hover {
+  background: var(--tm-surface-hover);
+  color: var(--tm-text);
+  border-color: rgba(255,255,255,0.15);
 }
-.tm-material-btn:hover::after { opacity: 0.08; }
-.tm-material-btn:active::after { opacity: 0.16; transition: opacity 0.05s; }
-.tm-material-btn-primary {
-  background: var(--tm-primary);
+.tm-cyber-btn:active {
+  transform: scale(0.97);
+}
+.tm-cyber-btn-primary {
+  background: linear-gradient(135deg, #06b6d4, #0891b2);
   color: #fff;
+  border: none;
   box-shadow: var(--tm-shadow-btn);
 }
-.tm-material-btn-primary:hover { background: var(--tm-primary-dark); }
-.tm-material-btn-primary::after { display: none; }
-.tm-material-btn-primary:active { box-shadow: 0 5px 5px -3px rgba(0,0,0,0.2), 0 8px 10px 1px rgba(0,0,0,0.14), 0 3px 14px 2px rgba(0,0,0,0.12); }
-.tm-material-btn-accent { color: var(--tm-accent); }
-.tm-material-btn-sm {
-  height: 32px;
+.tm-cyber-btn-primary:hover {
+  background: linear-gradient(135deg, #22d3ee, #06b6d4);
+  color: #fff;
+}
+.tm-cyber-btn-primary:active {
+  box-shadow: 0 5px 5px -3px rgba(0,0,0,0.2), 0 8px 10px 1px rgba(0,0,0,0.14);
+  transform: scale(0.97);
+}
+.tm-cyber-btn-accent {
+  color: var(--tm-accent);
+  border-color: rgba(248,113,113,0.2);
+}
+.tm-cyber-btn-accent:hover {
+  background: rgba(248,113,113,0.1);
+  color: var(--tm-accent);
+  border-color: rgba(248,113,113,0.3);
+}
+.tm-cyber-btn-sm {
+  height: 30px;
   min-width: 52px;
   padding: 0 12px;
   font-size: 12px;
 }
+.tm-cyber-btn-xs {
+  height: 24px;
+  padding: 0 8px;
+  font-size: 11px;
+  border-radius: 6px;
+  min-width: auto;
+}
 
 /* ========== Chip ========== */
-.tm-material-chip {
+.tm-cyber-chip {
   display: inline-flex;
   align-items: center;
-  height: 30px;
+  height: 28px;
   padding: 0 12px;
   border-radius: var(--tm-radius-chip);
-  background: var(--tm-surface);
-  color: var(--tm-text-secondary);
+  background: rgba(6,182,212,0.08);
+  color: var(--tm-primary-light);
   font-size: 12px;
-  font-weight: 400;
+  font-weight: 500;
   white-space: nowrap;
+  border: 1px solid rgba(6,182,212,0.15);
 }
 
 /* ========== Checkbox ========== */
-.tm-material-check {
+.tm-cyber-check {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   font-size: 13px;
   color: var(--tm-text);
   line-height: 1.4;
   cursor: pointer;
 }
-.tm-material-check input[type="checkbox"] {
+.tm-cyber-check input[type="checkbox"] {
   appearance: none;
   -webkit-appearance: none;
   width: 18px;
   height: 18px;
   border: 2px solid var(--tm-text-hint);
-  border-radius: 3px;
+  border-radius: 4px;
   cursor: pointer;
   flex-shrink: 0;
   display: inline-flex;
@@ -317,12 +326,13 @@
   transition: var(--tm-transition);
   position: relative;
   margin: 0;
+  background: transparent;
 }
-.tm-material-check input[type="checkbox"]:checked {
+.tm-cyber-check input[type="checkbox"]:checked {
   border-color: var(--tm-primary);
   background: var(--tm-primary);
 }
-.tm-material-check input[type="checkbox"]:checked::after {
+.tm-cyber-check input[type="checkbox"]:checked::after {
   content: '';
   display: block;
   width: 4px;
@@ -334,72 +344,79 @@
 }
 
 /* ========== List ========== */
-.tm-material-list {
-  max-height: 350px;
-  overflow-y: auto;
-  margin-top: 10px;
+.tm-cyber-list {
+  max-height: 360px;
+  overflow-y: visible;
+  margin-top: 12px;
   scrollbar-width: thin;
-  scrollbar-color: var(--tm-divider) transparent;
+  scrollbar-color: rgba(255,255,255,0.1) transparent;
 }
-.tm-material-list::-webkit-scrollbar { width: 5px; }
-.tm-material-list::-webkit-scrollbar-thumb { background: var(--tm-divider); border-radius: 4px; }
+.tm-cyber-list::-webkit-scrollbar { width: 4px; }
+.tm-cyber-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
 
-.tm-material-item {
-  padding: 12px;
+.tm-cyber-item {
+  padding: 12px 14px;
   border-radius: var(--tm-radius-btn);
-  margin-bottom: 10px;
+  margin-bottom: 8px;
   background: var(--tm-surface);
   border: 1px solid var(--tm-divider);
+  animation: tm-rise-in 0.3s cubic-bezier(0.2, 0.9, 0.2, 1) both;
 }
-.tm-material-item:last-child { margin-bottom: 0; }
-.tm-material-item-title {
+.tm-cyber-item:last-child { margin-bottom: 0; }
+.tm-cyber-item:hover {
+  background: var(--tm-surface-hover);
+  border-color: rgba(255,255,255,0.12);
+}
+.tm-cyber-item-title {
   font-size: 13px;
   font-weight: 500;
   line-height: 1.5;
   margin-bottom: 4px;
   color: var(--tm-text);
 }
-.tm-material-item-id {
+.tm-cyber-item-id {
   font-size: 11px;
   color: var(--tm-primary);
   word-break: break-all;
   margin-bottom: 8px;
-  font-family: "SF Mono", monospace;
+  font-family: "SF Mono", "Cascadia Code", monospace;
   opacity: 0.8;
 }
-.tm-material-item-config {
+.tm-cyber-item-config {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
   gap: 6px;
   margin-bottom: 8px;
 }
-.tm-material-item-config input {
+.tm-cyber-item-config input {
   padding: 5px 8px;
   font-size: 11px;
   text-align: center;
-  border: none;
+  border: 1px solid var(--tm-divider);
   border-radius: var(--tm-radius-btn);
   background: var(--tm-input-bg);
   color: var(--tm-text);
   outline: none;
   font-family: var(--tm-font);
-  transition: box-shadow 0.15s;
+  transition: border-color 0.15s;
 }
-.tm-material-item-config input:focus {
-  box-shadow: 0 0 0 2px var(--tm-primary);
+.tm-cyber-item-config input:focus {
+  border-color: var(--tm-primary);
+  box-shadow: 0 0 0 2px rgba(6,182,212,0.15);
 }
-.tm-material-item-actions {
+.tm-cyber-item-actions {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
 }
-.tm-material-empty {
-  padding: 24px 12px;
+.tm-cyber-empty {
+  padding: 32px 12px;
   text-align: center;
   color: var(--tm-text-hint);
   font-size: 13px;
+  line-height: 1.8;
 }
-.tm-material-status {
+.tm-cyber-status {
   font-size: 12px;
   color: var(--tm-text-secondary);
   margin-top: 12px;
@@ -407,171 +424,477 @@
   padding: 8px 0;
   text-align: center;
 }
-.tm-material-toolbar {
+.tm-cyber-toolbar {
   display: flex;
   gap: 8px;
-  flex-wrap: wrap;
   align-items: center;
   margin-bottom: 10px;
 }
-.tm-material-separator {
+.tm-cyber-separator {
   flex: 1;
 }
 
+/* ========== Login Overlay - Cyber Dark ========== */
+#biliauto-login-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  background: rgba(5,8,22,0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--tm-font);
+  padding: 16px;
+  box-sizing: border-box;
+  animation: tm-fade-in 0.3s ease;
+}
+#biliauto-login-overlay * {
+  box-sizing: border-box;
+}
+.cyber-login-card {
+  width: min(420px, 92vw);
+  background: rgba(15,23,42,0.95);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 16px;
+  padding: 28px;
+  box-shadow: 0 25px 60px rgba(0,0,0,0.5);
+  position: relative;
+  overflow: hidden;
+}
+.cyber-login-card::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle at 30% 20%, rgba(6,182,212,0.06), transparent 40%),
+              radial-gradient(circle at 70% 80%, rgba(6,182,212,0.04), transparent 40%);
+  pointer-events: none;
+  animation: cyber-water-drift 10s ease-in-out infinite alternate;
+}
+.cyber-login-header {
+  text-align: center;
+  margin-bottom: 24px;
+  position: relative;
+  z-index: 1;
+}
+.cyber-login-icon {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 12px;
+  background: linear-gradient(135deg, #06b6d4, #0891b2);
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  box-shadow: 0 8px 24px rgba(6,182,212,0.3);
+}
+.cyber-login-icon svg {
+  width: 28px;
+  height: 28px;
+}
+.cyber-login-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--tm-text);
+  margin: 0 0 4px;
+}
+.cyber-login-subtitle {
+  font-size: 13px;
+  color: var(--tm-text-secondary);
+  margin: 0;
+}
+.cyber-login-code-section {
+  position: relative;
+  z-index: 1;
+  background: rgba(6,182,212,0.06);
+  border: 1px solid rgba(6,182,212,0.15);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
+  text-align: center;
+}
+.cyber-login-code-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--tm-primary-light);
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  margin-bottom: 12px;
+}
+.cyber-login-code-chars {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
+.cyber-login-code-char {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 52px;
+  background: rgba(5,8,22,0.6);
+  border: 1px solid rgba(6,182,212,0.25);
+  border-radius: 8px;
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--tm-primary-light);
+  font-family: "SF Mono", "Cascadia Code", monospace;
+  transition: border-color 0.2s;
+}
+.cyber-login-code-char:not(:empty) {
+  border-color: var(--tm-primary);
+  box-shadow: 0 0 12px rgba(6,182,212,0.15);
+}
+.cyber-login-info {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: rgba(255,255,255,0.03);
+  border-radius: 10px;
+  border: 1px solid var(--tm-divider);
+  margin-bottom: 16px;
+}
+.cyber-login-info-icon {
+  width: 32px;
+  height: 32px;
+  background: rgba(6,182,212,0.1);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--tm-primary);
+  flex-shrink: 0;
+}
+.cyber-login-info-icon svg {
+  width: 16px;
+  height: 16px;
+}
+.cyber-login-info-text {
+  font-size: 12px;
+  color: var(--tm-text-secondary);
+  line-height: 1.4;
+}
+.cyber-login-info-text strong {
+  color: var(--tm-primary-light);
+  font-weight: 600;
+}
+.cyber-login-status {
+  position: relative;
+  z-index: 1;
+  font-size: 13px;
+  color: var(--tm-text-secondary);
+  text-align: center;
+  margin-bottom: 12px;
+  min-height: 20px;
+}
+.cyber-login-btn {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 44px;
+  padding: 0 24px;
+  border: none;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #06b6d4, #0891b2);
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: var(--tm-font);
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.15s;
+  box-shadow: 0 4px 16px rgba(6,182,212,0.25);
+}
+.cyber-login-btn:hover {
+  opacity: 0.92;
+  box-shadow: 0 6px 24px rgba(6,182,212,0.35);
+}
+.cyber-login-btn:active {
+  transform: scale(0.98);
+}
+.cyber-login-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ========== Login Status Badge in Header ========== */
+.tm-cyber-status-badge {
+  font-size: 11px;
+  color: #22d3ee;
+  background: rgba(6,182,212,0.1);
+  padding: 2px 10px;
+  border-radius: 10px;
+  margin-left: 6px;
+  white-space: nowrap;
+  border: 1px solid rgba(6,182,212,0.2);
+  font-weight: 500;
+}
+
+/* ========== Page Log Panel ========== */
+.tm-cyber-log-wrap {
+  font-size: 12px;
+  color: var(--tm-text-secondary);
+  line-height: 1.6;
+}
+.tm-cyber-log-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--tm-divider);
+  margin-bottom: 8px;
+  font-size: 11px;
+}
+.tm-cyber-log-countdown {
+  color: var(--tm-primary-light);
+  font-weight: 600;
+  font-family: "SF Mono", "Cascadia Code", monospace;
+}
+.tm-cyber-log-scroll {
+  max-height: 200px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  font-family: "SF Mono", "Cascadia Code", monospace;
+  font-size: 11px;
+  color: var(--tm-text-hint);
+  scrollbar-width: thin;
+}
+.tm-cyber-log-scroll::-webkit-scrollbar { width: 4px; }
+.tm-cyber-log-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 4px; }
+.tm-cyber-log-status {
+  display: flex;
+  justify-content: space-between;
+  padding-top: 8px;
+  margin-top: 8px;
+  border-top: 1px solid var(--tm-divider);
+  font-size: 11px;
+}
+.tm-cyber-log-task-count {
+  color: var(--tm-primary-light);
+  font-weight: 600;
+}
+
+/* ========== Animations ========== */
+@keyframes tm-rise-in {
+  0% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes tm-fade-in {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+@keyframes cyber-water-drift {
+  0% {
+    transform: translate3d(-2%, -1%, 0) rotate(0deg);
+  }
+  100% {
+    transform: translate3d(2%, 1%, 0) rotate(8deg);
+  }
+}
+
+/* ========== Cyber Dark Variant (toggle alternative) ========== */
+.tm-cyber-dark {
+  --tm-bg-card: rgba(8, 12, 30, 0.96);
+  --tm-surface: rgba(255,255,255,0.02);
+  --tm-input-bg: rgba(255,255,255,0.03);
+  --tm-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
+  --tm-primary: #22d3ee;
+  --tm-primary-dark: #06b6d4;
+  --tm-primary-light: #67e8f9;
+}
+
+/* ========== Mobile Responsive ========== */
 @media (max-width: 600px) {
   #biliauto-panel {
     width: calc(100vw - 24px);
     max-width: none;
-    bottom: 16px;
     left: 12px !important;
     right: 12px !important;
-    transform: none !important;
+    top: 50% !important;
   }
-  .tm-material-header-title {
+  .tm-cyber-header-title {
     font-size: 14px;
   }
-  .tm-material-item-config {
+  .tm-cyber-item-config {
     grid-template-columns: 1fr;
     gap: 4px;
   }
-  .tm-material-item-actions {
+  .tm-cyber-item-actions {
     justify-content: flex-start;
   }
-  .tm-material-toolbar {
+  .tm-cyber-toolbar {
     flex-wrap: wrap;
+    gap: 6px;
   }
-  .tm-material-btn {
+  .tm-cyber-btn {
     min-width: 60px;
-    padding: 0 12px;
-    height: 36px;
+    padding: 0 10px;
+    height: 34px;
     font-size: 12px;
   }
-  .tm-material-btn-sm {
+  .tm-cyber-btn-sm {
     min-width: 44px;
     padding: 0 8px;
+  }
+  .cyber-login-card {
+    padding: 20px;
+  }
+  .cyber-login-code-char {
+    width: 36px;
+    height: 44px;
+    font-size: 18px;
+  }
+}
+
+@media (max-width: 400px) {
+  .cyber-login-code-char {
+    width: 30px;
+    height: 38px;
+    font-size: 16px;
+  }
+  .cyber-login-card {
+    padding: 16px;
   }
 }
 </style>
 
-<div class="tm-material-header">
-  <span class="tm-material-header-title">
-BiliAuto
-<span class="tm-material-header-badge">v${CONFIG.VERSION}</span>
-  </span>
-  <span class="tm-material-header-actions">
-<button class="tm-material-icon-btn" data-ba="logout" title="退出登录">🚪</button>
-<button class="tm-material-icon-btn" data-ba="copyPageInfo" title="复制当前页面信息">📋</button>
-<button class="tm-material-icon-btn" data-ba="toggleDark" title="切换夜间模式">🌙</button>
-<button class="tm-material-icon-btn" data-ba="closePanel" title="关闭面板">✕</button>
-  </span>
-</div>
-
-<div class="tm-material-body">
-
-  <div class="tm-material-meta" data-ba="meta"></div>
-
-  <div class="tm-material-toolbar">
-<div class="tm-material-input" style="flex:1;padding:10px 12px;font-size:12px;color:var(--tm-text-secondary);background:var(--tm-surface);border-radius:var(--tm-radius-btn);" data-ba="currentConfig">
-<div style="margin-bottom:8px;font-weight:600;">🎯 当前页面抢码配置</div>
-<div style="display:flex;gap:8px;align-items:center;">
-<input data-ba="currentTaskConfig" data-field="start_time" placeholder="开始时间" style="flex:1;padding:6px 8px;border:1px solid rgba(0,0,0,.12);border-radius:4px;font-size:12px;" title="开始时间，支持格式: 00:30:00 或 +30">
-<input data-ba="currentTaskConfig" data-field="interval" placeholder="间隔" style="width:60px;padding:6px 8px;border:1px solid rgba(0,0,0,.12);border-radius:4px;font-size:12px;text-align:center;" title="点击间隔(秒)">
-<input data-ba="currentTaskConfig" data-field="duration" placeholder="持续" style="width:60px;padding:6px 8px;border:1px solid rgba(0,0,0,.12);border-radius:4px;font-size:12px;text-align:center;" title="持续时长(秒)">
-</div>
-<div style="display:flex;gap:8px;margin-top:8px;">
-<button class="tm-material-btn" data-ba="testClick" style="flex:1;">👆 测试点击</button>
-<button class="tm-material-btn tm-material-btn-primary" data-ba="runCurrent" style="flex:1;">🚀 开始抢码</button>
-</div>
-</div>
-  </div>
-
-  <div class="tm-material-toolbar">
-<input class="tm-material-input" data-ba="addTaskInput" placeholder="添加 task_id" style="flex:1">
-<button class="tm-material-btn" data-ba="addTask">添加</button>
-  </div>
-
-  <div class="tm-material-input-row tm-material-compact-controls">
-    <input class="tm-material-input" data-ba="manual" placeholder="输入 task_id 后跳转">
-    <button class="tm-material-btn" data-ba="manualJump">跳转</button>
-  </div>
-  <input class="tm-material-input" data-ba="filter" placeholder="筛选任务名称或 ID">
-
-  <div class="tm-material-list" data-ba="list"></div>
-
-  <div class="tm-material-toolbar" style="margin-top:8px;justify-content:flex-end">
-<div style="display:flex;gap:4px">
-  <button class="tm-material-btn tm-material-btn-sm" data-ba="refresh">刷新</button>
-</div>
-  </div>
-
-  <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
-<span class="tm-material-chip" data-ba="taskCount">0 个任务</span>
-  </div>
-
-  <div class="tm-material-status" data-ba="status"></div>
-</div>
-
-<!-- ===================================================== -->
-<!-- 子模板：供 JS 通过 getSubTemplate() 提取 -->
-<!-- ===================================================== -->
 <template id="tmpl-fab">
-<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+  <path d="M2 17l10 5 10-5"/>
+  <path d="M2 12l10 5 10-5"/>
+</svg>
 </template>
 
 <template id="tmpl-error">
-<div style="padding:20px;color:red;font-size:18px;text-align:center;font-family:sans-serif;">
-  <p>⚠️ 模板加载失败</p>
-  <p style="font-size:14px;color:#999;">请检查网络或刷新重试</p>
-  <p style="font-size:12px;color:#666;margin-top:10px;">错误详情: {{ERROR_MSG}}</p>
-  <p style="font-size:12px;color:#666;">资源地址: TEMPLATE_HTML</p>
+<div style="padding:24px;text-align:center;font-family:sans-serif;">
+  <div style="font-size:32px;margin-bottom:12px;opacity:0.5">⚠️</div>
+  <div style="font-size:15px;color:var(--tm-accent);font-weight:600;margin-bottom:8px;">模板加载失败</div>
+  <div style="font-size:12px;color:var(--tm-text-hint);line-height:1.6;">
+    <p>无法从远程加载界面模板</p>
+    <p style="font-size:11px;margin-top:8px;">{{ERROR_MSG}}</p>
+    <p style="font-size:11px;margin-top:4px;word-break:break-all;">请检查网络连接或刷新重试</p>
+  </div>
 </div>
 </template>
 
 <template id="tmpl-logPanel">
-<div id="tm-page-log-panel" style="font-size:12px;line-height:1.55;padding:6px 0;color:inherit;">
-  <div style="font-weight:700;font-size:13px;margin-bottom:6px;display:flex;justify-content:space-between;gap:8px;">
-    <span>📋 抢码滚动日志</span><span>任务 <b id="tm-log-taskCount">-</b></span>
+<div class="tm-cyber-log-wrap">
+  <div class="tm-cyber-log-header">
+    <span>抢码日志面板</span>
+    <span class="tm-cyber-log-countdown">倒计时：<span id="tm-log-countdown">-</span></span>
   </div>
-  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:6px;color:#666;">
-    <span>倒计时：<b id="tm-log-countdown">-</b></span>
-    <span>状态：<b id="tm-log-status">等待中</b></span>
+  <div class="tm-cyber-log-scroll" id="tm-log-scroll">[--:--:--] 等待中</div>
+  <div class="tm-cyber-log-status">
+    <span id="tm-log-status">就绪</span>
+    <span>任务数：<span class="tm-cyber-log-task-count" id="tm-log-taskCount">0</span></span>
   </div>
-  <div id="tm-log-scroll" style="height:96px;overflow-y:auto;border:1px solid rgba(0,0,0,.10);border-radius:8px;background:rgba(255,255,255,.58);padding:6px;white-space:pre-wrap;font-family:Consolas,Menlo,monospace;"></div>
 </div>
 </template>
 
 <template id="tmpl-loginOverlay">
-<div style="font-size:18px;font-weight:700;margin-bottom:8px;">BiliAuto 登录</div>
-<div style="font-size:13px;color:#666;line-height:1.7;margin-bottom:10px;">未登录或登录已失效。点击按钮获取验证码，然后把验证码发送到群聊 <b>1082333812</b>。</div>
-<div id="tmpl-loginReason" style="font-size:12px;color:#d33;margin-bottom:8px;"></div>
-<div data-ba="loginCodeDisplay" style="font-size:34px;font-weight:800;letter-spacing:8px;text-align:center;margin:12px 0;font-family:Consolas,monospace;">------</div>
-<div data-ba="loginStatus" style="font-size:12px;color:#777;margin-bottom:12px;min-height:18px;">等待获取验证码</div>
-<button data-ba="startLogin" style="width:100%;height:38px;border:0;border-radius:7px;background:#1677ff;color:#fff;font-size:14px;font-weight:700;cursor:pointer;">获取验证码</button>
+<div class="cyber-login-card">
+  <div class="cyber-login-header">
+    <div class="cyber-login-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+        <path d="M2 17l10 5 10-5"/>
+        <path d="M2 12l10 5 10-5"/>
+      </svg>
+    </div>
+    <h1 class="cyber-login-title">授权登录</h1>
+    <p class="cyber-login-subtitle" id="tmpl-loginReason">请完成验证以使用 BiliAuto 抢码系统</p>
+  </div>
+
+  <div class="cyber-login-code-section">
+    <div class="cyber-login-code-label">验证码</div>
+    <div class="cyber-login-code-chars" data-ba="loginCodeDisplay">
+      <span class="cyber-login-code-char">-</span>
+      <span class="cyber-login-code-char">-</span>
+      <span class="cyber-login-code-char">-</span>
+      <span class="cyber-login-code-char">-</span>
+      <span class="cyber-login-code-char">-</span>
+      <span class="cyber-login-code-char">-</span>
+    </div>
+  </div>
+
+  <div class="cyber-login-info">
+    <div class="cyber-login-info-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+        <circle cx="9" cy="7" r="4"/>
+        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+        <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+      </svg>
+    </div>
+    <div class="cyber-login-info-text">
+      将验证码发送到群聊 <strong>1082333812</strong> 完成授权
+    </div>
+  </div>
+
+  <div data-ba="loginStatus" class="cyber-login-status">等待验证...</div>
+  <button class="cyber-login-btn" data-ba="startLogin">开始登录</button>
+</div>
+</template>
+
+<template id="tmpl-meta">
+<div>当前 task_id：{{CURRENT_TASK}}</div>
+<div>服务端：${CONFIG.API_BASE}</div>
+<div>奖励页：{{BASE_URL}}</div>
 </template>
 
 <template id="tmpl-emptyList">
-<div class="tm-material-empty">暂无任务<br>点击「刷新」拉取或输入 task_id 添加</div>
+<div class="tm-cyber-empty">
+  <div style="font-size:28px;margin-bottom:8px;opacity:0.3">📋</div>
+  暂无任务<br>
+  <span style="font-size:11px;">点击「刷新」拉取或输入 task_id 添加</span>
+</div>
 </template>
 
 <template id="tmpl-pagination">
-<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;margin-bottom:4px;font-size:12px;color:var(--tm-text-secondary)">
+<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;margin-bottom:6px;font-size:12px;color:var(--tm-text-secondary)">
   <span>共 {{COUNT}} 个任务</span>
-  <span style="display:flex;gap:4px;align-items:center">
-    <button class="tm-material-btn tm-material-btn-xs" data-ba="pagePrev" {{PREV_DISABLED}}>上一页</button>
+  <span style="display:flex;gap:6px;align-items:center">
+    <button class="tm-cyber-btn tm-cyber-btn-xs" data-ba="pagePrev"{{PREV_DISABLED}}>‹ 上一页</button>
     <span>{{PAGE}}/{{TOTAL_PAGES}}</span>
-    <button class="tm-material-btn tm-material-btn-xs" data-ba="pageNext" {{NEXT_DISABLED}}>下一页</button>
+    <button class="tm-cyber-btn tm-cyber-btn-xs" data-ba="pageNext"{{NEXT_DISABLED}}>下一页 ›</button>
   </span>
 </div>
 </template>
 
 <template id="tmpl-listItem">
-<div class="tm-material-item">
-  <span class="tm-material-item-title">{{NAME}}</span>
-  <button class="tm-material-btn tm-material-btn-sm" data-ba="jump" data-taskid="{{TASK_ID}}">跳转</button>
+<div class="tm-cyber-item">
+  <label class="tm-cyber-check">
+    <input type="checkbox" data-ba="select" data-taskid="{{TASK_ID}}">
+    {{NAME}}
+  </label>
+  <div class="tm-cyber-item-id">{{TASK_ID}}</div>
+  <div class="tm-cyber-item-config">
+    <input data-ba="taskConfig" data-field="start_time" data-taskid="{{TASK_ID}}" value="{{START_TIME}}" placeholder="时间" title="开始时间">
+    <input data-ba="taskConfig" data-field="interval" data-taskid="{{TASK_ID}}" value="{{INTERVAL}}" placeholder="间隔" title="点击间隔(秒)">
+    <input data-ba="taskConfig" data-field="duration" data-taskid="{{TASK_ID}}" value="{{DURATION}}" placeholder="持续" title="持续时长(秒)">
+  </div>
+  <div class="tm-cyber-item-actions">
+    <button class="tm-cyber-btn tm-cyber-btn-sm tm-cyber-btn-primary" data-ba="runOne" data-taskid="{{TASK_ID}}">执行</button>
+    <button class="tm-cyber-btn tm-cyber-btn-sm" data-ba="jump" data-taskid="{{TASK_ID}}">跳转</button>
+    <button class="tm-cyber-btn tm-cyber-btn-sm" data-ba="copy" data-taskid="{{TASK_ID}}">复制</button>
+    <button class="tm-cyber-btn tm-cyber-btn-sm tm-cyber-btn-accent" data-ba="removeTask" data-taskid="{{TASK_ID}}">删除</button>
+  </div>
 </div>
-</template>
-
-<template id="tmpl-meta">
-<div>当前 task_id：${CURRENT_TASK}</div>
-<div>奖励页：${BASE_URL}</div>
 </template>

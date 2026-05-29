@@ -419,9 +419,9 @@
 
     applyTheme() {
       const root = document.getElementById('biliauto-panel');
-      if (root) root.classList.toggle('tm-material-dark', this.state.darkMode);
+      if (root) root.classList.toggle('tm-cyber-dark', this.state.darkMode);
       const fab = document.getElementById('biliauto-fab');
-      if (fab) fab.classList.toggle('tm-material-dark', this.state.darkMode);
+      if (fab) fab.classList.toggle('tm-cyber-dark', this.state.darkMode);
     },
 
     setupPanelPosition() {
@@ -437,7 +437,7 @@
 
     setupDrag() {
       const root = document.getElementById('biliauto-panel');
-      const handle = root.querySelector('.tm-material-header');
+      const handle = root.querySelector('.tm-cyber-header');
       if (!handle || handle.dataset.dragInitialized) return;
       handle.dataset.dragInitialized = '1';
       // 如果之前有保存位置，用保存的位置覆盖css
@@ -849,9 +849,9 @@
       if (o) { o.style.display = 'flex'; return; }
       o = document.createElement('div');
       o.id = 'biliauto-login-overlay';
-      o.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:rgba(0,0,0,.62);display:flex;align-items:center;justify-content:center;font-family:Arial,sans-serif;padding:16px;';
+      o.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:rgba(5,8,22,0.85);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);display:flex;align-items:center;justify-content:center;font-family:var(--tm-font,Inter,sans-serif);padding:16px;';
       const c = document.createElement('div');
-      c.style.cssText = 'width:min(420px,96vw);background:#fff;color:#111;border-radius:10px;padding:18px;box-shadow:0 12px 40px rgba(0,0,0,.22);text-align:left;';
+      c.style.cssText = 'width:min(420px,92vw);background:rgba(15,23,42,0.95);color:rgba(255,255,255,0.87);border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:28px;box-shadow:0 25px 60px rgba(0,0,0,0.5);text-align:left;';
       c.innerHTML = Panel.getSubTemplate('loginOverlay');
       const reasonEl = c.querySelector('#tmpl-loginReason');
       if (reason && reasonEl) reasonEl.textContent = this.escape(reason);
@@ -1109,9 +1109,13 @@
         var task = pageTasks[ti];
         var taskId = String(task.task_value || task.value || task.task_id || '');
         var name = String(task.task_key || task.name || task.id || '未命名任务');
+        var cfg = this.state.taskConfigs[taskId] || Util.defaultTaskConfig(taskId);
         html += this.getSubTemplate('listItem', {
           NAME: this.escape(name),
-          TASK_ID: this.escapeAttr(taskId)
+          TASK_ID: this.escapeAttr(taskId),
+          START_TIME: this.escapeAttr(cfg.start_time),
+          INTERVAL: this.escapeAttr(String(cfg.interval)),
+          DURATION: this.escapeAttr(String(cfg.duration))
         });
       }
       list.innerHTML = html;
