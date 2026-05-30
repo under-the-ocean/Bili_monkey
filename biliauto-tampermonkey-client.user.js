@@ -374,6 +374,8 @@
       darkMode: GM_getValue('material_dark_mode', null),
       panelX: GM_getValue('material_panel_x', null),
       panelY: GM_getValue('material_panel_y', null),
+      panelWidth: GM_getValue('material_panel_width', 520),
+      panelHeight: GM_getValue('material_panel_height', null),
       loginCode: '',
       loginStatus: isLoggedIn() ? 'logged_in' : ''
     },
@@ -427,12 +429,41 @@
     setupPanelPosition() {
       const root = document.getElementById('biliauto-panel');
       if (!root) return;
+      if (this.state.panelWidth) root.style.width = this.state.panelWidth + 'px';
+      if (this.state.panelHeight) root.style.height = this.state.panelHeight + 'px';
       if (this.state.panelX !== null && this.state.panelY !== null) {
         root.style.left = this.state.panelX + 'px';
         root.style.top = this.state.panelY + 'px';
         root.style.right = 'auto';
         root.style.bottom = 'auto';
+        root.style.transform = 'none';
       }
+      this.clampPanelToViewport();
+    },
+
+    clampPanelToViewport() {
+      const root = document.getElementById('biliauto-panel');
+      if (!root) return;
+      const width = Math.max(360, Math.min(root.getBoundingClientRect().width, window.innerWidth - 24));
+      const height = Math.max(320, Math.min(root.getBoundingClientRect().height, window.innerHeight - 24));
+      root.style.width = width + 'px';
+      root.style.height = height + 'px';
+      const rect = root.getBoundingClientRect();
+      let left = rect.left;
+      let top = rect.top;
+      const maxLeft = Math.max(12, window.innerWidth - width - 12);
+      const maxTop = Math.max(12, window.innerHeight - height - 12);
+      left = Math.min(Math.max(left, 12), maxLeft);
+      top = Math.min(Math.max(top, 12), maxTop);
+      root.style.left = Math.round(left) + 'px';
+      root.style.top = Math.round(top) + 'px';
+      root.style.right = 'auto';
+      root.style.bottom = 'auto';
+      root.style.transform = 'none';
+      GM_setValue('material_panel_width', Math.round(width));
+      GM_setValue('material_panel_height', Math.round(height));
+      GM_setValue('material_panel_x', Math.round(left));
+      GM_setValue('material_panel_y', Math.round(top));
     },
 
     setupDrag() {
@@ -440,9 +471,12 @@
       const handle = root.querySelector('.tm-cyber-header');
       if (!handle || handle.dataset.dragInitialized) return;
       handle.dataset.dragInitialized = '1';
-      // 如果之前有保存位置，用保存的位置覆盖css
       const savedX = GM_getValue('material_panel_x', null);
       const savedY = GM_getValue('material_panel_y', null);
+      const savedW = GM_getValue('material_panel_width', null);
+      const savedH = GM_getValue('material_panel_height', null);
+      if (savedW !== null) root.style.width = savedW + 'px';
+      if (savedH !== null) root.style.height = savedH + 'px';
       if (savedX !== null && savedY !== null) {
         root.style.left = savedX + 'px';
         root.style.top = savedY + 'px';
@@ -450,7 +484,32 @@
         root.style.bottom = 'auto';
         root.style.transform = 'none';
       }
-      let isDragging = false, startX, startY, origX, origY;
+      this.clampPanelToViewport();
+      let isDragging = false;
+      let startX = 0;
+      let startY = 0;
+      let origX = 0;
+      let origY = 0;
+      const onMouseMove = (e) => {
+        if (!isDragging) return;
+        const rect = root.getBoundingClientRect();
+        const width = rect.width;
+        const height = rect.height;
+        const maxLeft = Math.max(12, window.innerWidth - width - 12);
+        const maxTop = Math.max(12, window.innerHeight - height - 12);
+        let nextLeft = origX + e.clientX - startX;
+        let nextTop = origY + e.clientY - startY;
+        nextLeft = Math.min(Math.max(nextLeft, 12), maxLeft);
+        nextTop = Math.min(Math.max(nextTop, 12), maxTop);
+        root.style.left = Math.round(nextLeft) + 'px';
+        root.style.top = Math.round(nextTop) + 'px';
+      };
+      const onMouseUp = () => {
+        if (!isDragging) return;
+        isDragging = false;
+        root.style.transition = '';
+        this.clampPanelToViewport();
+      };
       handle.addEventListener('mousedown', (e) => {
         if (e.button !== 0) return;
         if (e.target.closest('[data-ba]')) return;
@@ -460,27 +519,24 @@
         startY = e.clientY;
         origX = rect.left;
         origY = rect.top;
-        root.style.left = origX + 'px';
-        root.style.top = origY + 'px';
+        root.style.left = Math.round(origX) + 'px';
+        root.style.top = Math.round(origY) + 'px';
         root.style.right = 'auto';
         root.style.bottom = 'auto';
         root.style.transform = 'none';
         root.style.transition = 'none';
         e.preventDefault();
       });
-      document.addEventListener('mousemove', (e) => {
-        if (!isDragging) return;
-        root.style.left = (origX + e.clientX - startX) + 'px';
-        root.style.top = (origY + e.clientY - startY) + 'px';
-      });
-      document.addEventListener('mouseup', () => {
-        if (!isDragging) return;
-        isDragging = false;
-        root.style.transition = '';
-        const rect = root.getBoundingClientRect();
-        GM_setValue('material_panel_x', Math.round(rect.left));
-        GM_setValue('material_panel_y', Math.round(rect.top));
-      });
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+      if (!handle.dataset.viewportSyncInitialized) {
+        handle.dataset.viewportSyncInitialized = '1';
+        window.addEventListener('resize', () => this.clampPanelToViewport());
+        if (window.ResizeObserver) {
+          const observer = new ResizeObserver(() => this.clampPanelToViewport());
+          observer.observe(root);
+        }
+      }
     },
 
     template() {
