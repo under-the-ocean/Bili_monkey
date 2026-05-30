@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BiliAutoClicker - 油猴客户端
 // @namespace    https://github.com/under-the-ocean
-// @version      0.7.9
+// @version      0.8.0
 // @match        https://www.bilibili.com/blackboard/era/award-exchange.html?*
 // @connect      bili.982835785.xyz
 // @grant        GM_xmlhttpRequest
@@ -34,7 +34,7 @@
     DEFAULT_START_TIME: '00:29:57',
     MAX_RELOAD_ATTEMPTS: 3,
 
-    VERSION: '0.7.9',
+    VERSION: '0.8.0',
     RETRY_COUNT: 2,
     DEBUG: true
   };
@@ -625,15 +625,15 @@
       this.updatePageLog(text);
     },
 
-    // 替换B站页面指定公告段落为滚动抢码日志面板
+    // 在领取须知下方插入滚动抢码日志面板，保留原公告内容
     injectLogPanel() {
       const targetEl = document.querySelector('#app > div > div.home-wrap.select-disable > section.notice-wrap > p.content');
       if (!targetEl) return;
-      if (targetEl.dataset.biliautoLogInjected === '1') return;
-      targetEl.dataset.biliautoLogInjected = '1';
+      if (document.getElementById('biliauto-log-panel')) return;
       this._pageLogs = this._pageLogs || [];
-      targetEl.innerHTML = Panel.getSubTemplate('logPanel');
-      this.updatePageLog('日志面板已接管公告区域');
+      const panelHtml = Panel.getSubTemplate('logPanel').replace('<div class="tm-cyber-log-wrap">', '<div class="tm-cyber-log-wrap" id="biliauto-log-panel">');
+      targetEl.insertAdjacentHTML('afterend', panelHtml);
+      this.updatePageLog('日志面板已挂载到领取须知下方');
     },
 
     updatePageLog(text) {
@@ -667,17 +667,17 @@
                 const target = new Date();
                 target.setHours(+parts[0], +parts[1], +parts[2], 0);
                 if (target.getTime() <= now) target.setDate(target.getDate() + 1);
-                const diff = Math.max(0, Math.floor((target.getTime() - now) / 1000));
+                const diff = Math.max(0, target.getTime() - now);
                 if (bestDiff === null || diff < bestDiff) bestDiff = diff;
               }
             }
           }
-          if (bestDiff === null) { el.textContent = '-'; return; }
-          const h = Math.floor(bestDiff / 3600);
-          const m = Math.floor((bestDiff % 3600) / 60);
-          const sec = bestDiff % 60;
-          el.textContent = h + '时' + m + '分' + sec + '秒';
-        }, 1000);
+          if (bestDiff === null) {
+            el.textContent = '0.000';
+            return;
+          }
+          el.textContent = (bestDiff / 1000).toFixed(3);
+        }, 50);
       }
     },
 
@@ -1445,13 +1445,16 @@
         }
       };
       Util.info(`开始连点: selector=${selector}, interval=${intervalMs}ms, duration=${durationMs}ms, 结束时间=${Util.formatTime(new Date(endTime))}`);
-      logToPanel(`【连点开始】task_id=${taskId} 间隔=${intervalMs}ms 时长=${(durationMs/1000).toFixed(0)}秒`);
+      logToPanel(`【连点开始】task_id=${taskId} 间隔=${intervalMs}ms 时长=${(durationMs / 1000).toFixed(3)}秒`);
       const btn = Util.getByXPath(selector);
       const isSuccessText = (el) => el && (el.textContent || '').includes('查看奖励');
       if (btn) Executor.activateButton(btn);
       return new Promise((resolve) => {
         let lastLogTime = 0;
         const timer = setInterval(() => {
+          const now = Date.now();
+          const remaining = Math.max(0, endTime - now);
+          logToPanel(`【连点倒计时】${(remaining / 1000).toFixed(3)}s`);
           if (isSuccessText(btn)) {
             clearInterval(timer);
             const summary = `【连点提前结束】按钮文字已变为"查看奖励"，领取成功`;
@@ -1460,7 +1463,7 @@
             resolve({ success_count: successCount, fail_count: failCount, early_exit: true });
             return;
           }
-          if (Date.now() >= endTime) {
+          if (now >= endTime) {
             clearInterval(timer);
             const summary = `【连点结束】成功 ${successCount} 次, 失败 ${failCount} 次, 总点击 ${successCount + failCount} 次`;
             Util.info(summary);
@@ -1478,11 +1481,10 @@
           } catch {
             failCount++;
           }
-          const now = Date.now();
           if (now - lastLogTime > 2000) {
             lastLogTime = now;
-            const elapsed = ((now - (endTime - durationMs)) / 1000).toFixed(1);
-            const progressMsg = `【连点进度】${elapsed}s / ${(durationMs / 1000).toFixed(0)}s 成功 ${successCount} 失败 ${failCount}`;
+            const elapsed = ((now - (endTime - durationMs)) / 1000).toFixed(3);
+            const progressMsg = `【连点进度】${elapsed}s / ${(durationMs / 1000).toFixed(3)}s 成功 ${successCount} 失败 ${failCount}`;
             Util.log(progressMsg);
             logToPanel(progressMsg);
           }
@@ -1536,9 +1538,11 @@
       const intervalMs = Math.max(0, Number(config.interval || CONFIG.DEFAULT_CLICK_INTERVAL_MS / 1000) * 1000);
       const durationMs = Math.max(1, Number(config.duration || CONFIG.DEFAULT_CLICK_DURATION_MS / 1000) * 1000);
       const waitSec = Math.max(0, (startTime.getTime() - Date.now()) / 1000);
-      Util.info(`任务配置: task_id=${taskId} start=${config.start_time} wait=${waitSec.toFixed(0)}s interval=${intervalMs}ms duration=${durationMs}ms`);
+      Util.info(`任务配置: task_id=${taskId} start=${config.start_time} wait=${waitSec.toFixed(3)}s interval=${intervalMs}ms duration=${durationMs}ms`);
+      Panel.updatePageLog(`【任务配置】task_id=${taskId} 开始时间=${config.start_time} 间隔=${intervalMs}ms 时长=${(durationMs / 1000).toFixed(3)}s`);
       await this.waitUntil(startTime);
       Util.info(`开始执行任务: ${taskId}`);
+      Panel.updatePageLog(`【任务开始】task_id=${taskId}`);
       const clickStats = await this.performContinuousClick(selector, intervalMs, durationMs);
       const successCount = clickStats.success_count || 0;
       const totalCount = successCount + (clickStats.fail_count || 0);
@@ -1549,9 +1553,10 @@
         const btn = Util.getByXPath(selector);
         claimResult = await this.judgeClaimResult(btn, taskId);
       }
-      const elapsedTime = clickStats.early_exit ? ((totalCount * intervalMs) / 1000).toFixed(2) : (durationMs / 1000).toFixed(2);
+      const elapsedTime = clickStats.early_exit ? ((totalCount * intervalMs) / 1000).toFixed(3) : (durationMs / 1000).toFixed(3);
       const resultText = `${elapsedTime}秒点击结束，共点击 ${totalCount} 次，成功 ${successCount} 次，成功率 ${totalCount ? (successCount / totalCount * 100).toFixed(1) : '0.0'}%`;
       Util.info(`任务结果 [${taskId}]: ${resultText} | ${claimResult.ok ? '✅ 成功' : '❌ 失败'} — ${claimResult.message}`);
+      Panel.updatePageLog(`【任务结果】task_id=${taskId} ${claimResult.ok ? '成功' : '失败'} ${resultText}`);
       const task = Util.findTaskById(Panel.state.tasks, taskId);
       results[taskId] = {
         task_id: taskId,
