@@ -778,6 +778,286 @@
     padding: 16px;
   }
 }
+
+/* ========== Reforged Cyber Motion UI ========== */
+#biliauto-panel {
+  width: 520px;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(34, 211, 238, 0.18), transparent 30%),
+    radial-gradient(circle at 88% 12%, rgba(99, 102, 241, 0.14), transparent 28%),
+    linear-gradient(145deg, rgba(8, 13, 32, 0.96), rgba(2, 6, 23, 0.94));
+  border-color: rgba(103, 232, 249, 0.18);
+  box-shadow: 0 26px 80px rgba(0, 0, 0, 0.55), 0 0 60px rgba(6, 182, 212, 0.12);
+}
+#biliauto-panel::before,
+#biliauto-panel::after {
+  content: '';
+  position: absolute;
+  pointer-events: none;
+  inset: -40%;
+  opacity: 0.45;
+}
+#biliauto-panel::before {
+  background: conic-gradient(from 90deg, transparent, rgba(34, 211, 238, 0.12), transparent 32%, rgba(99, 102, 241, 0.1), transparent 66%);
+  animation: tm-orbit-glow 16s linear infinite;
+}
+#biliauto-panel::after {
+  inset: 0;
+  background-image: linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+  background-size: 28px 28px;
+  mask-image: linear-gradient(to bottom, rgba(0,0,0,0.72), transparent 72%);
+  opacity: 0.28;
+}
+.tm-cyber-header,
+.tm-cyber-body { position: relative; z-index: 1; }
+.tm-cyber-header {
+  padding: 16px 18px;
+  background: linear-gradient(90deg, rgba(6,182,212,0.12), rgba(99,102,241,0.06), transparent);
+}
+.tm-cyber-brand {
+  text-shadow: 0 0 18px rgba(34, 211, 238, 0.65);
+}
+.tm-cyber-body {
+  padding: 14px 16px 16px;
+}
+.tm-cyber-hero {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(103, 232, 249, 0.16);
+  border-radius: 18px;
+  padding: 16px;
+  margin-bottom: 14px;
+  background: linear-gradient(145deg, rgba(6,182,212,0.12), rgba(15,23,42,0.78) 48%, rgba(99,102,241,0.1));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 18px 36px rgba(0,0,0,0.22);
+  animation: tm-rise-in 0.42s cubic-bezier(0.2, 0.9, 0.2, 1) both;
+}
+.tm-cyber-hero::before {
+  content: '';
+  position: absolute;
+  width: 220px;
+  height: 220px;
+  right: -90px;
+  top: -105px;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(34,211,238,0.28), transparent 62%);
+  animation: tm-pulse-glow 3.8s ease-in-out infinite;
+}
+.tm-cyber-hero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg, transparent 0%, rgba(255,255,255,0.09) 38%, transparent 48%);
+  transform: translateX(-130%);
+  animation: tm-scan-shine 5.4s ease-in-out infinite;
+}
+.tm-cyber-hero-main,
+.tm-cyber-hero-actions,
+.tm-cyber-config-grid { position: relative; z-index: 1; }
+.tm-cyber-hero-main {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.tm-cyber-kicker {
+  font-size: 10px;
+  line-height: 1;
+  color: var(--tm-primary-light);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+.tm-cyber-hero-title {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+  color: rgba(255,255,255,0.94);
+  margin-bottom: 5px;
+}
+.tm-cyber-hero-subtitle {
+  font-size: 12px;
+  color: var(--tm-text-secondary);
+  line-height: 1.55;
+}
+.tm-cyber-radar {
+  width: 58px;
+  height: 58px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  border: 1px solid rgba(34,211,238,0.35);
+  background: radial-gradient(circle, rgba(34,211,238,0.2) 0 6%, transparent 7% 35%, rgba(34,211,238,0.08) 36% 38%, transparent 39%), conic-gradient(from 0deg, rgba(34,211,238,0.38), transparent 24%, transparent);
+  box-shadow: 0 0 24px rgba(34,211,238,0.18), inset 0 0 18px rgba(34,211,238,0.08);
+  animation: tm-radar-spin 3.2s linear infinite;
+}
+.tm-cyber-hero-actions {
+  display: grid;
+  grid-template-columns: 1.25fr 1fr 0.8fr;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.tm-cyber-btn-hero {
+  height: 42px;
+  border-radius: 12px;
+  font-weight: 700;
+}
+.tm-cyber-btn-primary.tm-cyber-btn-hero {
+  box-shadow: 0 12px 28px rgba(6,182,212,0.22), inset 0 1px 0 rgba(255,255,255,0.18);
+}
+.tm-cyber-config-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.tm-cyber-config-field {
+  position: relative;
+}
+.tm-cyber-config-field span {
+  display: block;
+  font-size: 10px;
+  color: var(--tm-text-hint);
+  margin: 0 0 5px 2px;
+}
+.tm-cyber-config-field .tm-cyber-input {
+  text-align: center;
+  padding: 8px 9px;
+  font-size: 12px;
+}
+.tm-cyber-card {
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 15px;
+  padding: 12px;
+  margin-bottom: 12px;
+  background: rgba(255,255,255,0.035);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+  animation: tm-rise-in 0.46s cubic-bezier(0.2, 0.9, 0.2, 1) both;
+}
+.tm-cyber-card-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  color: rgba(255,255,255,0.78);
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+.tm-cyber-card-title small {
+  color: var(--tm-text-hint);
+  font-weight: 500;
+}
+.tm-cyber-meta {
+  margin-bottom: 0;
+  background: rgba(2,6,23,0.36);
+}
+.tm-cyber-task-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.tm-cyber-task-head-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.tm-cyber-filter {
+  width: 178px;
+}
+.tm-cyber-list {
+  max-height: 320px;
+  margin-top: 0;
+}
+.tm-cyber-item {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  overflow: hidden;
+  padding: 13px;
+  margin-bottom: 9px;
+  background: linear-gradient(135deg, rgba(255,255,255,0.055), rgba(255,255,255,0.025));
+  border-color: rgba(255,255,255,0.09);
+  transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+}
+.tm-cyber-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 12px;
+  bottom: 12px;
+  width: 3px;
+  border-radius: 999px;
+  background: linear-gradient(#22d3ee, #6366f1);
+  box-shadow: 0 0 14px rgba(34,211,238,0.42);
+}
+.tm-cyber-item:hover {
+  transform: translateY(-2px);
+  border-color: rgba(34,211,238,0.26);
+  box-shadow: 0 12px 28px rgba(0,0,0,0.24), 0 0 24px rgba(6,182,212,0.09);
+}
+.tm-cyber-item-title {
+  margin: 0 0 5px;
+  padding-left: 8px;
+  font-weight: 700;
+}
+.tm-cyber-item-id {
+  margin: 0;
+  padding-left: 8px;
+  color: #67e8f9;
+}
+.tm-cyber-item-actions {
+  justify-content: flex-end;
+}
+.tm-cyber-status {
+  border-top: 1px solid rgba(255,255,255,0.06);
+  margin-top: 10px;
+}
+.tm-cyber-footer-tools {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.tm-cyber-btn::after,
+.tm-cyber-icon-btn::after,
+.cyber-login-btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg, transparent 0%, rgba(255,255,255,0.16) 42%, transparent 55%);
+  transform: translateX(-120%);
+  transition: transform 0.45s ease;
+}
+.tm-cyber-btn:hover::after,
+.tm-cyber-icon-btn:hover::after,
+.cyber-login-btn:hover::after {
+  transform: translateX(120%);
+}
+@keyframes tm-orbit-glow {
+  to { transform: rotate(360deg); }
+}
+@keyframes tm-pulse-glow {
+  0%, 100% { transform: scale(0.92); opacity: 0.5; }
+  50% { transform: scale(1.1); opacity: 0.85; }
+}
+@keyframes tm-scan-shine {
+  0%, 55% { transform: translateX(-130%); }
+  78%, 100% { transform: translateX(130%); }
+}
+@keyframes tm-radar-spin {
+  to { transform: rotate(360deg); }
+}
+@media (max-width: 600px) {
+  .tm-cyber-hero-main { align-items: flex-start; }
+  .tm-cyber-hero-actions { grid-template-columns: 1fr; }
+  .tm-cyber-config-grid { grid-template-columns: 1fr; }
+  .tm-cyber-task-head { align-items: stretch; flex-direction: column; }
+  .tm-cyber-filter { width: 100%; }
+  .tm-cyber-item { grid-template-columns: 1fr; }
+  .tm-cyber-item-actions { justify-content: flex-start; padding-left: 8px; }
+}
 </style>
 
 <!-- ========== Main Panel Skeleton ========== -->
@@ -797,44 +1077,66 @@
 
 <div class="tm-cyber-body">
 
-  <div class="tm-cyber-meta" data-ba="meta"></div>
-
-  <div class="tm-cyber-input-row">
-    <input class="tm-cyber-input" data-ba="addTaskInput" placeholder="添加 task_id" style="flex:1">
-    <button class="tm-cyber-btn" data-ba="addTask">添加</button>
-  </div>
-
-  <div class="tm-cyber-input-row">
-    <input class="tm-cyber-input" data-ba="manual" placeholder="输入 task_id 后跳转">
-    <button class="tm-cyber-btn" data-ba="manualJump">跳转</button>
-  </div>
-
-  <div data-ba="currentTaskConfig" style="display:flex;gap:6px;margin-bottom:10px;">
-    <input class="tm-cyber-input" data-field="start_time" placeholder="时间" title="开始时间" style="flex:1;text-align:center;font-size:12px;padding:6px 8px;">
-    <input class="tm-cyber-input" data-field="interval" placeholder="间隔" title="点击间隔(秒)" style="flex:1;text-align:center;font-size:12px;padding:6px 8px;">
-    <input class="tm-cyber-input" data-field="duration" placeholder="持续" title="持续时长(秒)" style="flex:1;text-align:center;font-size:12px;padding:6px 8px;">
-  </div>
-
-  <input class="tm-cyber-input" data-ba="filter" placeholder="筛选任务名称或 ID">
-
-  <div class="tm-cyber-list" data-ba="list"></div>
-
-  <div class="tm-cyber-toolbar" style="margin-top:10px;justify-content:space-between">
-    <div style="display:flex;gap:6px">
-      <button class="tm-cyber-btn tm-cyber-btn-primary tm-cyber-btn-sm" data-ba="runAll">执行选中</button>
-      <button class="tm-cyber-btn tm-cyber-btn-sm" data-ba="runCurrent">执行当前</button>
+  <section class="tm-cyber-hero">
+    <div class="tm-cyber-hero-main">
+      <div>
+        <div class="tm-cyber-kicker">MISSION CONTROL</div>
+        <div class="tm-cyber-hero-title">任务执行中枢</div>
+        <div class="tm-cyber-hero-subtitle">执行功能统一上移，列表中的 TaskID 仅用于快速跳转。</div>
+      </div>
+      <div class="tm-cyber-radar"></div>
     </div>
-    <div style="display:flex;gap:6px">
-      <button class="tm-cyber-btn tm-cyber-btn-sm" data-ba="refresh">刷新</button>
-      <button class="tm-cyber-btn tm-cyber-btn-sm" data-ba="defaults">重置</button>
-      <button class="tm-cyber-btn tm-cyber-btn-sm tm-cyber-btn-accent" data-ba="testClick">测试</button>
-      <button class="tm-cyber-btn tm-cyber-btn-sm tm-cyber-btn-accent" data-ba="clearAll">清空</button>
-      <button class="tm-cyber-btn tm-cyber-btn-sm tm-cyber-btn-accent" data-ba="logout" style="display:${CONFIG.QQ_ID?'':'none'}">退出</button>
+    <div class="tm-cyber-hero-actions">
+      <button class="tm-cyber-btn tm-cyber-btn-primary tm-cyber-btn-hero" data-ba="runCurrent">执行当前</button>
+      <button class="tm-cyber-btn tm-cyber-btn-hero" data-ba="runAll">执行选中</button>
+      <button class="tm-cyber-btn tm-cyber-btn-hero tm-cyber-btn-accent" data-ba="testClick">测试点击</button>
     </div>
-  </div>
+    <div class="tm-cyber-config-grid" data-ba="currentTaskConfig">
+      <label class="tm-cyber-config-field"><span>开始时间</span><input class="tm-cyber-input" data-field="start_time" placeholder="HH:MM:SS" title="开始时间"></label>
+      <label class="tm-cyber-config-field"><span>点击间隔</span><input class="tm-cyber-input" data-field="interval" placeholder="秒" title="点击间隔(秒)"></label>
+      <label class="tm-cyber-config-field"><span>持续时长</span><input class="tm-cyber-input" data-field="duration" placeholder="秒" title="持续时长(秒)"></label>
+    </div>
+  </section>
 
-  <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
-    <span class="tm-cyber-chip" data-ba="taskCount">0 个任务</span>
+  <section class="tm-cyber-card">
+    <div class="tm-cyber-card-title">
+      <span>当前页面</span>
+      <small>强制登录保持启用</small>
+    </div>
+    <div class="tm-cyber-meta" data-ba="meta"></div>
+  </section>
+
+  <section class="tm-cyber-card">
+    <div class="tm-cyber-card-title">
+      <span>TaskID 跳转</span>
+      <small>添加或手动输入后仅跳转</small>
+    </div>
+    <div class="tm-cyber-input-row">
+      <input class="tm-cyber-input" data-ba="addTaskInput" placeholder="添加 task_id 到快捷列表">
+      <button class="tm-cyber-btn" data-ba="addTask">添加</button>
+    </div>
+    <div class="tm-cyber-input-row">
+      <input class="tm-cyber-input" data-ba="manual" placeholder="输入 task_id 后立即跳转">
+      <button class="tm-cyber-btn tm-cyber-btn-primary" data-ba="manualJump">跳转</button>
+    </div>
+  </section>
+
+  <section class="tm-cyber-card">
+    <div class="tm-cyber-task-head">
+      <div class="tm-cyber-task-head-left">
+        <span class="tm-cyber-chip" data-ba="taskCount">0 个任务</span>
+      </div>
+      <input class="tm-cyber-input tm-cyber-filter" data-ba="filter" placeholder="筛选任务名称或 ID">
+    </div>
+    <div class="tm-cyber-list" data-ba="list"></div>
+  </section>
+
+  <div class="tm-cyber-footer-tools">
+    <button class="tm-cyber-btn tm-cyber-btn-sm" data-ba="refresh">刷新</button>
+    <button class="tm-cyber-btn tm-cyber-btn-sm" data-ba="defaults">重置</button>
+    <button class="tm-cyber-btn tm-cyber-btn-sm" data-ba="copyPageInfo">复制页面</button>
+    <button class="tm-cyber-btn tm-cyber-btn-sm tm-cyber-btn-accent" data-ba="clearAll">清空</button>
+    <button class="tm-cyber-btn tm-cyber-btn-sm tm-cyber-btn-accent" data-ba="logout" style="display:${CONFIG.QQ_ID?'':'none'}">退出</button>
   </div>
 
   <div class="tm-cyber-status" data-ba="status"></div>
@@ -948,21 +1250,13 @@
 
 <template id="tmpl-listItem">
 <div class="tm-cyber-item">
-  <label class="tm-cyber-check">
-    <input type="checkbox" data-ba="select" data-taskid="{{TASK_ID}}">
-    {{NAME}}
-  </label>
-  <div class="tm-cyber-item-id">{{TASK_ID}}</div>
-  <div class="tm-cyber-item-config">
-    <input data-ba="taskConfig" data-field="start_time" data-taskid="{{TASK_ID}}" value="{{START_TIME}}" placeholder="时间" title="开始时间">
-    <input data-ba="taskConfig" data-field="interval" data-taskid="{{TASK_ID}}" value="{{INTERVAL}}" placeholder="间隔" title="点击间隔(秒)">
-    <input data-ba="taskConfig" data-field="duration" data-taskid="{{TASK_ID}}" value="{{DURATION}}" placeholder="持续" title="持续时长(秒)">
+  <div>
+    <div class="tm-cyber-item-title">{{NAME}}</div>
+    <div class="tm-cyber-item-id">{{TASK_ID}}</div>
   </div>
   <div class="tm-cyber-item-actions">
-    <button class="tm-cyber-btn tm-cyber-btn-sm tm-cyber-btn-primary" data-ba="runOne" data-taskid="{{TASK_ID}}">执行</button>
-    <button class="tm-cyber-btn tm-cyber-btn-sm" data-ba="jump" data-taskid="{{TASK_ID}}">跳转</button>
-    <button class="tm-cyber-btn tm-cyber-btn-sm" data-ba="copy" data-taskid="{{TASK_ID}}">复制</button>
-    <button class="tm-cyber-btn tm-cyber-btn-sm tm-cyber-btn-accent" data-ba="removeTask" data-taskid="{{TASK_ID}}">删除</button>
+    <button class="tm-cyber-btn tm-cyber-btn-sm tm-cyber-btn-primary" data-ba="jump" data-taskid="{{TASK_ID}}">跳转</button>
   </div>
 </div>
 </template>
+

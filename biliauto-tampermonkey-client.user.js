@@ -848,7 +848,7 @@
 
     showLoginOverlay(reason) {
       let o = document.getElementById('biliauto-login-overlay');
-      if (o) { o.style.display = 'flex'; return; }
+      if (o) { o.style.display = 'flex'; o.classList.add('tm-overlay-visible'); return; }
       o = document.createElement('div');
       o.id = 'biliauto-login-overlay';
       o.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:rgba(5,8,22,0.85);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);display:flex;align-items:center;justify-content:center;font-family:var(--tm-font,Inter,sans-serif);padding:16px;';
@@ -859,6 +859,7 @@
       if (reason && reasonEl) reasonEl.textContent = this.escape(reason);
       o.appendChild(c);
       document.documentElement.appendChild(o);
+      requestAnimationFrame(() => o.classList.add('tm-overlay-visible'));
       o.addEventListener('click', (e) => {
         const btn = e.target.closest('[data-ba="startLogin"]');
         if (btn) this.startLogin();
@@ -1010,11 +1011,11 @@
       if (this.state.running) return;
       const selected = this.state.tasks.filter(task => {
         const taskId = task.task_value;
-        const cfg = this.state.taskConfigs[taskId] || Util.defaultTaskConfig(taskId);
-        return onlyTaskIds ? onlyTaskIds.includes(taskId) : cfg.selected;
+        if (onlyTaskIds) return onlyTaskIds.includes(taskId);
+        return true;
       });
       if (!selected.length) {
-        this.setStatus('没有选中的任务');
+        this.setStatus('没有可执行的任务');
         return;
       }
       this.state.running = true;
