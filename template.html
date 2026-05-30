@@ -70,12 +70,12 @@
 /* ========== Panel ========== */
 #biliauto-panel {
   position: fixed;
-  left: 50%!important;
-  right: auto!important;
-  top: 50%!important;
-  transform: translate(-50%, -50%) scale(0.96)!important;
+  left: 50%;
+  right: auto;
+  top: 50%;
+  transform: translate(-50%, -50%) scale(0.96);
   z-index: 2147483646;
-  width: 440px;
+  width: 520px;
   max-width: calc(100vw - 32px);
   max-height: min(calc(100vh - 40px), 90vh) !important;
   overflow-y: auto !important;
@@ -83,7 +83,6 @@
   -webkit-overflow-scrolling: touch;
   font-family: var(--tm-font);
   color: var(--tm-text);
-  background: var(--tm-bg-card);
   border-radius: var(--tm-radius);
   box-shadow: var(--tm-shadow);
   border: 1px solid rgba(255,255,255,0.08);
@@ -98,7 +97,7 @@
 }
 #biliauto-panel.tm-panel-visible {
   opacity: 1;
-  transform: translate(-50%, -50%) scale(1)!important;
+  transform: translate(-50%, -50%) scale(1);
   pointer-events: auto;
 }
 #biliauto-panel * { box-sizing: border-box; }
