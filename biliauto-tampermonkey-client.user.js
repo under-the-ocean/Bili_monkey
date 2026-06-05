@@ -400,6 +400,7 @@
       if (!document.getElementById('biliauto-panel')) {
         const root = document.createElement('div');
         root.id = 'biliauto-panel';
+        root.style.boxSizing = 'border-box';
         root.innerHTML = this.template();
         document.documentElement.appendChild(root);
       }
@@ -458,8 +459,8 @@
     clampPanelToViewport() {
       const root = document.getElementById('biliauto-panel');
       if (!root) return;
-      const width = Math.max(320, Math.min(root.getBoundingClientRect().width, window.innerWidth - 24));
-      const height = Math.max(260, Math.min(root.getBoundingClientRect().height, window.innerHeight - 24));
+      const width = Math.max(320, Math.min(root.offsetWidth, window.innerWidth - 24));
+      const height = Math.max(260, Math.min(root.offsetHeight, window.innerHeight - 24));
       root.style.width = width + 'px';
       root.style.height = height + 'px';
       const rect = root.getBoundingClientRect();
