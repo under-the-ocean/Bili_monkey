@@ -27,14 +27,15 @@
 /* ========== FAB ========== */
 #biliauto-fab {
   position: fixed;
-  left: 50%!important;
-  right: auto!important;
-  top: 50%!important;
-  transform: translate(-50%, -50%)!important;
+  left: auto !important;
+  right: 18px !important;
+  top: auto !important;
+  bottom: 18px !important;
+  transform: scale(1) !important;
   z-index: 2147483647;
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
   background: linear-gradient(135deg, #06b6d4, #0891b2);
   color: #fff;
   display: flex;
@@ -52,15 +53,15 @@
 }
 #biliauto-fab.tm-fab-hidden {
   opacity: 0;
-  transform: translate(-50%, -50%) scale(0.4);
+  transform: scale(0.4) !important;
   pointer-events: none;
 }
 #biliauto-fab:hover {
   box-shadow: 0 12px 32px rgba(6,182,212,0.45);
-  transform: translate(-50%, -50%) scale(1.08);
+  transform: scale(1.08) !important;
 }
 #biliauto-fab:active {
-  transform: translate(-50%, -50%) scale(0.92);
+  transform: scale(0.92) !important;
 }
 #biliauto-fab svg {
   display: block;
@@ -70,14 +71,15 @@
 /* ========== Panel ========== */
 #biliauto-panel {
   position: fixed;
-  left: 50%;
-  right: auto;
-  top: 50%;
-  transform: translate(-50%, -50%) scale(0.96);
+  left: auto;
+  right: 18px;
+  top: auto;
+  bottom: 18px;
+  transform: scale(0.96);
   z-index: 2147483646;
-  width: 520px;
+  width: 380px;
   max-width: calc(100vw - 32px);
-  max-height: min(calc(100vh - 40px), 90vh) !important;
+  max-height: calc(100vh - 24px) !important;
   overflow-y: auto !important;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
@@ -97,7 +99,7 @@
 }
 #biliauto-panel.tm-panel-visible {
   opacity: 1;
-  transform: translate(-50%, -50%) scale(1);
+  transform: scale(1);
   pointer-events: auto;
 }
 #biliauto-panel * { box-sizing: border-box; }
@@ -107,8 +109,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 18px;
-  min-height: 48px;
+  padding: 10px 12px;
+  min-height: 40px;
   cursor: grab;
   user-select: none;
   -webkit-user-select: none;
@@ -118,7 +120,7 @@
 }
 .tm-cyber-header:active { cursor: grabbing; }
 .tm-cyber-header-title {
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 700;
   color: var(--tm-text);
   display: flex;
@@ -148,8 +150,8 @@
 .tm-cyber-icon-btn {
   position: relative;
   overflow: hidden;
-  width: 34px;
-  height: 34px;
+  width: 28px;
+  height: 28px;
   border: none;
   border-radius: 8px;
   background: transparent;
@@ -160,7 +162,7 @@
   justify-content: center;
   padding: 0;
   transition: background 0.15s, color 0.15s;
-  font-size: 16px;
+  font-size: 13px;
   line-height: 1;
 }
 .tm-cyber-icon-btn:hover {
@@ -174,7 +176,7 @@
 
 /* ========== Body ========== */
 .tm-cyber-body {
-  padding: 14px 16px 16px;
+  padding: 10px;
   overflow-y: auto;
   min-height: 0;
   flex: 1;
@@ -224,14 +226,14 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 38px;
-  min-width: 72px;
-  padding: 0 18px;
+  height: 32px;
+  min-width: 56px;
+  padding: 0 12px;
   border: 1px solid var(--tm-divider);
   border-radius: var(--tm-radius-btn);
   background: transparent;
   color: var(--tm-text-secondary);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
   font-family: var(--tm-font);
   cursor: pointer;
@@ -273,10 +275,10 @@
   border-color: rgba(248,113,113,0.3);
 }
 .tm-cyber-btn-sm {
-  height: 30px;
-  min-width: 52px;
-  padding: 0 12px;
-  font-size: 12px;
+  height: 28px;
+  min-width: 44px;
+  padding: 0 10px;
+  font-size: 11px;
 }
 .tm-cyber-btn-xs {
   height: 24px;
@@ -781,7 +783,7 @@
 
 /* ========== Reforged Cyber Motion UI ========== */
 #biliauto-panel {
-  width: 520px;
+  width: 380px;
   background:
     radial-gradient(circle at 12% 0%, rgba(34, 211, 238, 0.18), transparent 30%),
     radial-gradient(circle at 88% 12%, rgba(99, 102, 241, 0.14), transparent 28%),
@@ -789,8 +791,8 @@
   border-color: rgba(103, 232, 249, 0.18);
   box-shadow: 0 26px 80px rgba(0, 0, 0, 0.55), 0 0 60px rgba(6, 182, 212, 0.12);
   resize: both;
-  min-width: 360px;
-  min-height: 320px;
+  min-width: 320px;
+  min-height: 260px;
   max-width: calc(100vw - 24px);
   max-height: calc(100vh - 24px);
 }
@@ -816,22 +818,22 @@
 .tm-cyber-header,
 .tm-cyber-body { position: relative; z-index: 1; }
 .tm-cyber-header {
-  padding: 16px 18px;
+  padding: 10px 12px;
   background: linear-gradient(90deg, rgba(6,182,212,0.12), rgba(99,102,241,0.06), transparent);
 }
 .tm-cyber-brand {
   text-shadow: 0 0 18px rgba(34, 211, 238, 0.65);
 }
 .tm-cyber-body {
-  padding: 14px 16px 16px;
+  padding: 10px;
 }
 .tm-cyber-hero {
   position: relative;
   overflow: hidden;
   border: 1px solid rgba(103, 232, 249, 0.16);
-  border-radius: 18px;
-  padding: 16px;
-  margin-bottom: 14px;
+  border-radius: 14px;
+  padding: 12px;
+  margin-bottom: 10px;
   background: linear-gradient(145deg, rgba(6,182,212,0.12), rgba(15,23,42,0.78) 48%, rgba(99,102,241,0.1));
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 18px 36px rgba(0,0,0,0.22);
   animation: tm-rise-in 0.42s cubic-bezier(0.2, 0.9, 0.2, 1) both;
@@ -839,10 +841,10 @@
 .tm-cyber-hero::before {
   content: '';
   position: absolute;
-  width: 220px;
-  height: 220px;
-  right: -90px;
-  top: -105px;
+  width: 150px;
+  height: 150px;
+  right: -55px;
+  top: -70px;
   border-radius: 999px;
   background: radial-gradient(circle, rgba(34,211,238,0.28), transparent 62%);
   animation: tm-pulse-glow 3.8s ease-in-out infinite;
@@ -861,8 +863,8 @@
 .tm-cyber-hero-main {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 14px;
+  gap: 10px;
+  margin-bottom: 10px;
 }
 .tm-cyber-kicker {
   font-size: 10px;
@@ -873,20 +875,20 @@
   margin-bottom: 8px;
 }
 .tm-cyber-hero-title {
-  font-size: 20px;
+  font-size: 16px;
   font-weight: 800;
   letter-spacing: 0.2px;
   color: rgba(255,255,255,0.94);
   margin-bottom: 5px;
 }
 .tm-cyber-hero-subtitle {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--tm-text-secondary);
   line-height: 1.55;
 }
 .tm-cyber-radar {
-  width: 58px;
-  height: 58px;
+  width: 42px;
+  height: 42px;
   flex: 0 0 auto;
   border-radius: 999px;
   border: 1px solid rgba(34,211,238,0.35);
@@ -901,8 +903,8 @@
   margin-bottom: 12px;
 }
 .tm-cyber-btn-hero {
-  height: 42px;
-  border-radius: 12px;
+  height: 34px;
+  border-radius: 10px;
   font-weight: 700;
 }
 .tm-cyber-btn-primary.tm-cyber-btn-hero {
@@ -929,9 +931,9 @@
 }
 .tm-cyber-card {
   border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 15px;
-  padding: 12px;
-  margin-bottom: 12px;
+  border-radius: 12px;
+  padding: 10px;
+  margin-bottom: 10px;
   background: rgba(255,255,255,0.035);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
   animation: tm-rise-in 0.46s cubic-bezier(0.2, 0.9, 0.2, 1) both;
@@ -941,10 +943,10 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  font-size: 12px;
+  font-size: 11px;
   color: rgba(255,255,255,0.78);
   font-weight: 700;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 .tm-cyber-card-title small {
   color: var(--tm-text-hint);
@@ -959,7 +961,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 .tm-cyber-task-head-left {
   display: flex;
@@ -968,21 +970,21 @@
   min-width: 0;
 }
 .tm-cyber-filter {
-  width: 178px;
+  width: 132px;
 }
 .tm-cyber-list {
-  max-height: 320px;
+  max-height: 240px;
   margin-top: 0;
 }
 .tm-cyber-item {
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 10px;
+  gap: 8px;
   align-items: center;
   overflow: hidden;
-  padding: 13px;
-  margin-bottom: 9px;
+  padding: 10px;
+  margin-bottom: 8px;
   background: linear-gradient(135deg, rgba(255,255,255,0.055), rgba(255,255,255,0.025));
   border-color: rgba(255,255,255,0.09);
   transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
@@ -1004,21 +1006,24 @@
   box-shadow: 0 12px 28px rgba(0,0,0,0.24), 0 0 24px rgba(6,182,212,0.09);
 }
 .tm-cyber-item-title {
-  margin: 0 0 5px;
+  margin: 0 0 4px;
   padding-left: 8px;
   font-weight: 700;
+  font-size: 12px;
 }
 .tm-cyber-item-id {
   margin: 0;
   padding-left: 8px;
   color: #67e8f9;
+  font-size: 10px;
 }
 .tm-cyber-item-actions {
   justify-content: flex-end;
 }
 .tm-cyber-status {
   border-top: 1px solid rgba(255,255,255,0.06);
-  margin-top: 10px;
+  margin-top: 8px;
+  font-size: 10px;
 }
 .tm-cyber-footer-tools {
   display: flex;

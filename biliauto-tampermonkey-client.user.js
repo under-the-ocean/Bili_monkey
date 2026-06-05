@@ -374,8 +374,8 @@
       darkMode: GM_getValue('material_dark_mode', null),
       panelX: GM_getValue('material_panel_x', null),
       panelY: GM_getValue('material_panel_y', null),
-      panelWidth: GM_getValue('material_panel_width', 520),
-      panelHeight: GM_getValue('material_panel_height', null),
+      panelWidth: GM_getValue('material_panel_width', 380),
+      panelHeight: GM_getValue('material_panel_height', 460),
       loginCode: '',
       loginStatus: isLoggedIn() ? 'logged_in' : ''
     },
@@ -437,6 +437,14 @@
         root.style.right = 'auto';
         root.style.bottom = 'auto';
         root.style.transform = 'none';
+      } else {
+        const width = this.state.panelWidth || 380;
+        const height = this.state.panelHeight || 460;
+        root.style.left = Math.max(12, window.innerWidth - width - 18) + 'px';
+        root.style.top = Math.max(12, window.innerHeight - height - 18) + 'px';
+        root.style.right = 'auto';
+        root.style.bottom = 'auto';
+        root.style.transform = 'none';
       }
       this.clampPanelToViewport();
     },
@@ -444,8 +452,8 @@
     clampPanelToViewport() {
       const root = document.getElementById('biliauto-panel');
       if (!root) return;
-      const width = Math.max(360, Math.min(root.getBoundingClientRect().width, window.innerWidth - 24));
-      const height = Math.max(320, Math.min(root.getBoundingClientRect().height, window.innerHeight - 24));
+      const width = Math.max(320, Math.min(root.getBoundingClientRect().width, window.innerWidth - 24));
+      const height = Math.max(260, Math.min(root.getBoundingClientRect().height, window.innerHeight - 24));
       root.style.width = width + 'px';
       root.style.height = height + 'px';
       const rect = root.getBoundingClientRect();
