@@ -360,6 +360,12 @@
     return !!CONFIG.API_KEY && !!CONFIG.QQ_ID;
   }
 
+  function readStoredPositiveNumber(key, fallback) {
+    const raw = GM_getValue(key, fallback);
+    const value = Number(raw);
+    return Number.isFinite(value) && value > 0 ? value : fallback;
+  }
+
   // ========================
   // 叠加管理界面 - Material Design 重构
   // ========================
@@ -374,8 +380,8 @@
       darkMode: GM_getValue('material_dark_mode', null),
       panelX: GM_getValue('material_panel_x', null),
       panelY: GM_getValue('material_panel_y', null),
-      panelWidth: GM_getValue('material_panel_width', 380),
-      panelHeight: GM_getValue('material_panel_height', 460),
+      panelWidth: readStoredPositiveNumber('material_panel_width', 380),
+      panelHeight: readStoredPositiveNumber('material_panel_height', 460),
       loginCode: '',
       loginStatus: isLoggedIn() ? 'logged_in' : ''
     },
@@ -468,6 +474,10 @@
       root.style.right = 'auto';
       root.style.bottom = 'auto';
       root.style.transform = 'none';
+      this.state.panelWidth = Math.round(width);
+      this.state.panelHeight = Math.round(height);
+      this.state.panelX = Math.round(left);
+      this.state.panelY = Math.round(top);
       GM_setValue('material_panel_width', Math.round(width));
       GM_setValue('material_panel_height', Math.round(height));
       GM_setValue('material_panel_x', Math.round(left));
@@ -479,15 +489,11 @@
       const handle = root.querySelector('.tm-cyber-header');
       if (!handle || handle.dataset.dragInitialized) return;
       handle.dataset.dragInitialized = '1';
-      const savedX = GM_getValue('material_panel_x', null);
-      const savedY = GM_getValue('material_panel_y', null);
-      const savedW = GM_getValue('material_panel_width', null);
-      const savedH = GM_getValue('material_panel_height', null);
-      if (savedW !== null) root.style.width = savedW + 'px';
-      if (savedH !== null) root.style.height = savedH + 'px';
-      if (savedX !== null && savedY !== null) {
-        root.style.left = savedX + 'px';
-        root.style.top = savedY + 'px';
+      if (this.state.panelWidth) root.style.width = this.state.panelWidth + 'px';
+      if (this.state.panelHeight) root.style.height = this.state.panelHeight + 'px';
+      if (this.state.panelX !== null && this.state.panelY !== null) {
+        root.style.left = this.state.panelX + 'px';
+        root.style.top = this.state.panelY + 'px';
         root.style.right = 'auto';
         root.style.bottom = 'auto';
         root.style.transform = 'none';
