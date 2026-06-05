@@ -620,6 +620,23 @@
       });
 
       panel.addEventListener('change', (e) => {
+        const fieldTarget = e.target.closest('[data-field]');
+        if (fieldTarget) {
+          const field = fieldTarget.getAttribute('data-field');
+          const value = fieldTarget.type === 'checkbox' ? fieldTarget.checked : fieldTarget.value;
+          const taskConfig = fieldTarget.closest('[data-ba="taskConfig"]');
+          if (taskConfig) {
+            this.updateTaskConfig(taskConfig.getAttribute('data-taskid'), field, value);
+            return;
+          }
+          const currentTaskConfig = fieldTarget.closest('[data-ba="currentTaskConfig"]');
+          if (currentTaskConfig) {
+            const currentTask = Util.extractTaskIdFromPage() || 'unknown_task';
+            this.updateTaskConfig(currentTask, field, value);
+            return;
+          }
+        }
+
         const target = e.target.closest('[data-ba]');
         if (!target) return;
         const action = target.getAttribute('data-ba');
