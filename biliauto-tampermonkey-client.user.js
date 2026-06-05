@@ -34,7 +34,7 @@
     DEFAULT_START_TIME: '00:29:57',
     MAX_RELOAD_ATTEMPTS: 3,
 
-    VERSION: '0.8.0',
+    VERSION: '0.8.1',
     RETRY_COUNT: 2,
     DEBUG: true
   };
@@ -715,16 +715,33 @@
 
     // 在领取须知下方插入滚动抢码日志面板，保留原公告内容
     injectLogPanel() {
-      const targetEl = document.querySelector('#app > div > div.home-wrap.select-disable > section.notice-wrap > p.content');
-      if (!targetEl) return;
       if (document.getElementById('biliauto-log-panel')) return;
+      const targetEl = document.querySelector('#app > div > div.home-wrap.select-disable > section.notice-wrap > p.content')
+        || document.querySelector('#app .notice-wrap p.content');
+      if (!targetEl) {
+        if (!this._logPanelMountTimer) {
+          let attempts = 0;
+          this._logPanelMountTimer = setInterval(() => {
+            attempts += 1;
+            if (document.getElementById('biliauto-log-panel') || attempts >= 80) {
+              clearInterval(this._logPanelMountTimer);
+              this._logPanelMountTimer = null;
+              return;
+            }
+            this.injectLogPanel();
+          }, 250);
+        }
+        return;
+      }
       this._pageLogs = this._pageLogs || [];
       const panelHtml = Panel.getSubTemplate('logPanel').replace('<div class="tm-cyber-log-wrap">', '<div class="tm-cyber-log-wrap" id="biliauto-log-panel">');
       targetEl.insertAdjacentHTML('afterend', panelHtml);
       this.updatePageLog('日志面板已挂载到领取须知下方');
     },
-
     updatePageLog(text) {
+      if (!document.getElementById('biliauto-log-panel')) {
+        this.injectLogPanel();
+      }
       if (text) {
         this._pageLogs = this._pageLogs || [];
         const time = new Date().toLocaleTimeString();

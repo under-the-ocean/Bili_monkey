@@ -828,9 +828,16 @@
 .tm-cyber-body {
   padding: 10px;
 }
+.tm-cyber-body > section {
+  display: block;
+  min-height: 0;
+  height: auto;
+}
 .tm-cyber-hero {
   position: relative;
   overflow: hidden;
+  min-height: 0;
+  height: auto;
   border: 1px solid rgba(103, 232, 249, 0.16);
   border-radius: 14px;
   padding: 12px;
@@ -914,10 +921,15 @@
 .tm-cyber-config-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
+  align-items: start;
   gap: 8px;
 }
 .tm-cyber-config-field {
   position: relative;
+  display: block;
+  min-height: 0;
+  height: auto;
+  margin: 0;
 }
 .tm-cyber-config-field span {
   display: block;
