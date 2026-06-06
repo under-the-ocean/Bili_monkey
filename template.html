@@ -652,7 +652,7 @@
 /* ========== Page Log Panel ========== */
 .tm-cyber-log-wrap {
   font-size: 12px;
-  color: var(--tm-text-secondary);
+  color: #61666d;
   line-height: 1.6;
 }
 .tm-cyber-log-header {
@@ -660,12 +660,13 @@
   justify-content: space-between;
   align-items: center;
   padding: 4px 0;
-  border-bottom: 1px solid var(--tm-divider);
+  border-bottom: 1px solid #e3e5e7;
   margin-bottom: 8px;
   font-size: 11px;
+  color: #000;
 }
 .tm-cyber-log-countdown {
-  color: var(--tm-primary-light);
+  color: #61666d;
   font-weight: 600;
   font-family: "SF Mono", "Cascadia Code", monospace;
 }
@@ -675,21 +676,22 @@
   white-space: pre-wrap;
   font-family: "SF Mono", "Cascadia Code", monospace;
   font-size: 11px;
-  color: var(--tm-text-hint);
+  color: #61666d;
   scrollbar-width: thin;
 }
 .tm-cyber-log-scroll::-webkit-scrollbar { width: 4px; }
-.tm-cyber-log-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 4px; }
+.tm-cyber-log-scroll::-webkit-scrollbar-thumb { background: #e3e5e7; border-radius: 4px; }
 .tm-cyber-log-status {
   display: flex;
   justify-content: space-between;
   padding-top: 8px;
   margin-top: 8px;
-  border-top: 1px solid var(--tm-divider);
+  border-top: 1px solid #e3e5e7;
   font-size: 11px;
+  color: #9499a0;
 }
 .tm-cyber-log-task-count {
-  color: var(--tm-primary-light);
+  color: #61666d;
   font-weight: 600;
 }
 
@@ -1115,7 +1117,7 @@
       <button class="tm-cyber-btn tm-cyber-btn-hero tm-cyber-btn-accent" data-ba="testClick">测试点击</button>
     </div>
     <div class="tm-cyber-config-grid" data-ba="currentTaskConfig">
-      <label class="tm-cyber-config-field"><span>开始时间</span><input class="tm-cyber-input" data-field="start_time" placeholder="HH:MM:SS" title="开始时间"></label>
+      <label class="tm-cyber-config-field"><span>开始时间</span><input class="tm-cyber-input" data-field="start_time" placeholder="HH:MM:SS / +秒数 / 秒数" title="开始时间，支持 HH:MM:SS、+秒数 或 纯秒数"></label>
       <label class="tm-cyber-config-field"><span>点击间隔</span><input class="tm-cyber-input" data-field="interval" placeholder="秒" title="点击间隔(秒)"></label>
       <label class="tm-cyber-config-field"><span>持续时长</span><input class="tm-cyber-input" data-field="duration" placeholder="秒" title="持续时长(秒)"></label>
     </div>

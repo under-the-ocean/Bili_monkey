@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BiliAutoClicker - 油猴客户端
 // @namespace    https://github.com/under-the-ocean
-// @version      0.8.2
+// @version      0.8.3
 // @match        https://www.bilibili.com/blackboard/era/award-exchange.html?*
 // @connect      bili.982835785.xyz
 // @grant        GM_xmlhttpRequest
@@ -11,6 +11,7 @@
 // @grant        GM_deleteValue
 // @grant        GM_listValues
 // @grant        GM_getResourceText
+// @grant        unsafeWindow
 // @resource     TEMPLATE_HTML https://gh-proxy.com/https://raw.githubusercontent.com/under-the-ocean/Bili_monkey/main/template.html
 // @run-at       document-start
 // @downloadURL  https://gh-proxy.com/https://raw.githubusercontent.com/under-the-ocean/Bili_monkey/main/biliauto-tampermonkey-client.user.js
@@ -34,7 +35,7 @@
     DEFAULT_START_TIME: '00:29:57',
     MAX_RELOAD_ATTEMPTS: 3,
 
-    VERSION: '0.8.1',
+    VERSION: '0.8.3',
     RETRY_COUNT: 2,
     DEBUG: true
   };
@@ -89,22 +90,59 @@
       return el ? (el.innerText || el.textContent || '').trim() : '';
     },
 
-    parseTime(timeStr) {
-      const value = String(timeStr || CONFIG.DEFAULT_START_TIME).trim();
-      if (!value) return Util.parseTime(CONFIG.DEFAULT_START_TIME);
+    normalizeStartTimeInput(timeStr) {
+      const value = String(timeStr || '').trim();
+      if (!value) return '';
       if (value.startsWith('+')) {
         const seconds = Number(value.slice(1));
-        if (Number.isFinite(seconds)) return new Date(Date.now() + seconds * 1000);
+        return Number.isFinite(seconds) ? `+${seconds}` : value;
       }
       if (/^\d+(\.\d+)?$/.test(value)) {
-        return new Date(Date.now() + Number(value) * 1000);
+        return String(Number(value));
+      }
+      const parts = value.split(':').map(part => part.trim()).filter(Boolean);
+      if (parts.length === 2 || parts.length === 3) {
+        const nums = parts.map(Number);
+        if (nums.every(Number.isFinite)) {
+          const [hh, mm, ss = 0] = nums;
+          const pad = n => String(Math.max(0, Math.floor(n))).padStart(2, '0');
+          return `${pad(hh)}:${pad(mm)}:${pad(ss)}`;
+        }
+      }
+      return value;
+    },
+
+    parseTimeSpec(timeStr, now = new Date()) {
+      const raw = String(timeStr || '').trim();
+      const value = Util.normalizeStartTimeInput(raw || CONFIG.DEFAULT_START_TIME);
+      if (!value) return Util.parseTimeSpec(CONFIG.DEFAULT_START_TIME, now);
+      if (value.startsWith('+')) {
+        const seconds = Number(value.slice(1));
+        if (Number.isFinite(seconds)) {
+          const target = new Date(now.getTime() + seconds * 1000);
+          return { raw, normalized: value, target, delayMs: Math.max(0, target.getTime() - now.getTime()), mode: 'relative' };
+        }
+      }
+      if (/^\d+(\.\d+)?$/.test(value)) {
+        const target = new Date(now.getTime() + Number(value) * 1000);
+        return { raw, normalized: value, target, delayMs: Math.max(0, target.getTime() - now.getTime()), mode: 'relative' };
       }
       const parts = value.split(':').map(Number);
-      const now = new Date();
-      const target = new Date(now);
-      target.setHours(parts[0] || 0, parts[1] || 0, parts[2] || 0, 0);
-      if (target < now) target.setDate(target.getDate() + 1);
-      return target;
+      if (parts.length === 2 || parts.length === 3) {
+        const [hours, minutes, seconds = 0] = parts;
+        if ([hours, minutes, seconds].every(Number.isFinite)) {
+          const target = new Date(now);
+          target.setHours(hours, minutes, seconds, 0);
+          if (target.getTime() <= now.getTime()) target.setDate(target.getDate() + 1);
+          return { raw, normalized: value, target, delayMs: Math.max(0, target.getTime() - now.getTime()), mode: 'clock' };
+        }
+      }
+      const fallback = Util.parseTimeSpec(CONFIG.DEFAULT_START_TIME, now);
+      return { ...fallback, raw, normalized: fallback.normalized, invalid: true };
+    },
+
+    parseTime(timeStr) {
+      return Util.parseTimeSpec(timeStr).target;
     },
 
     formatTime(date = new Date()) {
@@ -695,11 +733,14 @@
     updateTaskConfig(taskId, field, value) {
       if (!taskId) return;
       const current = this.state.taskConfigs[taskId] || Util.defaultTaskConfig(taskId);
-      this.state.taskConfigs[taskId] = { ...current, [field]: field === 'selected' ? Boolean(value) : value };
+      let nextValue = field === 'selected' ? Boolean(value) : value;
+      if (field === 'start_time') nextValue = Util.normalizeStartTimeInput(value) || CONFIG.DEFAULT_START_TIME;
+      this.state.taskConfigs[taskId] = { ...current, [field]: nextValue };
       this.saveTaskConfigs();
-      // 只有当改变的是 selected 状态时才重新渲染列表
-      if (field === 'selected') {
+      // 关键配置变更后立即回显规范化结果
+      if (field === 'selected' || field === 'start_time') {
         this.renderList();
+        this.render();
       }
     },
 
@@ -713,7 +754,7 @@
       this.updatePageLog(text);
     },
 
-    // 在领取须知下方插入滚动抢码日志面板，保留原公告内容
+    // 用日志面板替换领取须知内容区域，避免原节点残留空白
     injectLogPanel() {
       if (document.getElementById('biliauto-log-panel')) return;
       const targetEl = document.querySelector('#app > div > div.home-wrap.select-disable > section.notice-wrap > p.content')
@@ -735,8 +776,12 @@
       }
       this._pageLogs = this._pageLogs || [];
       const panelHtml = Panel.getSubTemplate('logPanel').replace('<div class="tm-cyber-log-wrap">', '<div class="tm-cyber-log-wrap" id="biliauto-log-panel">');
-      targetEl.insertAdjacentHTML('afterend', panelHtml);
-      this.updatePageLog('日志面板已挂载到领取须知下方');
+      const mount = document.createElement('div');
+      mount.innerHTML = panelHtml;
+      const panelEl = mount.firstElementChild;
+      if (!panelEl) return;
+      targetEl.replaceWith(panelEl);
+      this.updatePageLog('日志面板已替换领取须知内容区域');
     },
     updatePageLog(text) {
       if (!document.getElementById('biliauto-log-panel')) {
@@ -767,12 +812,9 @@
             const taskId = String(task.task_value || task.value || task.task_id || '');
             const cfg = this.state.taskConfigs[taskId];
             if (cfg && cfg.start_time) {
-              const parts = cfg.start_time.split(':');
-              if (parts.length === 3) {
-                const target = new Date();
-                target.setHours(+parts[0], +parts[1], +parts[2], 0);
-                if (target.getTime() <= now) target.setDate(target.getDate() + 1);
-                const diff = Math.max(0, target.getTime() - now);
+              const parsed = Util.parseTimeSpec(cfg.start_time, new Date(now));
+              if (parsed && Number.isFinite(parsed.delayMs)) {
+                const diff = Math.max(0, parsed.delayMs);
                 if (bestDiff === null || diff < bestDiff) bestDiff = diff;
               }
             }
@@ -1272,8 +1314,221 @@
     installed: false,
 
     install() {
+      if (this.installed) return;
       this.installed = true;
-      Util.info('RewardMonitor 已安装（DOM 模式，不监控 API）');
+      this._installMessageBridge();
+      this._installUnsafeWindowHook();
+      this._injectPageHook();
+      this._setupPerformanceObserver();
+      Util.info('RewardMonitor installed: page-context fetch/XHR hook enabled');
+    },
+
+    _installMessageBridge() {
+      if (this._messageBridgeInstalled) return;
+      this._messageBridgeInstalled = true;
+      window.addEventListener('message', (event) => {
+        const data = event.data || {};
+        if (data.source !== 'BILIAUTO_REWARD_MONITOR' || !data.payload) return;
+        const payload = data.payload;
+        const text = payload.text || '';
+        let json = null;
+        try {
+          json = text ? JSON.parse(text) : null;
+        } catch (e) {
+          Util.warn(`RewardMonitor response JSON parse failed: ${e.message}`);
+          return;
+        }
+        Util.log(`RewardMonitor captured ${payload.kind}: ${payload.url} status=${payload.status}`);
+        if (payload.kind === 'receive') {
+          this.save(payload.taskId || this.currentTaskId(), json, payload.url, payload.status);
+        } else if (payload.kind === 'info') {
+          this.saveMissionInfo(json, payload.url);
+        } else if (payload.kind === 'mylist') {
+          this.saveMyList(json, payload.url, payload.status);
+        }
+      });
+    },
+
+    _installUnsafeWindowHook() {
+      try {
+        const pageWindow = typeof unsafeWindow !== 'undefined' ? unsafeWindow : null;
+        if (!pageWindow || pageWindow.__BILIAUTO_REWARD_HOOK_INSTALLED__) return false;
+        pageWindow.__BILIAUTO_REWARD_HOOK_INSTALLED__ = true;
+        const apiPrefix = '/x/activity_components/mission/';
+        const getUrl = (input) => {
+          if (typeof input === 'string') return input;
+          if (input && input.url) return input.url;
+          return '';
+        };
+        const getKind = (url) => {
+          if (!url || url.indexOf(apiPrefix) === -1) return '';
+          if (url.indexOf('/mission/receive') !== -1) return 'receive';
+          if (url.indexOf('/mission/info') !== -1) return 'info';
+          if (url.indexOf('/mission/mylist') !== -1) return 'mylist';
+          return 'mission';
+        };
+        const readTaskId = (url, body) => {
+          try {
+            const fromUrl = new URL(url, location.href).searchParams.get('task_id');
+            if (fromUrl) return fromUrl;
+          } catch {}
+          try {
+            if (typeof body === 'string') return new URLSearchParams(body).get('task_id') || '';
+            if (pageWindow.URLSearchParams && body instanceof pageWindow.URLSearchParams) return body.get('task_id') || '';
+            if (pageWindow.FormData && body instanceof pageWindow.FormData) return body.get('task_id') || '';
+          } catch {}
+          return '';
+        };
+        const post = (kind, url, status, text, body) => {
+          pageWindow.postMessage({
+            source: 'BILIAUTO_REWARD_MONITOR',
+            payload: {
+              kind,
+              url,
+              status,
+              text: text || '',
+              taskId: readTaskId(url, body)
+            }
+          }, '*');
+        };
+        if (pageWindow.fetch) {
+          const rawFetch = pageWindow.fetch;
+          pageWindow.fetch = function (input, init) {
+            const url = getUrl(input);
+            const body = init && init.body;
+            const kind = getKind(url);
+            return rawFetch.apply(this, arguments).then((resp) => {
+              if (kind) {
+                try {
+                  resp.clone().text().then((text) => post(kind, url, resp.status, text, body)).catch(() => {});
+                } catch {}
+              }
+              return resp;
+            });
+          };
+        }
+        if (pageWindow.XMLHttpRequest) {
+          const RawXHR = pageWindow.XMLHttpRequest;
+          const rawOpen = RawXHR.prototype.open;
+          const rawSend = RawXHR.prototype.send;
+          RawXHR.prototype.open = function (method, url) {
+            this.__biliautoUrl = url || '';
+            this.__biliautoMethod = method || '';
+            return rawOpen.apply(this, arguments);
+          };
+          RawXHR.prototype.send = function (body) {
+            const xhr = this;
+            const url = xhr.__biliautoUrl || '';
+            const kind = getKind(url);
+            if (kind) {
+              xhr.addEventListener('loadend', function () {
+                post(kind, url, xhr.status, xhr.responseText || '', body);
+              });
+            }
+            return rawSend.apply(this, arguments);
+          };
+        }
+        Util.info('RewardMonitor unsafeWindow hook installed');
+        return true;
+      } catch (e) {
+        Util.warn(`RewardMonitor unsafeWindow hook failed: ${e.message}`);
+        return false;
+      }
+    },
+
+    _injectPageHook() {
+      if (document.getElementById('biliauto-reward-page-hook')) return;
+      const code = `
+        ;(function () {
+          if (window.__BILIAUTO_REWARD_HOOK_INSTALLED__) return;
+          window.__BILIAUTO_REWARD_HOOK_INSTALLED__ = true;
+          var SOURCE = 'BILIAUTO_REWARD_MONITOR';
+          var API_PREFIX = '/x/activity_components/mission/';
+          function getUrl(input) {
+            if (typeof input === 'string') return input;
+            if (input && input.url) return input.url;
+            return '';
+          }
+          function getKind(url) {
+            if (!url || url.indexOf(API_PREFIX) === -1) return '';
+            if (url.indexOf('/mission/receive') !== -1) return 'receive';
+            if (url.indexOf('/mission/info') !== -1) return 'info';
+            if (url.indexOf('/mission/mylist') !== -1) return 'mylist';
+            return 'mission';
+          }
+          function readTaskId(url, body) {
+            try {
+              var u = new URL(url, location.href);
+              var fromUrl = u.searchParams.get('task_id');
+              if (fromUrl) return fromUrl;
+            } catch (e) {}
+            try {
+              if (typeof body === 'string') return new URLSearchParams(body).get('task_id') || '';
+              if (body instanceof URLSearchParams) return body.get('task_id') || '';
+              if (body instanceof FormData) return body.get('task_id') || '';
+            } catch (e) {}
+            return '';
+          }
+          function post(kind, url, status, text, body) {
+            try {
+              window.postMessage({
+                source: SOURCE,
+                payload: {
+                  kind: kind,
+                  url: url,
+                  status: status,
+                  text: text || '',
+                  taskId: readTaskId(url, body)
+                }
+              }, '*');
+            } catch (e) {}
+          }
+          if (window.fetch) {
+            var rawFetch = window.fetch;
+            window.fetch = function (input, init) {
+              var url = getUrl(input);
+              var body = init && init.body;
+              var kind = getKind(url);
+              return rawFetch.apply(this, arguments).then(function (resp) {
+                if (kind) {
+                  try {
+                    resp.clone().text().then(function (text) {
+                      post(kind, url, resp.status, text, body);
+                    }).catch(function () {});
+                  } catch (e) {}
+                }
+                return resp;
+              });
+            };
+          }
+          if (window.XMLHttpRequest) {
+            var RawXHR = window.XMLHttpRequest;
+            var rawOpen = RawXHR.prototype.open;
+            var rawSend = RawXHR.prototype.send;
+            RawXHR.prototype.open = function (method, url) {
+              this.__biliautoUrl = url || '';
+              this.__biliautoMethod = method || '';
+              return rawOpen.apply(this, arguments);
+            };
+            RawXHR.prototype.send = function (body) {
+              var xhr = this;
+              var url = xhr.__biliautoUrl || '';
+              var kind = getKind(url);
+              if (kind) {
+                xhr.addEventListener('loadend', function () {
+                  post(kind, url, xhr.status, xhr.responseText || '', body);
+                });
+              }
+              return rawSend.apply(this, arguments);
+            };
+          }
+        })();
+      `;
+      const script = document.createElement('script');
+      script.id = 'biliauto-reward-page-hook';
+      script.textContent = code;
+      (document.documentElement || document.head || document).appendChild(script);
+      script.remove();
     },
 
     _setupPerformanceObserver() {
@@ -1432,16 +1687,35 @@
       };
     },
 
+    saveMyList(json, url, statusCode) {
+      const data = json && json.data;
+      const list = data && Array.isArray(data.list) ? data.list : [];
+      this.myList = data || {};
+      Util.log(`RewardMonitor mylist captured: count=${list.length} status=${statusCode}`);
+      for (const item of list) {
+        const cdkey = item && item.extra_info && item.extra_info.cdkey_content || '';
+        if (!cdkey) continue;
+        const logMsg = `【领奖记录】award_id=${item.award_id || ''} type=${item.type || ''} cdkey=${cdkey}`;
+        Util.log(logMsg);
+        if (Panel && Panel.updatePageLog) Panel.updatePageLog(logMsg);
+      }
+      if (!list.length && Panel && Panel.updatePageLog) {
+        Panel.updatePageLog('【领奖记录】未找到已领取记录');
+      }
+      return data;
+    },
+
     save(taskId, respJson, url, statusCode) {
       const task = Util.findTaskById(Panel.state.tasks, taskId);
       const taskName = this.getMissionName(taskId) || Util.getTaskName(task);
       const code = respJson ? respJson.code : undefined;
       const message = respJson && (respJson.message || respJson.msg) || '';
+      const cdkey = respJson && respJson.data && respJson.data.extra_info && respJson.data.extra_info.cdkey_content || '';
       let status = '失败';
       let reason = '';
       if (code === 0) {
         status = '成功';
-        reason = '领取成功';
+        reason = cdkey ? `领取成功 CDK=${cdkey}` : '领取成功';
       } else if (code === 202032) {
         reason = '无资格领取奖励';
       } else if (code === 202031) {
@@ -1467,6 +1741,7 @@
         status,
         response_code: code,
         message: reason || message,
+        cdkey,
         timestamp: Util.formatTime(),
         device_name: CONFIG.DEVICE_NAME,
         url,
@@ -1490,6 +1765,7 @@
         status: captured.status,
         response_code: captured.response_code,
         message: captured.message,
+        cdkey: captured.cdkey || '',
         timestamp: captured.timestamp,
         device_name: captured.device_name
       };
@@ -1497,8 +1773,24 @@
 
     get(taskId) {
       return this.cache[taskId];
+    },
+
+    waitForReceive(taskId, timeoutMs = 5000) {
+      const existing = this.get(taskId);
+      if (existing) return Promise.resolve(existing);
+      return new Promise(resolve => {
+        const startedAt = Date.now();
+        const timer = setInterval(() => {
+          const captured = this.get(taskId);
+          if (captured || Date.now() - startedAt >= timeoutMs) {
+            clearInterval(timer);
+            resolve(captured || null);
+          }
+        }, 50);
+      });
     }
   };
+  RewardMonitor.install();
 
   // ========================
   // 执行模块
@@ -1552,7 +1844,10 @@
       Util.info(`开始连点: selector=${selector}, interval=${intervalMs}ms, duration=${durationMs}ms, 结束时间=${Util.formatTime(new Date(endTime))}`);
       logToPanel(`【连点开始】task_id=${taskId} 间隔=${intervalMs}ms 时长=${(durationMs / 1000).toFixed(3)}秒`);
       const btn = Util.getByXPath(selector);
-      const isSuccessText = (el) => el && (el.textContent || '').includes('查看奖励');
+      /*
+       * 原始 DOM 判断方式暂时注释，等 API hook 结果验证稳定后删除。
+       * const isSuccessText = (el) => el && (el.textContent || '').includes('查看奖励');
+       */
       if (btn) Executor.activateButton(btn);
       return new Promise((resolve) => {
         let lastLogTime = 0;
@@ -1560,6 +1855,17 @@
           const now = Date.now();
           const remaining = Math.max(0, endTime - now);
           logToPanel(`【连点倒计时】${(remaining / 1000).toFixed(3)}s`);
+          const captured = RewardMonitor.get(taskId);
+          if (captured) {
+            clearInterval(timer);
+            const summary = `【连点提前结束】已捕获 /mission/receive API 响应 code=${captured.response_code}`;
+            Util.info(summary);
+            logToPanel(summary);
+            resolve({ success_count: successCount, fail_count: failCount, early_exit: true, api_captured: true });
+            return;
+          }
+          /*
+           * 原始 DOM 判断方式暂时注释，当前只以 /mission/receive API 响应为准。
           if (isSuccessText(btn)) {
             clearInterval(timer);
             const summary = `【连点提前结束】按钮文字已变为"查看奖励"，领取成功`;
@@ -1568,6 +1874,7 @@
             resolve({ success_count: successCount, fail_count: failCount, early_exit: true });
             return;
           }
+           */
           if (now >= endTime) {
             clearInterval(timer);
             const summary = `【连点结束】成功 ${successCount} 次, 失败 ${failCount} 次, 总点击 ${successCount + failCount} 次`;
@@ -1598,12 +1905,22 @@
     },
 
     async judgeClaimResult(btn, taskId) {
-      Util.log(`判断领取结果: task_id=${taskId}（DOM 模式）`);
+      Util.log(`判断领取结果: task_id=${taskId}（API hook 模式）`);
       const logToPanel = (msg) => {
         if (Panel && Panel.updatePageLog) {
           Panel.updatePageLog(msg);
         }
       };
+      const captured = await RewardMonitor.waitForReceive(taskId, 5000);
+      if (captured) {
+        const ok = captured.response_code === 0;
+        const resultMsg = `API领取结果: code=${captured.response_code} ${captured.message || ''}`;
+        Util.log(resultMsg);
+        logToPanel(resultMsg);
+        return { ok, response_code: captured.response_code, message: resultMsg };
+      }
+      /*
+       * 原始 DOM 判断方式暂时注释，等 API hook 结果验证稳定后删除。
       const deadline = Date.now() + 5000;
       while (Date.now() < deadline) {
         if (btn && (btn.textContent || '').includes('查看奖励')) {
@@ -1616,6 +1933,11 @@
       }
       const resultMsg = '❌ 超时未检测到"查看奖励"，领取可能失败';
       Util.log(resultMsg);
+      logToPanel(resultMsg);
+      return { ok: false, response_code: -1, message: resultMsg };
+       */
+      const resultMsg = '未捕获到 /mission/receive API 响应，暂不使用 DOM/按钮文字判断';
+      Util.warn(resultMsg);
       logToPanel(resultMsg);
       return { ok: false, response_code: -1, message: resultMsg };
     },
@@ -1639,12 +1961,18 @@
     },
 
     async runSingleTask(taskId, config, selector, results) {
-      const startTime = Util.parseTime(config.start_time || CONFIG.DEFAULT_START_TIME);
+      const startSpec = Util.parseTimeSpec(config.start_time || CONFIG.DEFAULT_START_TIME);
+      const startTime = startSpec.target;
       const intervalMs = Math.max(0, Number(config.interval || CONFIG.DEFAULT_CLICK_INTERVAL_MS / 1000) * 1000);
       const durationMs = Math.max(1, Number(config.duration || CONFIG.DEFAULT_CLICK_DURATION_MS / 1000) * 1000);
       const waitSec = Math.max(0, (startTime.getTime() - Date.now()) / 1000);
-      Util.info(`任务配置: task_id=${taskId} start=${config.start_time} wait=${waitSec.toFixed(3)}s interval=${intervalMs}ms duration=${durationMs}ms`);
-      Panel.updatePageLog(`【任务配置】task_id=${taskId} 开始时间=${config.start_time} 间隔=${intervalMs}ms 时长=${(durationMs / 1000).toFixed(3)}s`);
+      if (startSpec.invalid) {
+        const warnMsg = `任务 ${taskId} 的开始时间 "${config.start_time}" 无法识别，已回退为 ${startSpec.normalized}`;
+        Util.warn(warnMsg);
+        Panel.updatePageLog(`【时间回退】${warnMsg}`);
+      }
+      Util.info(`任务配置: task_id=${taskId} start=${startSpec.normalized} wait=${waitSec.toFixed(3)}s interval=${intervalMs}ms duration=${durationMs}ms`);
+      Panel.updatePageLog(`【任务配置】task_id=${taskId} 开始时间=${startSpec.normalized} 间隔=${intervalMs}ms 时长=${(durationMs / 1000).toFixed(3)}s`);
       await this.waitUntil(startTime);
       Util.info(`开始执行任务: ${taskId}`);
       Panel.updatePageLog(`【任务开始】task_id=${taskId}`);
@@ -1652,9 +1980,23 @@
       const successCount = clickStats.success_count || 0;
       const totalCount = successCount + (clickStats.fail_count || 0);
       let claimResult;
-      if (clickStats.early_exit) {
-        claimResult = { ok: true, response_code: 0, message: '✅ 按钮文字已变为"查看奖励"' };
+      const captured = await RewardMonitor.waitForReceive(taskId, 1500);
+      if (captured) {
+        claimResult = {
+          ok: captured.response_code === 0,
+          response_code: captured.response_code,
+          message: `API领取结果: ${captured.message || ''}`
+        };
       } else {
+        /*
+         * 原始 DOM 判断方式暂时注释，等 API hook 结果验证稳定后删除。
+         * if (clickStats.early_exit) {
+         *   claimResult = { ok: true, response_code: 0, message: '✅ 按钮文字已变为"查看奖励"' };
+         * } else {
+         *   const btn = Util.getByXPath(selector);
+         *   claimResult = await this.judgeClaimResult(btn, taskId);
+         * }
+         */
         const btn = Util.getByXPath(selector);
         claimResult = await this.judgeClaimResult(btn, taskId);
       }
@@ -1669,6 +2011,7 @@
         status: claimResult.ok ? '成功' : '失败',
         response_code: claimResult.response_code,
         message: `${resultText}；${claimResult.message}`,
+        cdkey: captured && captured.cdkey || '',
         timestamp: Util.formatTime(),
         device_name: CONFIG.DEVICE_NAME
       };
