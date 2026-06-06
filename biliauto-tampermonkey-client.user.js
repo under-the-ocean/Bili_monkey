@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BiliAutoClicker - 油猴客户端
 // @namespace    https://github.com/under-the-ocean
-// @version      0.8.3
+// @version      0.8.4
 // @match        https://www.bilibili.com/blackboard/era/award-exchange.html?*
 // @connect      bili.982835785.xyz
 // @grant        GM_xmlhttpRequest
@@ -35,7 +35,7 @@
     DEFAULT_START_TIME: '00:29:57',
     MAX_RELOAD_ATTEMPTS: 3,
 
-    VERSION: '0.8.3',
+    VERSION: '0.8.4',
     RETRY_COUNT: 2,
     DEBUG: true
   };
@@ -1775,6 +1775,11 @@
       return this.cache[taskId];
     },
 
+    clear(taskId) {
+      if (!taskId) return;
+      delete this.cache[taskId];
+    },
+
     waitForReceive(taskId, timeoutMs = 5000) {
       const existing = this.get(taskId);
       if (existing) return Promise.resolve(existing);
@@ -1856,13 +1861,11 @@
           const remaining = Math.max(0, endTime - now);
           logToPanel(`【连点倒计时】${(remaining / 1000).toFixed(3)}s`);
           const captured = RewardMonitor.get(taskId);
-          if (captured) {
-            clearInterval(timer);
+          if (captured && captured._continuedClickLogged !== true) {
+            captured._continuedClickLogged = true;
             const summary = `【连点提前结束】已捕获 /mission/receive API 响应 code=${captured.response_code}`;
             Util.info(summary);
             logToPanel(summary);
-            resolve({ success_count: successCount, fail_count: failCount, early_exit: true, api_captured: true });
-            return;
           }
           /*
            * 原始 DOM 判断方式暂时注释，当前只以 /mission/receive API 响应为准。
@@ -1974,6 +1977,7 @@
       Util.info(`任务配置: task_id=${taskId} start=${startSpec.normalized} wait=${waitSec.toFixed(3)}s interval=${intervalMs}ms duration=${durationMs}ms`);
       Panel.updatePageLog(`【任务配置】task_id=${taskId} 开始时间=${startSpec.normalized} 间隔=${intervalMs}ms 时长=${(durationMs / 1000).toFixed(3)}s`);
       await this.waitUntil(startTime);
+      RewardMonitor.clear(taskId);
       Util.info(`开始执行任务: ${taskId}`);
       Panel.updatePageLog(`【任务开始】task_id=${taskId}`);
       const clickStats = await this.performContinuousClick(selector, intervalMs, durationMs);
