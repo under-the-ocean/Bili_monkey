@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BiliAutoClicker - 油猴客户端
 // @namespace    https://github.com/under-the-ocean
-// @version      0.8.4
+// @version      0.8.5
 // @match        https://www.bilibili.com/blackboard/era/award-exchange.html?*
 // @connect      bili.982835785.xyz
 // @grant        GM_xmlhttpRequest
@@ -35,7 +35,7 @@
     DEFAULT_START_TIME: '00:29:57',
     MAX_RELOAD_ATTEMPTS: 3,
 
-    VERSION: '0.8.4',
+    VERSION: '0.8.5',
     RETRY_COUNT: 2,
     DEBUG: true
   };
@@ -1310,6 +1310,7 @@
     RECEIVE_API_PATH: '/x/activity_components/mission/receive',
     INFO_API_PATH: '/x/activity_components/mission/info',
     cache: {},
+    responseCache: {},
     missionInfo: {},
     installed: false,
 
@@ -1747,7 +1748,16 @@
         url,
         status_code: statusCode
       };
-      this.cache[taskId] = logEntry;
+      const responses = this.responseCache[taskId] || [];
+      responses.push(logEntry);
+      this.responseCache[taskId] = responses;
+
+      const previous = this.cache[taskId];
+      if (!previous || code === 0 || previous.response_code !== 0) {
+        this.cache[taskId] = { ...logEntry, responses };
+      } else {
+        previous.responses = responses;
+      }
       const logMsg = `【API响应】task_id=${taskId} code=${code} status=${status} msg=${reason || message}`;
       Util.log(logMsg);
       Util.log('原始响应:', respJson);
@@ -1778,6 +1788,7 @@
     clear(taskId) {
       if (!taskId) return;
       delete this.cache[taskId];
+      delete this.responseCache[taskId];
     },
 
     waitForReceive(taskId, timeoutMs = 5000) {
