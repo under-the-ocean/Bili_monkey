@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BiliAutoClicker - 油猴客户端
 // @namespace    https://github.com/under-the-ocean
-// @version      0.8.5
+// @version      0.8.7
 // @match        https://www.bilibili.com/blackboard/era/award-exchange.html?*
 // @connect      bili.982835785.xyz
 // @grant        GM_xmlhttpRequest
@@ -21,21 +21,52 @@
 (function () {
   'use strict';
 
+  function detectBrowserInfo() {
+    const ua = navigator.userAgent || '';
+    const uaData = navigator.userAgentData;
+    let browserType = 'Browser';
+    let browserName = 'Unknown';
+
+    if (uaData && Array.isArray(uaData.brands)) {
+      const brands = uaData.brands.map(b => b.brand).filter(Boolean);
+      const brandText = brands.join(' / ');
+      if (/Edge/i.test(brandText)) browserName = 'Microsoft Edge';
+      else if (/Chrome/i.test(brandText)) browserName = 'Google Chrome';
+      else if (/Chromium/i.test(brandText)) browserName = 'Chromium';
+      else if (brands.length) browserName = brands[brands.length - 1];
+    }
+    if (browserName === 'Unknown') {
+      if (/Edg\//.test(ua)) browserName = 'Microsoft Edge';
+      else if (/OPR\//.test(ua)) browserName = 'Opera';
+      else if (/Firefox\//.test(ua)) browserName = 'Firefox';
+      else if (/Chrome\//.test(ua) && !/Chromium\//.test(ua)) browserName = 'Google Chrome';
+      else if (/Chromium\//.test(ua)) browserName = 'Chromium';
+      else if (/Safari\//.test(ua)) browserName = 'Safari';
+    }
+
+    if (/Firefox\//.test(ua)) browserType = 'Firefox';
+    else if (/Edg\//.test(ua) || /Chrome\//.test(ua) || /Chromium\//.test(ua) || (uaData && uaData.brands)) browserType = 'Chromium';
+    else if (/Safari\//.test(ua)) browserType = 'WebKit';
+
+    return { type: browserType, name: browserName, label: browserType + ' - ' + browserName };
+  }
+
   const CONFIG = {
     API_BASE: GM_getValue('api_base', 'https://bili.982835785.xyz'),
 
     API_KEY: GM_getValue('api_key', ''),
     QQ_ID: GM_getValue('qq_id', ''),
+    ACCOUNT_NAME: GM_getValue('account_name', ''),
 
     DEVICE_ID: GM_getValue('qq_id') || GM_getValue('device_id', 'tm-' + crypto.randomUUID()),
-    DEVICE_NAME: GM_getValue('device_name', navigator.platform || 'Unknown'),
+    DEVICE_NAME: GM_getValue('device_name', detectBrowserInfo().label),
 
     DEFAULT_CLICK_INTERVAL_MS: 50,
     DEFAULT_CLICK_DURATION_MS: 10000,
     DEFAULT_START_TIME: '00:29:57',
     MAX_RELOAD_ATTEMPTS: 3,
 
-    VERSION: '0.8.5',
+    VERSION: '0.8.7',
     RETRY_COUNT: 2,
     DEBUG: true
   };
@@ -91,22 +122,55 @@
     },
 
     normalizeStartTimeInput(timeStr) {
-      const value = String(timeStr || '').trim();
+      let value = String(timeStr || '').trim();
       if (!value) return '';
+      value = value
+        .replace(/：/g, ':')
+        .replace(/，/g, ',')
+        .replace(/\s+/g, '')
+        .replace(/^今天/, '')
+        .replace(/^今晚/, '');
+
+      if (/^(现在|立即|马上|now)$/i.test(value)) return '+0';
+
+      const rel = value.match(/^\+?(?:(\d+(?:\.\d+)?)(?:小时|小時|h))?(?:(\d+(?:\.\d+)?)(?:分钟|分鐘|分|m))?(?:(\d+(?:\.\d+)?)(?:秒|s))?(?:后|後)$/i);
+      if (rel && (rel[1] || rel[2] || rel[3])) {
+        const seconds = (Number(rel[1] || 0) * 3600) + (Number(rel[2] || 0) * 60) + Number(rel[3] || 0);
+        return `+${seconds}`;
+      }
+
       if (value.startsWith('+')) {
-        const seconds = Number(value.slice(1));
-        return Number.isFinite(seconds) ? `+${seconds}` : value;
+        const tail = value.slice(1);
+        if (/^\d+(\.\d+)?$/.test(tail)) return `+${Number(tail)}`;
+        const m = tail.match(/^(?:(\d+(?:\.\d+)?)(?:小时|小時|h))?(?:(\d+(?:\.\d+)?)(?:分钟|分鐘|分|m))?(?:(\d+(?:\.\d+)?)(?:秒|s))?$/i);
+        if (m && (m[1] || m[2] || m[3])) {
+          const seconds = (Number(m[1] || 0) * 3600) + (Number(m[2] || 0) * 60) + Number(m[3] || 0);
+          return `+${seconds}`;
+        }
       }
-      if (/^\d+(\.\d+)?$/.test(value)) {
-        return String(Number(value));
+
+      if (/^\d+(\.\d+)?$/.test(value)) return String(Number(value));
+
+      let tomorrow = false;
+      if (value.startsWith('明天')) {
+        tomorrow = true;
+        value = value.slice(2);
       }
+
+      value = value.replace(/半/g, '30分');
+      const zh = value.match(/^(\d{1,2})[点时時](?:(\d{1,2})分?)?(?:(\d{1,2})秒?)?$/);
+      if (zh) {
+        const pad = n => String(Math.max(0, Math.floor(Number(n || 0)))).padStart(2, '0');
+        return `${tomorrow ? '明天 ' : ''}${pad(zh[1])}:${pad(zh[2] || 0)}:${pad(zh[3] || 0)}`;
+      }
+
       const parts = value.split(':').map(part => part.trim()).filter(Boolean);
       if (parts.length === 2 || parts.length === 3) {
         const nums = parts.map(Number);
         if (nums.every(Number.isFinite)) {
           const [hh, mm, ss = 0] = nums;
           const pad = n => String(Math.max(0, Math.floor(n))).padStart(2, '0');
-          return `${pad(hh)}:${pad(mm)}:${pad(ss)}`;
+          return `${tomorrow ? '明天 ' : ''}${pad(hh)}:${pad(mm)}:${pad(ss)}`;
         }
       }
       return value;
@@ -127,14 +191,20 @@
         const target = new Date(now.getTime() + Number(value) * 1000);
         return { raw, normalized: value, target, delayMs: Math.max(0, target.getTime() - now.getTime()), mode: 'relative' };
       }
-      const parts = value.split(':').map(Number);
+      let clockValue = value;
+      let forceTomorrow = false;
+      if (clockValue.startsWith('明天 ')) {
+        forceTomorrow = true;
+        clockValue = clockValue.slice(3).trim();
+      }
+      const parts = clockValue.split(':').map(Number);
       if (parts.length === 2 || parts.length === 3) {
         const [hours, minutes, seconds = 0] = parts;
         if ([hours, minutes, seconds].every(Number.isFinite)) {
           const target = new Date(now);
           target.setHours(hours, minutes, seconds, 0);
-          if (target.getTime() <= now.getTime()) target.setDate(target.getDate() + 1);
-          return { raw, normalized: value, target, delayMs: Math.max(0, target.getTime() - now.getTime()), mode: 'clock' };
+          if (forceTomorrow || target.getTime() <= now.getTime()) target.setDate(target.getDate() + 1);
+          return { raw, normalized: value, target, delayMs: Math.max(0, target.getTime() - now.getTime()), mode: forceTomorrow ? 'tomorrow-clock' : 'clock' };
         }
       }
       const fallback = Util.parseTimeSpec(CONFIG.DEFAULT_START_TIME, now);
@@ -611,6 +681,7 @@
         .replace(/\$\{VERSION\}/g, CONFIG.VERSION)
         .replace(/\$\{DEVICE_ID_SHORT\}/g, CONFIG.DEVICE_ID.slice(0, 8))
         .replace(/\$\{CONFIG\.QQ_ID\}/g, CONFIG.QQ_ID || '')
+        .replace(/\$\{CONFIG\.ACCOUNT_NAME\}/g, CONFIG.ACCOUNT_NAME || CONFIG.QQ_ID || '')
         .replace(/\$\{this\.escape\(([^)]+)\)\}/g, (match, expr) => {
           try { const val = eval(expr); return this.escape(String(val ?? '')); } catch(e) { return ''; }
         })
@@ -672,6 +743,17 @@
         else if (action === 'runCurrent') this.runCurrent();
       });
 
+      panel.addEventListener('input', (e) => {
+        const target = e.target.closest('[data-field]');
+        if (!target) return;
+        const box = target.closest('[data-ba="currentTaskConfig"]');
+        if (!box) return;
+        const currentTask = Util.extractTaskIdFromPage() || 'unknown_task';
+        const field = target.getAttribute('data-field');
+        this.updateTaskConfig(currentTask, field, target.value, { silent: true, noRender: true });
+        target.dataset.currentConfigLiveBound = '1';
+      });
+
       panel.addEventListener('change', (e) => {
         const fieldTarget = e.target.closest('[data-field]');
         if (fieldTarget) {
@@ -726,11 +808,42 @@
       this.render();
     },
 
+    syncCurrentTaskConfigFromInputs(options = {}) {
+      const currentTask = Util.extractTaskIdFromPage() || 'unknown_task';
+      const currentConfigEl = document.querySelector('#biliauto-panel [data-ba="currentTaskConfig"]');
+      if (!currentConfigEl || !currentTask || currentTask === 'unknown_task') return this.state.taskConfigs[currentTask] || Util.defaultTaskConfig(currentTask);
+      const current = this.state.taskConfigs[currentTask] || Util.defaultTaskConfig(currentTask);
+      const startInput = currentConfigEl.querySelector('[data-field="start_time"]');
+      const intervalInput = currentConfigEl.querySelector('[data-field="interval"]');
+      const durationInput = currentConfigEl.querySelector('[data-field="duration"]');
+      const next = { ...current };
+      if (startInput) {
+        next.start_time = Util.normalizeStartTimeInput(startInput.value) || CONFIG.DEFAULT_START_TIME;
+        startInput.value = next.start_time;
+      }
+      if (intervalInput) {
+        const val = Number(intervalInput.value);
+        next.interval = Number.isFinite(val) && val >= 0 ? val : CONFIG.DEFAULT_CLICK_INTERVAL_MS / 1000;
+        intervalInput.value = String(next.interval);
+      }
+      if (durationInput) {
+        const val = Number(durationInput.value);
+        next.duration = Number.isFinite(val) && val > 0 ? val : CONFIG.DEFAULT_CLICK_DURATION_MS / 1000;
+        durationInput.value = String(next.duration);
+      }
+      this.state.taskConfigs[currentTask] = next;
+      this.saveTaskConfigs();
+      if (options.log !== false) {
+        this.setStatus(`已同步当前任务配置：开始 ${next.start_time}，间隔 ${next.interval}s，持续 ${next.duration}s`);
+      }
+      return next;
+    },
+
     saveTaskConfigs() {
       GM_setValue('task_configs', this.state.taskConfigs);
     },
 
-    updateTaskConfig(taskId, field, value) {
+    updateTaskConfig(taskId, field, value, options = {}) {
       if (!taskId) return;
       const current = this.state.taskConfigs[taskId] || Util.defaultTaskConfig(taskId);
       let nextValue = field === 'selected' ? Boolean(value) : value;
@@ -738,7 +851,8 @@
       this.state.taskConfigs[taskId] = { ...current, [field]: nextValue };
       this.saveTaskConfigs();
       // 关键配置变更后立即回显规范化结果
-      if (field === 'selected' || field === 'start_time') {
+      if (!options.silent) this.setStatus(`配置已保存：${field} = ${nextValue}`);
+      if (!options.noRender && (field === 'selected' || field === 'start_time')) {
         this.renderList();
         this.render();
       }
@@ -854,9 +968,11 @@
     logout() {
       if (!confirm('确认退出登录？')) return;
       GM_setValue('qq_id', '');
+      GM_setValue('account_name', '');
       GM_setValue('api_key', '');
       GM_setValue('device_id', '');
       CONFIG.QQ_ID = '';
+      CONFIG.ACCOUNT_NAME = '';
       CONFIG.API_KEY = '';
       this.state.loginStatus = '';
       this.setStatus('已退出登录');
@@ -963,9 +1079,13 @@
       Executor.activateButton(btn);
       btn.scrollIntoView({ behavior: 'smooth', block: 'center' });
       await Util.sleep(300);
+      const beforeText = Util.text(btn);
       btn.click();
-      this.setStatus('测试点击已执行');
-      Util.info('测试点击: 已点击领取按钮');
+      const afterText = Util.text(btn);
+      const msg = `测试点击已执行：仅测试按钮响应，不保存/覆盖任务配置。按钮文本：${beforeText || '空'} -> ${afterText || '空'}`;
+      this.setStatus(msg);
+      this.updatePageLog(`【测试点击】${msg}`);
+      Util.info('测试点击:', msg);
     },
 
     async runCurrent() {
@@ -978,7 +1098,7 @@
         return;
       }
       const taskId = Util.extractTaskIdFromPage() || 'unknown_task';
-      const cfg = this.state.taskConfigs[taskId] || Util.defaultTaskConfig(taskId);
+      const cfg = this.syncCurrentTaskConfigFromInputs({ log: true }) || this.state.taskConfigs[taskId] || Util.defaultTaskConfig(taskId);
       this.state.running = true;
       this.setStatus(`准备执行任务: ${taskId}`);
       Util.info(`面板: 执行当前页面任务: ${taskId}`);
@@ -1074,8 +1194,9 @@
           if (data.status === 'verified') {
             const qqId = data.qq_id || '';
             const apiKey = data.api_key || '';
+            const accountName = data.account_name || data.display_name || data.nickname || data.username || qqId;
             if (qqId && apiKey) {
-              await this.saveLoginData(qqId, apiKey);
+              await this.saveLoginData(qqId, apiKey, accountName);
             }
             if (statusEl) {
               statusEl.textContent = '✅ 登录成功！';
@@ -1109,18 +1230,20 @@
       }
     },
 
-    async saveLoginData(qqId, apiKey) {
+    async saveLoginData(qqId, apiKey, accountName) {
       CONFIG.QQ_ID = qqId;
       CONFIG.API_KEY = apiKey;
+      CONFIG.ACCOUNT_NAME = accountName || qqId;
       CONFIG.DEVICE_ID = qqId;
       GM_setValue('qq_id', qqId);
       GM_setValue('api_key', apiKey);
+      GM_setValue('account_name', CONFIG.ACCOUNT_NAME);
       GM_setValue('device_id', qqId);
       this.state.loginStatus = 'logged_in';
       this.hideLoginOverlay();
       const badge = document.querySelector('#biliauto-panel [data-ba="loginStatusBadge"]');
       if (badge) {
-        badge.textContent = '✅ ' + qqId;
+        badge.textContent = '✅ ' + (CONFIG.ACCOUNT_NAME || qqId);
         badge.style.display = '';
       }
       this.setStatus('✅ 已登录');
@@ -1159,7 +1282,8 @@
       const selected = this.state.tasks.filter(task => {
         const taskId = task.task_value;
         if (onlyTaskIds) return onlyTaskIds.includes(taskId);
-        return true;
+        const cfg = this.state.taskConfigs[taskId] || Util.defaultTaskConfig(taskId);
+        return !!cfg.selected;
       });
       if (!selected.length) {
         this.setStatus('没有可执行的任务');
@@ -1179,8 +1303,9 @@
         setTimeout(() => window.open(url, '_blank'), i * 2000);
       }
       if (current) {
+        const currentCfg = this.syncCurrentTaskConfigFromInputs({ log: true }) || this.state.taskConfigs[current.task_value] || Util.defaultTaskConfig(current.task_value);
         Util.log(`面板: 执行当前页面任务: ${current.task_value}`);
-        await runCurrentPageTask(this.state.baseConfig, current.task_value, this.state.taskConfigs[current.task_value]);
+        await runCurrentPageTask(this.state.baseConfig, current.task_value, currentCfg);
       }
       this.state.running = false;
       Util.info('面板: 全部执行触发完成');
@@ -1986,11 +2111,11 @@
         Panel.updatePageLog(`【时间回退】${warnMsg}`);
       }
       Util.info(`任务配置: task_id=${taskId} start=${startSpec.normalized} wait=${waitSec.toFixed(3)}s interval=${intervalMs}ms duration=${durationMs}ms`);
-      Panel.updatePageLog(`【任务配置】task_id=${taskId} 开始时间=${startSpec.normalized} 间隔=${intervalMs}ms 时长=${(durationMs / 1000).toFixed(3)}s`);
+      Panel.updatePageLog(`【任务配置】task_id=${taskId} 开始时间=${startSpec.normalized} 等待=${waitSec.toFixed(3)}s 间隔=${intervalMs}ms 时长=${(durationMs / 1000).toFixed(3)}s`);
       await this.waitUntil(startTime);
       RewardMonitor.clear(taskId);
       Util.info(`开始执行任务: ${taskId}`);
-      Panel.updatePageLog(`【任务开始】task_id=${taskId}`);
+      Panel.updatePageLog(`【任务开始】task_id=${taskId} 计划时间=${startSpec.normalized} 实际时间=${Util.formatTime()}`);
       const clickStats = await this.performContinuousClick(selector, intervalMs, durationMs);
       const successCount = clickStats.success_count || 0;
       const totalCount = successCount + (clickStats.fail_count || 0);
@@ -2018,7 +2143,7 @@
       const elapsedTime = clickStats.early_exit ? ((totalCount * intervalMs) / 1000).toFixed(3) : (durationMs / 1000).toFixed(3);
       const resultText = `${elapsedTime}秒点击结束，共点击 ${totalCount} 次，成功 ${successCount} 次，成功率 ${totalCount ? (successCount / totalCount * 100).toFixed(1) : '0.0'}%`;
       Util.info(`任务结果 [${taskId}]: ${resultText} | ${claimResult.ok ? '✅ 成功' : '❌ 失败'} — ${claimResult.message}`);
-      Panel.updatePageLog(`【任务结果】task_id=${taskId} ${claimResult.ok ? '成功' : '失败'} ${resultText}`);
+      Panel.updatePageLog(`【任务结果】task_id=${taskId} ${claimResult.ok ? '成功' : '失败'} ${resultText}；${claimResult.message}`);
       const task = Util.findTaskById(Panel.state.tasks, taskId);
       results[taskId] = {
         task_id: taskId,

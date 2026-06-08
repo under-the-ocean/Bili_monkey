@@ -937,11 +937,11 @@
   display: block;
   font-size: 10px;
   color: var(--tm-text-hint);
-  margin: 0 0 5px 2px;
+  margin: 0 0 2px 2px;
 }
 .tm-cyber-config-field .tm-cyber-input {
   text-align: center;
-  padding: 8px 9px;
+  padding: 7px 9px;
   font-size: 12px;
 }
 .tm-cyber-card {
@@ -1083,6 +1083,19 @@
   .tm-cyber-item { grid-template-columns: 1fr; }
   .tm-cyber-item-actions { justify-content: flex-start; padding-left: 8px; }
 }
+
+.tm-cyber-update-tip {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(95, 212, 255, .28);
+  background: rgba(95, 212, 255, .08);
+  border-radius: 12px;
+  color: rgba(234, 246, 255, .86);
+  font-size: 12px;
+  line-height: 1.55;
+}
+.tm-cyber-update-tip b { color: #8ee8ff; }
+
 </style>
 
 <!-- ========== Main Panel Skeleton ========== -->
@@ -1090,7 +1103,7 @@
   <span class="tm-cyber-header-title">
     <span class="tm-cyber-brand">BiliAuto</span>
     <span class="tm-cyber-header-badge">v${CONFIG.VERSION}</span>
-    <span class="tm-cyber-status-badge" data-ba="loginStatusBadge" style="display:${CONFIG.QQ_ID?'':'none'}">✅ ${CONFIG.QQ_ID}</span>
+    <span class="tm-cyber-status-badge" data-ba="loginStatusBadge" style="display:${CONFIG.QQ_ID?'':'none'}">✅ ${CONFIG.ACCOUNT_NAME}</span>
   </span>
   <span class="tm-cyber-header-actions">
     <button class="tm-cyber-icon-btn" data-ba="logout" title="退出登录" style="display:${CONFIG.QQ_ID?'':'none'}">🚪</button>
@@ -1111,13 +1124,17 @@
       </div>
       <div class="tm-cyber-radar"></div>
     </div>
+
+    <div class="tm-cyber-update-tip">
+      <b>更新提示：</b>若脚本异常、时间不生效、自然语言时间不识别或面板不显示，请在油猴扩展中打开本脚本并执行“检查更新”；若曾手动改过脚本，需要重新安装最新脚本。
+    </div>
     <div class="tm-cyber-hero-actions">
       <button class="tm-cyber-btn tm-cyber-btn-primary tm-cyber-btn-hero" data-ba="runCurrent">执行当前</button>
       <button class="tm-cyber-btn tm-cyber-btn-hero" data-ba="runAll">执行选中</button>
       <button class="tm-cyber-btn tm-cyber-btn-hero tm-cyber-btn-accent" data-ba="testClick">测试点击</button>
     </div>
     <div class="tm-cyber-config-grid" data-ba="currentTaskConfig">
-      <label class="tm-cyber-config-field"><span>开始时间</span><input class="tm-cyber-input" data-field="start_time" placeholder="HH:MM:SS / +秒数 / 秒数" title="开始时间，支持 HH:MM:SS、+秒数 或 纯秒数"></label>
+      <label class="tm-cyber-config-field"><span>开始时间</span><input class="tm-cyber-input" data-field="start_time" type="time" step="1" placeholder="20:00:00" title="可点开时间控件选择；也可手动输入 20点、20点半、20:00、30秒后、1分30秒后、+30、立即"></label>
       <label class="tm-cyber-config-field"><span>点击间隔</span><input class="tm-cyber-input" data-field="interval" placeholder="秒" title="点击间隔(秒)"></label>
       <label class="tm-cyber-config-field"><span>持续时长</span><input class="tm-cyber-input" data-field="duration" placeholder="秒" title="持续时长(秒)"></label>
     </div>
