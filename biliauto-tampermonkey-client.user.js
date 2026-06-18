@@ -903,10 +903,10 @@
         next.duration = Number.isFinite(val) && val > 0 ? val : CONFIG.DEFAULT_CLICK_DURATION_MS / 1000;
         durationInput.value = String(next.duration);
       }
-      const clickModeInput = currentConfigEl.querySelector('[data-field="click_mode"]');
-      if (clickModeInput) {
-        next.click_mode = clickModeInput.value === 'direct' ? 'direct' : 'dom';
-        clickModeInput.value = next.click_mode;
+      const checkedModeInput = currentConfigEl.querySelector('[data-field="click_mode"]:checked') || currentConfigEl.querySelector('[data-field="click_mode"]');
+      if (checkedModeInput) {
+        next.click_mode = checkedModeInput.value === 'direct' ? 'direct' : 'dom';
+        this.syncModeSwitch(currentConfigEl, next.click_mode);
       }
       this.state.taskConfigs[currentTask] = next;
       this.saveTaskConfigs();
@@ -918,6 +918,19 @@
 
     saveTaskConfigs() {
       GM_setValue('task_configs', this.state.taskConfigs);
+    },
+
+    syncModeSwitch(container, mode) {
+      if (!container) return;
+      const normalizedMode = mode === 'direct' ? 'direct' : 'dom';
+      const modeOptions = container.querySelectorAll('.tm-cyber-mode-option');
+      modeOptions.forEach((option) => {
+        option.classList.toggle('is-active', option.getAttribute('data-mode') === normalizedMode);
+      });
+      const modeInputs = container.querySelectorAll('[data-field="click_mode"]');
+      modeInputs.forEach((input) => {
+        input.checked = input.value === normalizedMode;
+      });
     },
 
     updateTaskConfig(taskId, field, value, options = {}) {
@@ -1450,8 +1463,7 @@ updatePageLog(text) {
         if (startTimeInput) startTimeInput.value = cfg.start_time || CONFIG.DEFAULT_START_TIME;
         if (intervalInput) intervalInput.value = cfg.interval || CONFIG.DEFAULT_CLICK_INTERVAL_MS / 1000;
         if (durationInput) durationInput.value = cfg.duration || CONFIG.DEFAULT_CLICK_DURATION_MS / 1000;
-        const clickModeInput = currentConfigEl.querySelector('[data-field="click_mode"]');
-        if (clickModeInput) clickModeInput.value = cfg.click_mode || CONFIG.DEFAULT_CLICK_MODE;
+        this.syncModeSwitch(currentConfigEl, cfg.click_mode || CONFIG.DEFAULT_CLICK_MODE);
       }
 
       const countEl = panel.querySelector('[data-ba="taskCount"]');

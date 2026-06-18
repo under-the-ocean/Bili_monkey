@@ -40,17 +40,26 @@
 .tm-cyber-check input[type=checkbox]:checked::after{content:'';display:block;width:4px;height:7px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg);margin-top:-1px}
 .tm-cyber-card{border:1px solid var(--tm-divider);border-radius:var(--tm-radius-btn);padding:10px 12px;margin-bottom:8px;background:rgba(255,255,255,0.025);animation:tm-rise-in .35s ease both}
 .tm-cyber-card-title{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:11px;color:var(--tm-text-secondary);font-weight:600;margin-bottom:8px}
-.tm-cyber-hero{border:1px solid var(--tm-divider);border-radius:var(--tm-radius-btn);padding:12px;margin-bottom:8px;background:rgba(255,255,255,0.025);animation:tm-rise-in .35s ease both}
-.tm-cyber-hero-main{display:flex;justify-content:space-between;gap:8px;margin-bottom:10px}
-.tm-cyber-kicker{font-size:9px;color:var(--tm-primary-light);letter-spacing:.12em;text-transform:uppercase;margin-bottom:4px}
-.tm-cyber-hero-title{font-size:15px;font-weight:700;color:var(--tm-text);margin-bottom:2px}
-.tm-cyber-hero-subtitle{font-size:11px;color:var(--tm-text-secondary)}
-.tm-cyber-hero-actions{display:flex;gap:8px;margin-bottom:10px}
-.tm-cyber-btn-hero{height:32px;border-radius:8px;flex:1;font-weight:600}
-.tm-cyber-config-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
-.tm-cyber-config-field{display:block}
-.tm-cyber-config-field span{display:block;font-size:9px;color:var(--tm-text-hint);margin:0 0 2px 2px}
-.tm-cyber-config-field .tm-cyber-input{text-align:center;padding:6px 8px;font-size:11px}
+.tm-cyber-hero{border:1px solid var(--tm-divider);border-radius:16px;padding:14px;margin-bottom:10px;background:linear-gradient(180deg,rgba(255,255,255,0.035),rgba(255,255,255,0.018));animation:tm-rise-in .35s ease both}
+.tm-cyber-hero-shell{display:flex;flex-direction:column;gap:12px}
+.tm-cyber-hero-main{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.tm-cyber-hero-copy{min-width:0;flex:1}
+.tm-cyber-kicker{font-size:10px;color:var(--tm-primary-light);letter-spacing:.16em;text-transform:uppercase;margin-bottom:6px;font-weight:700}
+.tm-cyber-hero-title{font-size:17px;font-weight:800;color:var(--tm-text);margin-bottom:4px;line-height:1.15}
+.tm-cyber-hero-subtitle{font-size:11px;color:var(--tm-text-secondary);line-height:1.55;max-width:30ch}
+.tm-cyber-hero-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.tm-cyber-btn-hero{height:40px;border-radius:12px;flex:1;font-weight:700;font-size:13px}
+.tm-cyber-control-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.tm-cyber-config-field{display:flex;flex-direction:column;gap:6px;min-width:0}
+.tm-cyber-config-field span{display:block;font-size:10px;color:var(--tm-text-hint);margin:0 0 0 2px;font-weight:600;letter-spacing:.02em}
+.tm-cyber-config-field .tm-cyber-input{text-align:center;padding:10px 12px;font-size:12px;font-weight:600;min-height:42px}
+.tm-cyber-mode-field{gap:8px}
+.tm-cyber-mode-switch{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.tm-cyber-mode-option{display:flex;align-items:center;justify-content:center;text-align:center;min-height:42px;padding:0 10px;border:1px solid var(--tm-divider);border-radius:12px;background:var(--tm-input-bg);color:var(--tm-text-secondary);font-size:12px;font-weight:700;cursor:pointer;transition:border-color .15s,background .15s,color .15s,box-shadow .15s}
+.tm-cyber-mode-option:hover{border-color:rgba(6,182,212,0.3);color:var(--tm-text)}
+.tm-cyber-mode-option.is-active{border-color:rgba(6,182,212,0.55);background:rgba(6,182,212,0.14);color:#e6fbff;box-shadow:inset 0 0 0 1px rgba(6,182,212,0.2)}
+.tm-cyber-mode-option[data-mode="direct"].is-active{border-color:rgba(239,68,68,0.4);background:rgba(239,68,68,0.12);color:#ffe8e8;box-shadow:inset 0 0 0 1px rgba(239,68,68,0.16)}
+.tm-cyber-mode-native{position:absolute;opacity:0;pointer-events:none;width:1px;height:1px}
 .tm-cyber-task-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
 .tm-cyber-task-head-left{display:flex;align-items:center;gap:8px}
 .tm-cyber-filter{width:120px}
@@ -100,7 +109,7 @@
 .tm-cyber-log-status{display:flex;justify-content:space-between;padding-top:8px;margin-top:8px;border-top:1px solid #e4e4e7;font-size:11px;color:#71717a}
 .tm-cyber-log-task-count{color:#3f3f46;font-weight:600}
 @keyframes tm-rise-in{0%{opacity:0;transform:translateY(8px)}100%{opacity:1;transform:translateY(0)}}
-@media(max-width:600px){#biliauto-panel{width:calc(100vw - 24px);left:12px!important;right:12px!important}.tm-cyber-config-grid{grid-template-columns:1fr}.tm-cyber-task-head{flex-direction:column;align-items:stretch}.tm-cyber-filter{width:100%}.tm-cyber-hero-actions{flex-direction:column}.cyber-login-code-char{width:32px;height:40px;font-size:16px}}</style>
+@media(max-width:600px){#biliauto-panel{width:calc(100vw - 24px);left:12px!important;right:12px!important}.tm-cyber-control-grid{grid-template-columns:1fr}.tm-cyber-task-head{flex-direction:column;align-items:stretch}.tm-cyber-filter{width:100%}.tm-cyber-hero-actions{grid-template-columns:1fr}.tm-cyber-mode-switch{grid-template-columns:1fr}.cyber-login-code-char{width:32px;height:40px;font-size:16px}}</style>
 
 <!-- ========== Main Panel Skeleton ========== -->
 <div class="tm-cyber-header">
@@ -120,21 +129,46 @@
 <div class="tm-cyber-body">
 
   <section class="tm-cyber-hero">
-    <div class="tm-cyber-hero-main">
-      <div>
-        <div class="tm-cyber-kicker">MISSION CONTROL</div>
-        <div class="tm-cyber-hero-title">任务执行中枢</div>
-        <div class="tm-cyber-hero-subtitle">执行功能统一上移，列表中的 TaskID 仅用于快速跳转。</div>
-      </div></div><div class="tm-cyber-hero-actions">
-      <button class="tm-cyber-btn tm-cyber-btn-primary tm-cyber-btn-hero" data-ba="runCurrent">执行当前</button>
-      <button class="tm-cyber-btn tm-cyber-btn-hero" data-ba="runAll">执行选中</button>
-      <button class="tm-cyber-btn tm-cyber-btn-hero tm-cyber-btn-accent" data-ba="testClick">测试点击</button>
-    </div>
-    <div class="tm-cyber-config-grid" data-ba="currentTaskConfig">
-      <label class="tm-cyber-config-field"><span>开始时间</span><input class="tm-cyber-input" data-field="start_time" type="time" step="1" placeholder="20:00:00" title="可点开时间控件选择；也可手动输入 20点、20点半、20:00、30秒后、1分30秒后、+30、立即"></label>
-      <label class="tm-cyber-config-field"><span>点击间隔</span><input class="tm-cyber-input" data-field="interval" placeholder="秒" title="点击间隔(秒)"></label>
-      <label class="tm-cyber-config-field"><span>持续时长</span><input class="tm-cyber-input" data-field="duration" placeholder="秒" title="持续时长(秒)"></label>
-      <label class="tm-cyber-config-field"><span>点击模式</span><select class="tm-cyber-input" data-field="click_mode" title="DOM点击：低风险，受B站1秒限制 | 直接API：绕开限制高速请求"><option value="dom">DOM点击 (低风险)</option><option value="direct">直接API (高速)</option></select></label>
+    <div class="tm-cyber-hero-shell" data-ba="currentTaskConfig">
+      <div class="tm-cyber-hero-main">
+        <div class="tm-cyber-hero-copy">
+          <div class="tm-cyber-kicker">MISSION CONTROL</div>
+          <div class="tm-cyber-hero-title">任务执行中枢</div>
+          <div class="tm-cyber-hero-subtitle">把操作、频率和模式收束到一个紧凑控制区，减少空白和视觉打架。</div>
+        </div>
+      </div>
+      <div class="tm-cyber-hero-actions">
+        <button class="tm-cyber-btn tm-cyber-btn-primary tm-cyber-btn-hero" data-ba="runCurrent">执行当前</button>
+        <button class="tm-cyber-btn tm-cyber-btn-hero" data-ba="runAll">执行选中</button>
+        <button class="tm-cyber-btn tm-cyber-btn-hero tm-cyber-btn-accent" data-ba="testClick">测试点击</button>
+      </div>
+      <div class="tm-cyber-control-grid">
+        <label class="tm-cyber-config-field">
+          <span>开始时间</span>
+          <input class="tm-cyber-input" data-field="start_time" type="time" step="1" placeholder="20:00:00" title="可点开时间控件选择；也可手动输入 20点、20点半、20:00、30秒后、1分30秒后、+30、立即">
+        </label>
+        <label class="tm-cyber-config-field">
+          <span>点击间隔</span>
+          <input class="tm-cyber-input" data-field="interval" placeholder="秒" title="点击间隔(秒)">
+        </label>
+        <label class="tm-cyber-config-field">
+          <span>持续时长</span>
+          <input class="tm-cyber-input" data-field="duration" placeholder="秒" title="持续时长(秒)">
+        </label>
+        <div class="tm-cyber-config-field tm-cyber-mode-field">
+          <span>点击模式</span>
+          <div class="tm-cyber-mode-switch" data-ba="modeSwitch">
+            <label class="tm-cyber-mode-option is-active" data-mode="dom">
+              <input class="tm-cyber-mode-native" data-field="click_mode" type="radio" name="biliauto-click-mode" value="dom" checked>
+              <span>DOM点击</span>
+            </label>
+            <label class="tm-cyber-mode-option" data-mode="direct">
+              <input class="tm-cyber-mode-native" data-field="click_mode" type="radio" name="biliauto-click-mode" value="direct">
+              <span>直接API</span>
+            </label>
+          </div>
+        </div>
+      </div>
     </div>
   </section>
 
