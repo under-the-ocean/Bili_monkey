@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BiliAutoClicker - 油猴客户端
 // @namespace    https://github.com/under-the-ocean
-// @version      1.0.1
+// @version      1.0.2
 // @match        https://www.bilibili.com/blackboard/era/award-exchange.html?*
 // @connect      bili.982835785.xyz
 // @connect      api.live.bilibili.com
@@ -66,10 +66,11 @@
 
     DEFAULT_CLICK_INTERVAL_MS: 50,
     DEFAULT_CLICK_DURATION_MS: 10000,
+    DEFAULT_CLICK_MODE: 'dom',
     DEFAULT_START_TIME: '00:29:57',
     MAX_RELOAD_ATTEMPTS: 3,
 
-    VERSION: '1.0.0',
+    VERSION: '1.0.2',
     RETRY_COUNT: 2,
     DEBUG: true
   };
@@ -293,6 +294,7 @@
         start_time: CONFIG.DEFAULT_START_TIME,
         interval: CONFIG.DEFAULT_CLICK_INTERVAL_MS / 1000,
         duration: CONFIG.DEFAULT_CLICK_DURATION_MS / 1000,
+        click_mode: CONFIG.DEFAULT_CLICK_MODE,
         selected: false
       };
     },
@@ -901,6 +903,11 @@
         next.duration = Number.isFinite(val) && val > 0 ? val : CONFIG.DEFAULT_CLICK_DURATION_MS / 1000;
         durationInput.value = String(next.duration);
       }
+      const clickModeInput = currentConfigEl.querySelector('[data-field="click_mode"]');
+      if (clickModeInput) {
+        next.click_mode = clickModeInput.value === 'direct' ? 'direct' : 'dom';
+        clickModeInput.value = next.click_mode;
+      }
       this.state.taskConfigs[currentTask] = next;
       this.saveTaskConfigs();
       if (options.log !== false) {
@@ -1443,6 +1450,8 @@ updatePageLog(text) {
         if (startTimeInput) startTimeInput.value = cfg.start_time || CONFIG.DEFAULT_START_TIME;
         if (intervalInput) intervalInput.value = cfg.interval || CONFIG.DEFAULT_CLICK_INTERVAL_MS / 1000;
         if (durationInput) durationInput.value = cfg.duration || CONFIG.DEFAULT_CLICK_DURATION_MS / 1000;
+        const clickModeInput = currentConfigEl.querySelector('[data-field="click_mode"]');
+        if (clickModeInput) clickModeInput.value = cfg.click_mode || CONFIG.DEFAULT_CLICK_MODE;
       }
 
       const countEl = panel.querySelector('[data-ba="taskCount"]');
@@ -2095,12 +2104,16 @@ updatePageLog(text) {
       let failCount = 0;
       const endTime = Date.now() + durationMs;
       const taskId = RewardMonitor.currentTaskId();
+      // 从任务配置读取点击模式（默认dom保证安全）
+      const taskCfg = Panel && Panel.state && Panel.state.taskConfigs && Panel.state.taskConfigs[taskId];
+      const clickMode = (taskCfg && taskCfg.click_mode) || CONFIG.DEFAULT_CLICK_MODE;
+      const isDirectMode = clickMode === 'direct';
       const logToPanel = (msg) => {
         if (Panel && Panel.updatePageLog) {
           Panel.updatePageLog(msg);
         }
       };
-      Util.info(`开始连点: selector=${selector}, interval=${intervalMs}ms, duration=${durationMs}ms, 结束时间=${Util.formatTime(new Date(endTime))}`);
+      Util.info(`开始连点: selector=${selector}, interval=${intervalMs}ms, duration=${durationMs}ms, mode=${clickMode}, 结束时间=${Util.formatTime(new Date(endTime))}`);
       logToPanel(`【连点开始】task_id=${taskId} 间隔=${intervalMs}ms 时长=${(durationMs / 1000).toFixed(3)}秒`);
       const btn = Util.getByXPath(selector);
       /*
@@ -2141,15 +2154,22 @@ updatePageLog(text) {
             return;
           }
           try {
-            // 优先通过 Vue 组件直接调用 handelReceive，绕过 1s throttle
-            const directFn = typeof unsafeWindow !== 'undefined' && unsafeWindow.__biliauto_receive_direct;
-            if (directFn && directFn('user')) {
-              successCount++;
-            } else if (btn) {
-              btn.click();
-              successCount++;
+            if (isDirectMode) {
+              // 直接API模式：绕过B站1s throttle，通过Vue组件直接调用handelReceive
+              const directFn = typeof unsafeWindow !== 'undefined' && unsafeWindow.__biliauto_receive_direct;
+              if (directFn && directFn('user')) {
+                successCount++;
+              } else {
+                failCount++;
+              }
             } else {
-              failCount++;
+              // DOM点击模式（低风险）：使用原始按钮点击，受B站1s限制
+              if (btn) {
+                btn.click();
+                successCount++;
+              } else {
+                failCount++;
+              }
             }
           } catch {
             failCount++;
