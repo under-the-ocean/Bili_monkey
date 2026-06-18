@@ -918,7 +918,7 @@
       const current = this.state.taskConfigs[taskId] || Util.defaultTaskConfig(taskId);
       let nextValue = field === 'selected' ? Boolean(value) : value;
       if (field === 'start_time') nextValue = Util.normalizeStartTimeInput(value) || CONFIG.DEFAULT_START_TIME;
-      if (field === 'start_time') { if (this._countdownTimer) { clearInterval(this._countdownTimer); this._countdownTimer = null; } this.updatePageLog(null); }
+      if (field === 'start_time') this._refreshCountdown();
       this.state.taskConfigs[taskId] = { ...current, [field]: nextValue };
       this.saveTaskConfigs();
       // 关键配置变更后立即回显规范化结果
@@ -969,7 +969,33 @@
       targetEl.insertAdjacentElement('afterend', panelEl);
       this.updatePageLog('日志面板已替换领取须知内容区域');
     },
-    updatePageLog(text) {
+    
+    _refreshCountdown() {
+      if (this._countdownTimer) { clearInterval(this._countdownTimer); this._countdownTimer = null; }
+      const el = document.getElementById('tm-log-countdown');
+      if (!el) return;
+      const tick = () => {
+        const cdEl = document.getElementById('tm-log-countdown');
+        if (!cdEl) { clearInterval(this._countdownTimer); this._countdownTimer = null; return; }
+        let bestDiff = null;
+        const now = ServerTime.now();
+        for (const task of this.state.tasks) {
+          const taskId = String(task.task_value || task.value || task.task_id || '');
+          const cfg = this.state.taskConfigs[taskId];
+          if (cfg && cfg.start_time) {
+            const parsed = Util.parseTimeSpec(cfg.start_time, ServerTime.nowDate());
+            if (parsed && Number.isFinite(parsed.delayMs)) {
+              const diff = Math.max(0, parsed.delayMs);
+              if (bestDiff === null || diff < bestDiff) bestDiff = diff;
+            }
+          }
+        }
+        cdEl.textContent = bestDiff !== null ? (bestDiff / 1000).toFixed(3) : '0.000';
+      };
+      tick(); // immediate update
+      this._countdownTimer = setInterval(tick, 50);
+    },
+updatePageLog(text) {
       if (!document.getElementById('biliauto-log-panel')) {
         this.injectLogPanel();
       }
@@ -988,30 +1014,7 @@
         scrollEl.textContent = (this._pageLogs && this._pageLogs.length) ? this._pageLogs.join('\n') : '[--:--:--] 等待中';
         scrollEl.scrollTop = scrollEl.scrollHeight;
       }
-      if (!this._countdownTimer) {
-        this._countdownTimer = setInterval(() => {
-          const el = document.getElementById('tm-log-countdown');
-          if (!el) { clearInterval(this._countdownTimer); this._countdownTimer = null; return; }
-          let bestDiff = null;
-                    const now = ServerTime.now();
-          for (const task of this.state.tasks) {
-            const taskId = String(task.task_value || task.value || task.task_id || '');
-            const cfg = this.state.taskConfigs[taskId];
-            if (cfg && cfg.start_time) {
-                            const parsed = Util.parseTimeSpec(cfg.start_time, ServerTime.nowDate());
-              if (parsed && Number.isFinite(parsed.delayMs)) {
-                const diff = Math.max(0, parsed.delayMs);
-                if (bestDiff === null || diff < bestDiff) bestDiff = diff;
-              }
-            }
-          }
-          if (bestDiff === null) {
-            el.textContent = '0.000';
-            return;
-          }
-          el.textContent = (bestDiff / 1000).toFixed(3);
-        }, 50);
-      }
+      if (!this._countdownTimer) { this._refreshCountdown(); }
     },
 
     toggle() {
