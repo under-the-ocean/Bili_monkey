@@ -65,8 +65,8 @@
 .tm-cyber-empty{padding:24px;text-align:center;color:var(--tm-text-hint);font-size:12px}
 .tm-cyber-status{font-size:11px;color:var(--tm-text-secondary);text-align:center;padding-top:8px}
 .tm-cyber-footer-tools{display:flex;gap:6px;flex-wrap:wrap;margin-top:2px}
-.tm-cyber-update-tip{margin-bottom:10px;padding:8px 12px;border:1px solid rgba(6,182,212,0.2);background:rgba(6,182,212,0.06);border-radius:8px;color:var(--tm-text-secondary);font-size:11px;line-height:1.5}
-.tm-cyber-update-tip b{color:var(--tm-primary-light)}
+
+
 #biliauto-login-overlay{position:fixed;inset:0;z-index:2147483647;background:rgba(9,9,11,0.88);backdrop-filter:blur(12px);display:flex;align-items:center;justify-content:center;font-family:var(--tm-font);padding:16px;opacity:0;pointer-events:none;transition:opacity .3s ease}
 #biliauto-login-overlay.tm-overlay-visible{opacity:1;pointer-events:auto}
 #biliauto-login-overlay *{box-sizing:border-box}
@@ -125,12 +125,7 @@
         <div class="tm-cyber-kicker">MISSION CONTROL</div>
         <div class="tm-cyber-hero-title">任务执行中枢</div>
         <div class="tm-cyber-hero-subtitle">执行功能统一上移，列表中的 TaskID 仅用于快速跳转。</div>
-      </div></div>
-
-    <div class="tm-cyber-update-tip">
-      <b>更新提示：</b>若脚本异常、时间不生效、自然语言时间不识别或面板不显示，请在油猴扩展中打开本脚本并执行“检查更新”；若曾手动改过脚本，需要重新安装最新脚本。
-    </div>
-    <div class="tm-cyber-hero-actions">
+      </div></div><div class="tm-cyber-hero-actions">
       <button class="tm-cyber-btn tm-cyber-btn-primary tm-cyber-btn-hero" data-ba="runCurrent">执行当前</button>
       <button class="tm-cyber-btn tm-cyber-btn-hero" data-ba="runAll">执行选中</button>
       <button class="tm-cyber-btn tm-cyber-btn-hero tm-cyber-btn-accent" data-ba="testClick">测试点击</button>
@@ -183,7 +178,7 @@
     <button class="tm-cyber-btn tm-cyber-btn-sm tm-cyber-btn-accent" data-ba="logout" style="display:${CONFIG.QQ_ID?'':'none'}">退出</button>
   </div>
 
-  <div class="tm-cyber-status" data-ba="status"> 时间校准：<span id="biliauto-time-offset" style="color:var(--tm-primary-light)">校准中...</span> | </div>
+  <div class="tm-cyber-status" data-ba="status"></div>
 </div>
 
 <!-- ========== Sub Templates ========== -->
@@ -212,7 +207,7 @@
 <div class="tm-cyber-log-wrap">
   <div class="tm-cyber-log-header">
     <span>抢码日志面板</span>
-    <span class="tm-cyber-log-countdown">倒计时：<span id="tm-log-countdown">0.000</span></span>
+    <span class="tm-cyber-log-countdown">倒计时：<span id="tm-log-countdown">0.000</span> | 校准：<span id="biliauto-time-offset">校准中...</span></span>
   </div>
   <div class="tm-cyber-log-scroll" id="tm-log-scroll">[--:--:--] 等待中</div>
   <div class="tm-cyber-log-status">
