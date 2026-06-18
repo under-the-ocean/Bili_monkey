@@ -941,6 +941,12 @@
       if (field === 'start_time') nextValue = Util.normalizeStartTimeInput(value) || CONFIG.DEFAULT_START_TIME;
       if (field === 'start_time') this._refreshCountdown();
       this.state.taskConfigs[taskId] = { ...current, [field]: nextValue };
+      if (field === 'click_mode') {
+        const currentTaskConfig = document.querySelector('#biliauto-panel [data-ba="currentTaskConfig"]');
+        if (taskId === (Util.extractTaskIdFromPage() || 'unknown_task')) {
+          this.syncModeSwitch(currentTaskConfig, nextValue);
+        }
+      }
       this.saveTaskConfigs();
       if (taskId === (Util.extractTaskIdFromPage() || 'unknown_task')) {
         this.scheduleCurrentTask();
