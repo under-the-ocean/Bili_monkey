@@ -1,0 +1,77 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,minimum-scale=1,maximum-scale=1,viewport-fit=cover"><meta http-equiv="X-UA-Compatible" content="ie=edge"><title>奖励领取</title><meta name="keywords" content="奖励领取"><meta name="description" content="奖励领取"><meta name="spm_prefix" content="888.126558"><script>var docEl = document.documentElement
+      var resizeEvt =
+        'orientationchange' in window ? 'orientationchange' : 'resize'
+      var visibleRatio = 0.72
+      var recalc = function () {
+        var clientWidth = docEl.clientWidth
+        var clientHeight = docEl.clientHeight
+        if (!clientWidth) {
+          return
+        }
+        if (clientWidth >= 750) {
+          if (clientWidth / clientHeight < visibleRatio) {
+            docEl.style.fontSize = '100px'
+          } else {
+            var w = visibleRatio * clientHeight
+            docEl.style.fontSize = 100 * (w / 750) + 'px'
+          }
+        } else {
+          docEl.style.fontSize = 100 * (clientWidth / 750) + 'px'
+        }
+      }
+      window.addEventListener(resizeEvt, recalc, false)
+      document.addEventListener('DOMContentLoaded', recalc, false)</script><script>var era_source
+        var era_share_source
+        try {
+          var u = new URL(location.href)
+          var sp = u.searchParams
+          era_share_source = sp.get('share_source')
+          era_source =
+            sp.get('msource') ||
+            sp.get('from_spmid') ||
+            sp.get('spm_id_from') ||
+            sp.get('topic_from') ||
+            sp.get('from')
+        } catch (e) {
+          console.warn('get page source from query failed', e)
+        }
+        var era_default_report_msg_obj = {
+          page_id: '3ERA4wloghvc9700',
+          era_source: era_source,
+          share_source: era_share_source,
+        }
+
+        window.reportMsgObj = era_default_report_msg_obj
+
+        window.reportConfig = {
+          sample: 1,
+          scrollTracker: true,
+          msgObjects: 'reportMsgObj',
+          pvMsg: era_default_report_msg_obj,
+          errorTracker: true,
+        }</script><script src="//s1.hdslb.com/bfs/seed/jinkela/short/reporter-pb/index_native.js" crossorigin="anonymous"></script><script>var reporter = new window.ReporterPb({
+          extra: window.reportMsgObj,
+        })
+        reporter.flush()</script><script>window.__MIRROR_CONFIG__ = {
+          origin: 'activity',
+          module: 'eva-activity',
+          config: {
+            isAutoInit: true,
+            // 注意这个属性，isAutoInit未true,js加载完成后会自动执行init 方法
+            whiteScreen: {
+              checkDom: ['#app'],
+              callback: (status) => {
+                console.log('白屏检测是否正常', status)
+              },
+              isSkeleton: false,
+            },
+          },
+          pbOptions: {
+            autoPv: false, // 关闭自动上报pv
+            retry: false, // 关闭上报失败重试
+          },
+        }</script><script src="https://s1.hdslb.com/bfs/seed/jinkela/short/b-mirror/biliMirror.umd.mini.js" crossorigin="anonymous"></script><script src="//s1.hdslb.com/bfs/seed/log/report/log-reporter.js" crossorigin="anonymous"></script><link href="https://activity.hdslb.com/blackboard/activity3ERA4wloghvc9700/css/chunk-vendors.3d536b0d.css" rel="stylesheet"><link href="https://activity.hdslb.com/blackboard/activity3ERA4wloghvc9700/css/index.0545a737.css" rel="stylesheet">
+        <script>
+            var activityPageEvaConfigActivityId = "1ERA3wloghv6q200"
+        </script>
+    <!-- APM开关已开启 __APM_SWITCH_OPEN__ --></head><body><div id="app"></div><script src="https://activity.hdslb.com/blackboard/activity3ERA4wloghvc9700/js/chunk-vendors.a49cd0f8.js" crossorigin="anonymous"></script><script src="https://activity.hdslb.com/blackboard/activity3ERA4wloghvc9700/js/index.c24946f8.js" crossorigin="anonymous"></script></body></html>
