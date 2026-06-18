@@ -979,18 +979,25 @@
       const tick = () => {
         const cdEl = document.getElementById('tm-log-countdown');
         if (!cdEl) { clearInterval(this._countdownTimer); this._countdownTimer = null; return; }
+        const currentTaskId = Util.extractTaskIdFromPage() || 'unknown_task';
+        const currentCfg = this.state.taskConfigs[currentTaskId];
+        if (currentCfg && currentCfg.start_time) {
+          const currentParsed = Util.parseTimeSpec(currentCfg.start_time, ServerTime.nowDate());
+          if (currentParsed && Number.isFinite(currentParsed.delayMs)) {
+            cdEl.textContent = (Math.max(0, currentParsed.delayMs) / 1000).toFixed(3);
+            return;
+          }
+        }
+
         let bestDiff = null;
-        const now = ServerTime.now();
         for (const task of this.state.tasks) {
           const taskId = String(task.task_value || task.value || task.task_id || '');
           const cfg = this.state.taskConfigs[taskId];
-          if (cfg && cfg.start_time) {
-            const parsed = Util.parseTimeSpec(cfg.start_time, ServerTime.nowDate());
-            if (parsed && Number.isFinite(parsed.delayMs)) {
-              const diff = Math.max(0, parsed.delayMs);
-              if (bestDiff === null || diff < bestDiff) bestDiff = diff;
-            }
-          }
+          if (!cfg || !cfg.start_time) continue;
+          const parsed = Util.parseTimeSpec(cfg.start_time, ServerTime.nowDate());
+          if (!parsed || !Number.isFinite(parsed.delayMs)) continue;
+          const diff = Math.max(0, parsed.delayMs);
+          if (bestDiff === null || diff < bestDiff) bestDiff = diff;
         }
         cdEl.textContent = bestDiff !== null ? (bestDiff / 1000).toFixed(3) : '0.000';
       };
