@@ -967,6 +967,8 @@
       if (!panelEl) return;
             targetEl.style.display = 'none';
       targetEl.insertAdjacentElement('afterend', panelEl);
+      const recalBtn = document.getElementById('biliauto-recalibrate');
+      if (recalBtn) { recalBtn.addEventListener('click', () => { recalBtn.style.opacity = '0.3'; ServerTime.calibrate().finally(() => { recalBtn.style.opacity = '0.6'; }); }); }
       this.updatePageLog('日志面板已替换领取须知内容区域');
     },
     
