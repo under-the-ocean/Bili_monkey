@@ -1,7 +1,7 @@
-// ==UserScript==
+﻿// ==UserScript==
 // @name         BiliAutoClicker - 油猴客户端
 // @namespace    https://github.com/under-the-ocean
-// @version      0.8.7
+// @version      0.9.0
 // @match        https://www.bilibili.com/blackboard/era/award-exchange.html?*
 // @connect      bili.982835785.xyz
 // @grant        GM_xmlhttpRequest
@@ -66,7 +66,7 @@
     DEFAULT_START_TIME: '00:29:57',
     MAX_RELOAD_ATTEMPTS: 3,
 
-    VERSION: '0.8.7',
+    VERSION: '0.9.0',
     RETRY_COUNT: 2,
     DEBUG: true
   };
@@ -334,6 +334,7 @@
       const headers = {
         'Content-Type': 'application/json',
         'X-Device-ID': CONFIG.DEVICE_ID,
+        'X-Client-Version': CONFIG.VERSION,
         'X-Device-Name': encodeURIComponent(CONFIG.DEVICE_NAME),
         ...extraHeaders
       };
@@ -351,6 +352,15 @@
             const body = res.responseText || '';
             Util.log(`<<< ${method} ${path} -> ${res.status} ${body.slice(0, 150)}`);
             if (res.status < 200 || res.status >= 300) {
+              if (res.status === 426) {
+                try {
+                  const parsed = JSON.parse(body);
+                  if (parsed && parsed.code === 'FORCE_UPDATE_REQUIRED') {
+                    reject(Object.assign(new Error(parsed.message || '客户端版本过低'), { code: 'FORCE_UPDATE_REQUIRED', update: parsed.update }));
+                    return;
+                  }
+                } catch {}
+              }
               reject(new Error(`HTTP ${res.status}: ${body.slice(0, 200)}`));
               return;
             }
@@ -1142,6 +1152,23 @@
     },
 
     async startLogin() {
+    showForceUpdateOverlay(updateInfo) {
+      let o = document.getElementById('biliauto-force-update-overlay');
+      if (o) { o.style.display = 'flex'; return; }
+      o = document.createElement('div');
+      o.id = 'biliauto-force-update-overlay';
+      o.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:rgba(5,8,22,0.85);backdrop-filter:blur(12px);display:flex;align-items:center;justify-content:center;font-family:var(--tm-font,Inter,sans-serif);padding:16px;';
+      const c = document.createElement('div');
+      c.style.cssText = 'width:min(440px,92vw);background:rgba(15,23,42,0.95);color:rgba(255,255,255,0.87);border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:28px;box-shadow:0 25px 60px rgba(0,0,0,0.5);text-align:center;';
+      c.innerHTML = '<div style="font-size:22px;font-weight:600;margin-bottom:8px;">需要更新</div>'
+        + '<div style="font-size:14px;color:rgba(255,255,255,0.55);margin-bottom:4px;">当前版本 <span style="font-family:monospace">' + CONFIG.VERSION + '</span></div>'
+        + '<div style="font-size:14px;color:rgba(255,255,255,0.55);margin-bottom:16px;">最新版本 <span style="font-family:monospace">' + (updateInfo && updateInfo.version || '') + '</span></div>'
+        + '<div style="font-size:13px;color:rgba(251,191,36,0.85);line-height:1.6;margin-bottom:20px;white-space:pre-wrap;text-align:left;">' + (updateInfo && updateInfo.description || '请更新客户端') + '</div>'
+        + '<a href="' + (updateInfo && updateInfo.download_url || '#') + '" target="_blank" style="display:inline-block;padding:10px 28px;border-radius:10px;background:rgb(251,191,36);color:rgb(0,0,0);font-weight:500;text-decoration:none;">立即更新</a>';
+      o.appendChild(c);
+      document.documentElement.appendChild(o);
+    },
+
       var btn = document.querySelector('#biliauto-login-overlay [data-ba="startLogin"]');
       if (btn) { btn.disabled = true; btn.textContent = '获取中...'; btn.style.opacity = '0.65'; }
       var display = document.querySelector('#biliauto-login-overlay [data-ba="loginCodeDisplay"]');
@@ -2242,6 +2269,21 @@
 
     Panel.init();
     Panel.injectLogPanel();
+
+    // 强制更新预检
+    try {
+      const versionResp = await API.request('GET', '/api/versions/latest');
+      if (versionResp && versionResp.status === 'success' && versionResp.data) {
+        const latest = versionResp.data;
+        if (latest.force_update && (latest.version || '') > (CONFIG.VERSION || '')) {
+          Util.warn('强制更新: 版本过低, 阻塞执行');
+          Panel.showForceUpdateOverlay(latest);
+          return;
+        }
+      }
+    } catch (e) {
+      Util.log('版本预检失败(不影响主流程):', e.message || e);
+    }
 
     if (!isLoggedIn()) {
       Util.info('未登录，显示全屏登录界面');
