@@ -1681,9 +1681,13 @@ updatePageLog(text) {
         // 暴露直接调用 B站 receive 的函数，绕过 1s throttle
         // 保留 isExchangeLoading 检查防止并发请求
         pageWindow.__biliauto_receive_direct = function(source) {
+          var setReason = function(reason) {
+            pageWindow.__biliauto_receive_direct_last_reason = reason || 'unknown';
+          };
           try {
             var appEl = document.querySelector('#app');
             if (!appEl || !appEl.__vue__) {
+              setReason('#app or __vue__ not found');
               Util.warn('direct mode: #app or __vue__ not found');
               return false;
             }
@@ -1702,18 +1706,23 @@ updatePageLog(text) {
             };
             var indexComp = findReceiveComponent(root);
             if (!indexComp || typeof indexComp.handelReceive !== 'function') {
+              setReason('component with handelReceive not found');
               Util.warn('direct mode: component with handelReceive not found');
               return false;
             }
             if (indexComp.isExchangeLoading) {
+              setReason('blocked by isExchangeLoading');
               Util.log('direct mode: blocked by isExchangeLoading');
               return false; // ??????????
             }
             indexComp.handelReceive(source || 'script');
+            setReason('handelReceive invoked');
             Util.log('direct mode: handelReceive invoked');
             return true;
           } catch (err) {
-            Util.warn('direct mode invoke failed: ' + (err && err.message || err));
+            var message = err && err.message || String(err);
+            setReason('invoke failed: ' + message);
+            Util.warn('direct mode invoke failed: ' + message);
             return false;
           }
         };
@@ -2196,6 +2205,10 @@ updatePageLog(text) {
                 successCount++;
               } else {
                 failCount++;
+                const reason = typeof unsafeWindow !== 'undefined' && unsafeWindow.__biliauto_receive_direct_last_reason;
+                if (reason && now - lastLogTime > 500) {
+                  Util.log('direct mode attempt failed: ' + reason);
+                }
               }
             } else {
               // DOM点击模式（低风险）：使用原始按钮点击，受B站1s限制
