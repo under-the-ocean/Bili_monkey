@@ -1,4 +1,4 @@
-﻿// ==UserScript==
+// ==UserScript==
 // @name         BiliAutoClicker - 油猴客户端
 // @namespace    https://github.com/under-the-ocean
 // @version      0.9.1
@@ -11,8 +11,10 @@
 // @grant        GM_deleteValue
 // @grant        GM_listValues
 // @grant        GM_getResourceText
+// @grant        GM_getResourceURL
 // @grant        unsafeWindow
 // @resource     TEMPLATE_HTML https://gh-proxy.com/https://raw.githubusercontent.com/under-the-ocean/Bili_monkey/main/template.html
+// @resource     CUSTOM_FONT  https://gh-proxy.com/https://raw.githubusercontent.com/under-the-ocean/Bili_monkey/main/zh-cn.ttf
 // @run-at       document-start
 // @downloadURL  https://gh-proxy.com/https://raw.githubusercontent.com/under-the-ocean/Bili_monkey/main/biliauto-tampermonkey-client.user.js
 // @updateURL    https://gh-proxy.com/https://raw.githubusercontent.com/under-the-ocean/Bili_monkey/main/biliauto-tampermonkey-client.user.js
@@ -676,6 +678,7 @@
       Util.log('=== 模板加载开始 ===');
       Util.log('尝试从 @resource TEMPLATE_HTML 获取模板...');
       const tpl = GM_getResourceText('TEMPLATE_HTML');
+      const fontUrl = GM_getResourceURL('CUSTOM_FONT');
       Util.log(`模板获取结果: ${tpl ? `成功，长度=${tpl.length}字符` : '失败（返回空或undefined）'}`);
       
       if (!tpl) {
@@ -689,6 +692,7 @@
       const beforeLength = tpl.length;
       let result = tpl
         .replace(/\$\{VERSION\}/g, CONFIG.VERSION)
+        .replace(/\$\{FONT_URL\}/g, fontUrl)
         .replace(/\$\{DEVICE_ID_SHORT\}/g, CONFIG.DEVICE_ID.slice(0, 8))
         .replace(/\$\{CONFIG\.QQ_ID\}/g, CONFIG.QQ_ID || '')
         .replace(/\$\{CONFIG\.ACCOUNT_NAME\}/g, CONFIG.ACCOUNT_NAME || CONFIG.QQ_ID || '')
