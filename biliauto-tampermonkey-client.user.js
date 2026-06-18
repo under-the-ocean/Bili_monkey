@@ -1683,14 +1683,37 @@ updatePageLog(text) {
         pageWindow.__biliauto_receive_direct = function(source) {
           try {
             var appEl = document.querySelector('#app');
-            if (!appEl || !appEl.__vue__) return false;
+            if (!appEl || !appEl.__vue__) {
+              Util.warn('direct mode: #app or __vue__ not found');
+              return false;
+            }
             var root = appEl.__vue__;
-            var indexComp = root.$children && root.$children[0];
-            if (!indexComp || typeof indexComp.handelReceive !== 'function') return false;
-            if (indexComp.isExchangeLoading) return false; // 上一个请求还在进行中
+            var visited = [];
+            var findReceiveComponent = function(vm) {
+              if (!vm || visited.indexOf(vm) >= 0) return null;
+              visited.push(vm);
+              if (typeof vm.handelReceive === 'function') return vm;
+              var children = vm.$children || [];
+              for (var i = 0; i < children.length; i++) {
+                var found = findReceiveComponent(children[i]);
+                if (found) return found;
+              }
+              return null;
+            };
+            var indexComp = findReceiveComponent(root);
+            if (!indexComp || typeof indexComp.handelReceive !== 'function') {
+              Util.warn('direct mode: component with handelReceive not found');
+              return false;
+            }
+            if (indexComp.isExchangeLoading) {
+              Util.log('direct mode: blocked by isExchangeLoading');
+              return false; // ??????????
+            }
             indexComp.handelReceive(source || 'script');
+            Util.log('direct mode: handelReceive invoked');
             return true;
-          } catch (_) {
+          } catch (err) {
+            Util.warn('direct mode invoke failed: ' + (err && err.message || err));
             return false;
           }
         };
