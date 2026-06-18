@@ -878,6 +878,7 @@
       this.state.tasks = Util.normalizeTasks(tasks || this.state.tasks);
       this.state.taskConfigs = Util.loadTaskConfigs(this.state.tasks);
       this.render();
+      this.scheduleCurrentTask();
     },
 
     syncCurrentTaskConfigFromInputs(options = {}) {
@@ -941,6 +942,9 @@
       if (field === 'start_time') this._refreshCountdown();
       this.state.taskConfigs[taskId] = { ...current, [field]: nextValue };
       this.saveTaskConfigs();
+      if (taskId === (Util.extractTaskIdFromPage() || 'unknown_task')) {
+        this.scheduleCurrentTask();
+      }
       // 关键配置变更后立即回显规范化结果
       if (!options.silent) this.setStatus(`配置已保存：${field} = ${nextValue}`);
       if (!options.noRender && (field === 'selected' || field === 'start_time')) {
@@ -1058,6 +1062,38 @@ updatePageLog(text) {
       GM_setValue('material_panel_visible', false);
       Util.log('面板已关闭');
       this.render();
+    },
+
+    scheduleCurrentTask() {
+      if (this._currentTaskTimer) {
+        clearTimeout(this._currentTaskTimer);
+        this._currentTaskTimer = null;
+      }
+      if (!this.state.baseConfig || this.state.running) return;
+      const taskId = Util.extractTaskIdFromPage() || 'unknown_task';
+      if (!taskId || taskId === 'unknown_task') return;
+      const cfg = this.state.taskConfigs[taskId] || Util.defaultTaskConfig(taskId);
+      const parsed = Util.parseTimeSpec(cfg.start_time || CONFIG.DEFAULT_START_TIME, ServerTime.nowDate());
+      if (!parsed || !Number.isFinite(parsed.delayMs)) return;
+      const delayMs = Math.max(0, parsed.delayMs);
+      Util.log('schedule current task:', taskId, parsed.normalized, 'delay=', delayMs);
+      this.updatePageLog('[AutoSchedule] task_id=' + taskId + ' start=' + parsed.normalized + ' countdown=' + (delayMs / 1000).toFixed(3) + 's');
+      this._currentTaskTimer = setTimeout(async () => {
+        this._currentTaskTimer = null;
+        if (this.state.running) return;
+        try {
+          const latestCfg = this.syncCurrentTaskConfigFromInputs({ log: false }) || this.state.taskConfigs[taskId] || Util.defaultTaskConfig(taskId);
+          this.state.running = true;
+          this.setStatus('Auto run starting: ' + taskId);
+          await runCurrentPageTask(this.state.baseConfig, taskId, latestCfg);
+          this.setStatus('Auto run completed');
+        } catch (e) {
+          this.setStatus('Auto run failed: ' + (e.message || e));
+          Util.error('Auto run failed:', e);
+        } finally {
+          this.state.running = false;
+        }
+      }, delayMs);
     },
 
     toggleDarkMode() {
