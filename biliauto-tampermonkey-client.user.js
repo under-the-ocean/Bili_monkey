@@ -4,6 +4,7 @@
 // @version      0.9.1
 // @match        https://www.bilibili.com/blackboard/era/award-exchange.html?*
 // @connect      bili.982835785.xyz
+// @connect      api.live.bilibili.com
 // @grant        GM_xmlhttpRequest
 // @grant        GM_notification
 // @grant        GM_setValue
@@ -487,6 +488,58 @@
   }
 
   // ========================
+  // 时间校准 —— 从B站RTC接口获取服务器时间，补偿本地时钟偏差
+  // ========================
+  const ServerTime = {
+    offsetMs: 0,
+    lastCalibration: null,
+
+    async calibrate() {
+      try {
+        const t0 = Date.now();
+        const resp = await fetch('https://api.live.bilibili.com/xlive/open-interface/v1/rtc/getTimestamp');
+        const t1 = Date.now();
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const json = await resp.json();
+        if (json && json.code === 0 && json.data && json.data.microtime) {
+          const serverMs = json.data.microtime;
+          const rtt = t1 - t0;
+          this.offsetMs = serverMs - t0 - rtt / 2;
+          this.lastCalibration = Date.now();
+          Util.log('时间校准完成：偏差 ' + (this.offsetMs > 0 ? '+' : '') + this.offsetMs.toFixed(0) + 'ms，RTT=' + rtt + 'ms');
+          this._updateDisplay();
+          return this.offsetMs;
+        }
+        throw new Error('响应格式异常');
+      } catch (e) {
+        Util.warn('时间校准失败：' + e.message);
+        this._updateDisplay();
+        return this.offsetMs;
+      }
+    },
+
+    now() {
+      return Date.now() + this.offsetMs;
+    },
+
+    nowDate() {
+      return new Date(Date.now() + this.offsetMs);
+    },
+
+    getOffsetDisplay() {
+      if (this.lastCalibration === null) return '未校准';
+      const abs = Math.abs(this.offsetMs);
+      const sign = this.offsetMs > 0 ? '+' : '-';
+      if (abs < 1000) return sign + abs.toFixed(0) + 'ms';
+      return sign + (abs / 1000).toFixed(2) + 's';
+    },
+
+    _updateDisplay() {
+      const el = document.getElementById('biliauto-time-offset');
+      if (el) el.textContent = this.getOffsetDisplay();
+    }
+  };
+  // ========================
   // 叠加管理界面 - Material Design 重构
   // ========================
   const Panel = {
@@ -503,7 +556,8 @@
       panelWidth: readStoredPositiveNumber('material_panel_width', 380),
       panelHeight: readStoredPositiveNumber('material_panel_height', 460),
       loginCode: '',
-      loginStatus: isLoggedIn() ? 'logged_in' : ''
+      loginStatus: isLoggedIn() ? 'logged_in' : '',
+        timeOffset: null
     },
 
     init() {
@@ -526,6 +580,7 @@
       }
 
       this.applyDarkModeOptions();
+      ServerTime.calibrate();
       this.applyTheme();
       this.setupPanelPosition();
       this.setupDrag();
@@ -863,6 +918,7 @@
       const current = this.state.taskConfigs[taskId] || Util.defaultTaskConfig(taskId);
       let nextValue = field === 'selected' ? Boolean(value) : value;
       if (field === 'start_time') nextValue = Util.normalizeStartTimeInput(value) || CONFIG.DEFAULT_START_TIME;
+      if (field === 'start_time') { if (this._countdownTimer) { clearInterval(this._countdownTimer); this._countdownTimer = null; } this.updatePageLog(null); }
       this.state.taskConfigs[taskId] = { ...current, [field]: nextValue };
       this.saveTaskConfigs();
       // 关键配置变更后立即回显规范化结果
@@ -937,12 +993,12 @@
           const el = document.getElementById('tm-log-countdown');
           if (!el) { clearInterval(this._countdownTimer); this._countdownTimer = null; return; }
           let bestDiff = null;
-          const now = Date.now();
+                    const now = ServerTime.now();
           for (const task of this.state.tasks) {
             const taskId = String(task.task_value || task.value || task.task_id || '');
             const cfg = this.state.taskConfigs[taskId];
             if (cfg && cfg.start_time) {
-              const parsed = Util.parseTimeSpec(cfg.start_time, new Date(now));
+                            const parsed = Util.parseTimeSpec(cfg.start_time, ServerTime.nowDate());
               if (parsed && Number.isFinite(parsed.delayMs)) {
                 const diff = Math.max(0, parsed.delayMs);
                 if (bestDiff === null || diff < bestDiff) bestDiff = diff;
@@ -2138,7 +2194,7 @@
       const startTime = startSpec.target;
       const intervalMs = Math.max(0, Number(config.interval || CONFIG.DEFAULT_CLICK_INTERVAL_MS / 1000) * 1000);
       const durationMs = Math.max(1, Number(config.duration || CONFIG.DEFAULT_CLICK_DURATION_MS / 1000) * 1000);
-      const waitSec = Math.max(0, (startTime.getTime() - Date.now()) / 1000);
+            const waitSec = Math.max(0, (startTime.getTime() - ServerTime.now()) / 1000);
       if (startSpec.invalid) {
         const warnMsg = `任务 ${taskId} 的开始时间 "${config.start_time}" 无法识别，已回退为 ${startSpec.normalized}`;
         Util.warn(warnMsg);
@@ -2193,7 +2249,7 @@
     },
 
     async waitUntil(targetTime) {
-      const diff = targetTime.getTime() - Date.now();
+      const diff = targetTime.getTime() - ServerTime.now();
       if (diff <= 0) {
         Util.log('waitUntil: 目标时间已过，立即执行');
         return;
