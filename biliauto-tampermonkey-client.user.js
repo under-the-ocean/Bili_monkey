@@ -1154,23 +1154,6 @@
     },
 
     async startLogin() {
-    showForceUpdateOverlay(updateInfo) {
-      let o = document.getElementById('biliauto-force-update-overlay');
-      if (o) { o.style.display = 'flex'; return; }
-      o = document.createElement('div');
-      o.id = 'biliauto-force-update-overlay';
-      o.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:rgba(5,8,22,0.85);backdrop-filter:blur(12px);display:flex;align-items:center;justify-content:center;font-family:var(--tm-font,Inter,sans-serif);padding:16px;';
-      const c = document.createElement('div');
-      c.style.cssText = 'width:min(440px,92vw);background:rgba(15,23,42,0.95);color:rgba(255,255,255,0.87);border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:28px;box-shadow:0 25px 60px rgba(0,0,0,0.5);text-align:center;';
-      c.innerHTML = '<div style="font-size:22px;font-weight:600;margin-bottom:8px;">需要更新</div>'
-        + '<div style="font-size:14px;color:rgba(255,255,255,0.55);margin-bottom:4px;">当前版本 <span style="font-family:monospace">' + CONFIG.VERSION + '</span></div>'
-        + '<div style="font-size:14px;color:rgba(255,255,255,0.55);margin-bottom:16px;">最新版本 <span style="font-family:monospace">' + (updateInfo && updateInfo.version || '') + '</span></div>'
-        + '<div style="font-size:13px;color:rgba(251,191,36,0.85);line-height:1.6;margin-bottom:20px;white-space:pre-wrap;text-align:left;">' + (updateInfo && updateInfo.description || '请更新客户端') + '</div>'
-        + '<a href="' + (updateInfo && updateInfo.download_url || '#') + '" target="_blank" style="display:inline-block;padding:10px 28px;border-radius:10px;background:rgb(251,191,36);color:rgb(0,0,0);font-weight:500;text-decoration:none;">立即更新</a>';
-      o.appendChild(c);
-      document.documentElement.appendChild(o);
-    },
-
       var btn = document.querySelector('#biliauto-login-overlay [data-ba="startLogin"]');
       if (btn) { btn.disabled = true; btn.textContent = '获取中...'; btn.style.opacity = '0.65'; }
       var display = document.querySelector('#biliauto-login-overlay [data-ba="loginCodeDisplay"]');
@@ -1207,6 +1190,24 @@
         if (btn) { btn.disabled = false; btn.textContent = '重新获取验证码'; btn.style.opacity = '1'; }
       }
     },
+
+    showForceUpdateOverlay(updateInfo) {
+      let o = document.getElementById('biliauto-force-update-overlay');
+      if (o) { o.style.display = 'flex'; return; }
+      o = document.createElement('div');
+      o.id = 'biliauto-force-update-overlay';
+      o.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:rgba(5,8,22,0.85);backdrop-filter:blur(12px);display:flex;align-items:center;justify-content:center;font-family:var(--tm-font,Inter,sans-serif);padding:16px;';
+      const c = document.createElement('div');
+      c.style.cssText = 'width:min(440px,92vw);background:rgba(15,23,42,0.95);color:rgba(255,255,255,0.87);border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:28px;box-shadow:0 25px 60px rgba(0,0,0,0.5);text-align:center;';
+      c.innerHTML = '<div style="font-size:22px;font-weight:600;margin-bottom:8px;">需要更新</div>'
+        + '<div style="font-size:14px;color:rgba(255,255,255,0.55);margin-bottom:4px;">当前版本 <span style="font-family:monospace">' + CONFIG.VERSION + '</span></div>'
+        + '<div style="font-size:14px;color:rgba(255,255,255,0.55);margin-bottom:16px;">最新版本 <span style="font-family:monospace">' + (updateInfo && updateInfo.version || '') + '</span></div>'
+        + '<div style="font-size:13px;color:rgba(251,191,36,0.85);line-height:1.6;margin-bottom:20px;white-space:pre-wrap;text-align:left;">' + (updateInfo && updateInfo.description || '请更新客户端') + '</div>'
+        + '<a href="' + (updateInfo && updateInfo.download_url || '#') + '" target="_blank" style="display:inline-block;padding:10px 28px;border-radius:10px;background:rgb(251,191,36);color:rgb(0,0,0);font-weight:500;text-decoration:none;">立即更新</a>';
+      o.appendChild(c);
+      document.documentElement.appendChild(o);
+    },
+
 
     async pollLoginStatus(code) {
       var statusEl = document.querySelector('#biliauto-login-overlay [data-ba="loginStatus"]');
