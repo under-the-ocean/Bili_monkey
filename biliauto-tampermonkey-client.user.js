@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BiliAutoClicker - 油猴客户端
 // @namespace    https://github.com/under-the-ocean
-// @version      1.0.0
+// @version      1.0.1
 // @match        https://www.bilibili.com/blackboard/era/award-exchange.html?*
 // @connect      bili.982835785.xyz
 // @connect      api.live.bilibili.com
@@ -1657,6 +1657,22 @@ updatePageLog(text) {
           };
         }
         Util.info('RewardMonitor unsafeWindow hook installed');
+        // 暴露直接调用 B站 receive 的函数，绕过 1s throttle
+        // 保留 isExchangeLoading 检查防止并发请求
+        pageWindow.__biliauto_receive_direct = function(source) {
+          try {
+            var appEl = document.querySelector('#app');
+            if (!appEl || !appEl.__vue__) return false;
+            var root = appEl.__vue__;
+            var indexComp = root.$children && root.$children[0];
+            if (!indexComp || typeof indexComp.handelReceive !== 'function') return false;
+            if (indexComp.isExchangeLoading) return false; // 上一个请求还在进行中
+            indexComp.handelReceive(source || 'script');
+            return true;
+          } catch (_) {
+            return false;
+          }
+        };
         return true;
       } catch (e) {
         Util.warn(`RewardMonitor unsafeWindow hook failed: ${e.message}`);
@@ -2125,7 +2141,11 @@ updatePageLog(text) {
             return;
           }
           try {
-            if (btn) {
+            // 优先通过 Vue 组件直接调用 handelReceive，绕过 1s throttle
+            const directFn = typeof unsafeWindow !== 'undefined' && unsafeWindow.__biliauto_receive_direct;
+            if (directFn && directFn('user')) {
+              successCount++;
+            } else if (btn) {
               btn.click();
               successCount++;
             } else {
