@@ -62,7 +62,7 @@
     ACCOUNT_NAME: GM_getValue('account_name', ''),
 
     DEVICE_ID: GM_getValue('qq_id') || GM_getValue('device_id', 'tm-' + crypto.randomUUID()),
-    DEVICE_NAME: GM_getValue('device_name', detectBrowserInfo().label),
+    DEVICE_NAME: GM_getValue('device_name_v2', detectBrowserInfo().label),
 
     DEFAULT_CLICK_INTERVAL_MS: 50,
     DEFAULT_CLICK_DURATION_MS: 10000,
@@ -78,8 +78,8 @@
   if (!GM_getValue('device_id') && !CONFIG.QQ_ID) {
     GM_setValue('device_id', CONFIG.DEVICE_ID);
   }
-  if (!GM_getValue('device_name')) {
-    GM_setValue('device_name', CONFIG.DEVICE_NAME);
+  if (!GM_getValue('device_name_v2')) {
+    GM_setValue('device_name_v2', CONFIG.DEVICE_NAME);
   }
 
   // ========================
