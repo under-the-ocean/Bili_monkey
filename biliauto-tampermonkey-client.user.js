@@ -420,17 +420,18 @@
       for (let retry = 0; retry <= CONFIG.RETRY_COUNT; retry++) {
         try {
           const resp = await this.uploadRewards(payload);
-          Util.log(`上传结果成功 (第${retry + 1}次):`, resp);
+          Util.info(`上传结果成功 (第${retry + 1}次)`);
+          Util.log('响应详情:', resp);
           return resp;
         } catch (e) {
           lastError = e.message || String(e);
-          Util.log(`上传结果失败 (第${retry + 1}次):`, lastError);
+          Util.info(`上传结果失败 (第${retry + 1}次): ${lastError.slice(0, 100)}`);
           if (retry < CONFIG.RETRY_COUNT) {
             await Util.sleep(1000 * (retry + 1));
           }
         }
       }
-      Util.log(`上传结果最终失败: ${lastError}`);
+      Util.info(`上传结果最终失败: ${lastError.slice(0, 150)}`);
       this.saveLocalBackup(payload);
       return { status: 'error', message: lastError };
     },
