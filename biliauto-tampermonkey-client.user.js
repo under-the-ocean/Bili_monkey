@@ -2226,7 +2226,7 @@ updatePageLog(text) {
           const captured = RewardMonitor.get(taskId);
           if (captured && captured._continuedClickLogged !== true) {
             captured._continuedClickLogged = true;
-            const summary = `【连点提前结束】已捕获 /mission/receive API 响应 code=${captured.response_code}`;
+            const summary = `【API 捕获】/mission/receive 响应 code=${captured.response_code}`;
             Util.info(summary);
             logToPanel(summary);
           }
@@ -2234,7 +2234,7 @@ updatePageLog(text) {
            * 原始 DOM 判断方式暂时注释，当前只以 /mission/receive API 响应为准。
           if (isSuccessText(btn)) {
             clearInterval(timer);
-            const summary = `【连点提前结束】按钮文字已变为"查看奖励"，领取成功`;
+            const summary = `【DOM 检测】按钮文字已变为"查看奖励"，领取成功`;
             Util.info(summary);
             logToPanel(summary);
             resolve({ success_count: successCount, fail_count: failCount, early_exit: true });
