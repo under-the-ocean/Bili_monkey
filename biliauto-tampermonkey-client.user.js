@@ -357,18 +357,28 @@
             const body = res.responseText || '';
             Util.log(`<<< ${method} ${path} -> ${res.status} ${body.slice(0, 150)}`);
             if (res.status < 200 || res.status >= 300) {
-              if (res.status === 426) {
-                try {
-                  const parsed = JSON.parse(body);
-                  if (parsed && parsed.code === 'FORCE_UPDATE_REQUIRED') {
-                    reject(Object.assign(new Error(parsed.message || '客户端版本过低'), { code: 'FORCE_UPDATE_REQUIRED', update: parsed.update }));
-                    return;
-                  }
-                } catch {}
-              }
-              reject(new Error(`HTTP ${res.status}: ${body.slice(0, 200)}`));
-              return;
-            }
+	              if (res.status === 426) {
+	                try {
+	                  const parsed = JSON.parse(body);
+	                  if (parsed && parsed.code === 'FORCE_UPDATE_REQUIRED') {
+	                    reject(Object.assign(new Error(parsed.message || '客户端版本过低'), { code: 'FORCE_UPDATE_REQUIRED', update: parsed.update }));
+	                    return;
+	                  }
+	                } catch {}
+	              }
+	              if (res.status === 401) {
+	                try {
+	                  const parsed = JSON.parse(body);
+	                  if (parsed && parsed.code === 'AUTH_REQUIRED') {
+	                    Panel.showLoginOverlay('登录失效，请重新登录');
+	                    reject(Object.assign(new Error(parsed.message || '未登录'), { code: 'AUTH_REQUIRED' }));
+	                    return;
+	                  }
+	                } catch {}
+	              }
+	              reject(new Error(`HTTP ${res.status}: ${body.slice(0, 200)}`));
+	              return;
+	            }
             try {
               resolve(JSON.parse(body));
             } catch {
@@ -2490,12 +2500,16 @@ updatePageLog(text) {
       Util.log('版本预检失败(不影响主流程):', e.message || e);
     }
 
-    if (!isLoggedIn()) {
-      Util.info('未登录，显示全屏登录界面');
-      Panel.showLoginOverlay();
-    }
+	    if (!isLoggedIn()) {
+	      Util.info('未登录，显示全屏登录界面');
+	      Panel.showLoginOverlay();
+	      if (Util.isRewardPage() || Util.isLivePage()) {
+	        Util.info('未登录，停止执行活动页任务');
+	        return;
+	      }
+	    }
 
-    if (!Util.isRewardPage() && !Util.isLivePage()) {
+	    if (!Util.isRewardPage() && !Util.isLivePage()) {
       Util.info('当前不在 B 站活动页或直播间，仅获取服务端列表并显示');
       try {
         const [baseResp, tasksResp] = await Promise.all([API.getBaseConfig(), API.getTasks()]);
