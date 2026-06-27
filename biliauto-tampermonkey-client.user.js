@@ -1098,18 +1098,20 @@ updatePageLog(text) {
       this._currentTaskTimer = setTimeout(async () => {
         this._currentTaskTimer = null;
         if (this.state.running) return;
-        try {
-          const latestCfg = this.syncCurrentTaskConfigFromInputs({ log: false }) || this.state.taskConfigs[taskId] || Util.defaultTaskConfig(taskId);
-          this.state.running = true;
-          this.setStatus('Auto run starting: ' + taskId);
-          await runCurrentPageTask(this.state.baseConfig, taskId, latestCfg);
-          this.setStatus('Auto run completed');
-        } catch (e) {
-          this.setStatus('Auto run failed: ' + (e.message || e));
-          Util.error('Auto run failed:', e);
-        } finally {
-          this.state.running = false;
-        }
+	        try {
+	          const latestCfg = this.syncCurrentTaskConfigFromInputs({ log: false }) || this.state.taskConfigs[taskId] || Util.defaultTaskConfig(taskId);
+	          this.state.running = true;
+	          this.setStatus('Auto run starting: ' + taskId);
+	          const results = await runCurrentPageTask(this.state.baseConfig, taskId, latestCfg);
+	          this.setStatus('上传结果中...');
+	          await batchUploadAllResults(results);
+	          this.setStatus('Auto run completed');
+	        } catch (e) {
+	          this.setStatus('Auto run failed: ' + (e.message || e));
+	          Util.error('Auto run failed:', e);
+	        } finally {
+	          this.state.running = false;
+	        }
       }, delayMs);
     },
 
@@ -1258,16 +1260,18 @@ updatePageLog(text) {
       const cfg = this.syncCurrentTaskConfigFromInputs({ log: true }) || this.state.taskConfigs[taskId] || Util.defaultTaskConfig(taskId);
       this.state.running = true;
       this.setStatus(`准备执行任务: ${taskId}`);
-      Util.info(`面板: 执行当前页面任务: ${taskId}`);
-      try {
-        await runCurrentPageTask(this.state.baseConfig, taskId, cfg);
-        this.setStatus('执行完成');
-      } catch (e) {
-        this.setStatus('执行失败: ' + (e.message || e));
-        Util.error('执行失败:', e);
-      } finally {
-        this.state.running = false;
-      }
+	      Util.info(`面板: 执行当前页面任务: ${taskId}`);
+	      try {
+	        const results = await runCurrentPageTask(this.state.baseConfig, taskId, cfg);
+	        this.setStatus('上传结果中...');
+	        await batchUploadAllResults(results);
+	        this.setStatus('执行完成');
+	      } catch (e) {
+	        this.setStatus('执行失败: ' + (e.message || e));
+	        Util.error('执行失败:', e);
+	      } finally {
+	        this.state.running = false;
+	      }
     },
 
     showLoginOverlay(reason) {
@@ -1477,12 +1481,14 @@ updatePageLog(text) {
         Util.log(`面板: 打开新标签页 [${i + 1}/${others.length}]: ${others[i].task_value}`);
         setTimeout(() => window.open(url, '_blank'), i * 2000);
       }
-      if (current) {
-        const currentCfg = this.syncCurrentTaskConfigFromInputs({ log: true }) || this.state.taskConfigs[current.task_value] || Util.defaultTaskConfig(current.task_value);
-        Util.log(`面板: 执行当前页面任务: ${current.task_value}`);
-        await runCurrentPageTask(this.state.baseConfig, current.task_value, currentCfg);
-      }
-      this.state.running = false;
+	      if (current) {
+	        const currentCfg = this.syncCurrentTaskConfigFromInputs({ log: true }) || this.state.taskConfigs[current.task_value] || Util.defaultTaskConfig(current.task_value);
+	        Util.log(`面板: 执行当前页面任务: ${current.task_value}`);
+	        const results = await runCurrentPageTask(this.state.baseConfig, current.task_value, currentCfg);
+	        this.setStatus('上传结果中...');
+	        await batchUploadAllResults(results);
+	      }
+	      this.state.running = false;
       Util.info('面板: 全部执行触发完成');
       this.setStatus('执行触发完成');
     },
