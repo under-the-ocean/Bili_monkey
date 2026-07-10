@@ -70,7 +70,7 @@
     DEFAULT_START_TIME: '00:29:57',
     MAX_RELOAD_ATTEMPTS: 3,
 
-    VERSION: '1.0.8',
+    VERSION: '1.0.9',
     RETRY_COUNT: 2,
     DEBUG: true
   };
@@ -407,6 +407,19 @@
     /** 上传页面信息，维护服务端任务列表 */
     uploadPageInfo(payload) {
       return this.request('POST', '/api/stats/page-info', payload);
+    },
+
+    getTaskParsedInfo(taskId) {
+      return this.request('GET', '/api/astrbot/task-parsed?task_id=' + encodeURIComponent(taskId));
+    },
+
+    /** 提交奖励说明用于AI解析（从info hook触发） */
+    submitAwardDescription(taskId, awardDescription, firstSeenAt) {
+      return this.request('POST', '/api/astrbot/award-description', {
+        task_id: taskId,
+        award_description: awardDescription,
+        first_seen_at: firstSeenAt
+      });
     },
 
     /** 批量上报结果 - 对标 Python batch_upload_results */
@@ -956,6 +969,19 @@
         const currentTaskConfig = document.querySelector('#biliauto-panel [data-ba="currentTaskConfig"]');
         if (taskId === (Util.extractTaskIdFromPage() || 'unknown_task')) {
           this.syncModeSwitch(currentTaskConfig, nextValue);
+        }
+      }
+      if (field === 'click_mode' && nextValue === 'direct') {
+        const confirmMsg = '⚠️ 风险提示：直接API模式下，你的IP将直接请求B站接口。\n\nB站频率限制为每秒1次，过快请求可能触发风控导致IP被封禁！\n\n建议配合代理或降低点击频率使用。\n\n是否继续使用直接API模式？';
+        if (!confirm(confirmMsg)) {
+          this.state.taskConfigs[taskId] = { ...current, click_mode: 'dom' };
+          this.syncModeSwitch(
+            document.querySelector('#biliauto-panel [data-ba="currentTaskConfig"]'),
+            'dom'
+          );
+          this.saveTaskConfigs();
+          if (!options.silent) this.setStatus('已切换回 DOM点击模式（安全模式）');
+          return;
         }
       }
       this.saveTaskConfigs();
@@ -1988,15 +2014,31 @@ updatePageLog(text) {
       const taskName = data.task_name || '';
       const actName = data.act_name || '';
       const awardName = data.reward_info && data.reward_info.award_name || '';
+      const awardDesc = data.reward_info && data.reward_info.award_description || '';
       Util.log(`  info 数据解析: task_id="${taskId}" task_name="${taskName}" act_name="${actName}" award_name="${awardName}"`);
       if (taskId && taskName) {
         this.missionInfo[taskId] = {
           task_id: taskId,
           task_name: taskName,
           act_name: actName,
-          award_name: awardName
+          award_name: awardName,
+          award_description: awardDesc
         };
         Util.info(`任务信息已捕获: [${taskId}] ${actName ? actName + ' - ' : ''}${taskName}${awardName ? ' [' + awardName + ']' : ''}`);
+        if (awardDesc) {
+          const firstSeenAt = Util.formatTime(ServerTime.nowDate());
+          API.submitAwardDescription(taskId, awardDesc, firstSeenAt).then(resp => {
+            if (resp && resp.status === 'success' && resp.task_parsed && resp.task_parsed.daily_claim_time && resp.task_parsed.daily_claim_time !== '不限') {
+              const ct = resp.task_parsed.daily_claim_time;
+              const p = ct.split(':');
+              const adjusted = p[0] + ':' + p[1] + ':57';
+              Util.info(`AI解析: 自动设置抢码时间 ${ct} -> ${adjusted}（提前3秒）`);
+              Panel.updateTaskConfig(taskId, 'start_time', adjusted, { silent: true, noRender: true });
+            }
+          }).catch(e => {
+            Util.log(`提交奖励说明失败: ${e.message || e}`);
+          });
+        }
         if (this._missionInfoCallback) {
           this._missionInfoCallback(taskId, taskName, actName);
         }
@@ -2039,7 +2081,8 @@ updatePageLog(text) {
       if (!info) return null;
       return {
         section_title: info.act_name || info.task_name || '',
-        award_info: info.award_name || info.task_name || ''
+        award_info: info.award_name || info.task_name || '',
+        award_description: info.award_description || ''
       };
     },
 
@@ -2362,7 +2405,7 @@ updatePageLog(text) {
       const startTime = startSpec.target;
       const intervalMs = Math.max(0, Number(config.interval || CONFIG.DEFAULT_CLICK_INTERVAL_MS / 1000) * 1000);
       const durationMs = Math.max(1, Number(config.duration || CONFIG.DEFAULT_CLICK_DURATION_MS / 1000) * 1000);
-            const waitSec = Math.max(0, (startTime.getTime() - ServerTime.now()) / 1000);
+      const waitSec = Math.max(0, (startTime.getTime() - ServerTime.now()) / 1000);
       if (startSpec.invalid) {
         const warnMsg = `任务 ${taskId} 的开始时间 "${config.start_time}" 无法识别，已回退为 ${startSpec.normalized}`;
         Util.warn(warnMsg);
@@ -2411,7 +2454,13 @@ updatePageLog(text) {
         message: `${resultText}；${claimResult.message}`,
         cdkey: captured && captured.cdkey || '',
         timestamp: Util.formatTime(),
-        device_name: CONFIG.DEVICE_NAME
+        device_name: CONFIG.DEVICE_NAME,
+        task_config: {
+          click_mode: config.click_mode,
+          interval: config.interval,
+          duration: config.duration,
+          start_time: config.start_time
+        }
       };
       return results[taskId];
     },
@@ -2554,16 +2603,28 @@ updatePageLog(text) {
       if (domPageInfo) {
         taskName = domPageInfo.section_title || domPageInfo.award_info || '';
         if (taskId && taskId !== 'unknown_task') {
+          const missionPageInfo = RewardMonitor.getMissionPageInfo(taskId);
           const payload = {
             task_id: taskId,
             device_name: CONFIG.DEVICE_NAME,
             section_title: domPageInfo.section_title,
             award_info: domPageInfo.award_info,
+            award_description: (missionPageInfo && missionPageInfo.award_description) || '',
+            first_seen_at: ServerTime.formatTime ? ServerTime.formatTime() : Util.formatTime(),
             extract_time: Util.formatTime()
           };
-          Util.log(`上传页面信息(DOM): task_id=${taskId} section_title="${domPageInfo.section_title}" award_info="${domPageInfo.award_info}"`);
+          Util.log(`上传页面信息: task_id=${taskId} section_title="${domPageInfo.section_title}" award_info="${domPageInfo.award_info}"`);
           API.uploadPageInfo(payload).then(resp => {
             Util.log(`页面信息上传成功:`, resp && resp.status);
+            if (resp && resp.task_parsed && resp.task_parsed.daily_claim_time && resp.task_parsed.daily_claim_time !== '不限') {
+              const claimTime = resp.task_parsed.daily_claim_time;
+              const parts = claimTime.split(':');
+              const h = parts[0] || '00';
+              const m = parts[1] || '00';
+              const adjusted = h + ':' + m + ':57';
+              Util.info(`自动设置抢码时间: ${claimTime} -> ${adjusted}（提前3秒）`);
+              Panel.updateTaskConfig(taskId, 'start_time', adjusted, { silent: true, noRender: true });
+            }
           }).catch(e => {
             Util.log(`页面信息上传失败（不影响主流程）:`, e.message || e);
           });
@@ -2580,6 +2641,24 @@ updatePageLog(text) {
       const tasks = Util.normalizeTasks(tasksResp.data || {});
       Panel.setData(baseConfig, tasks);
       Util.info(`远程任务列表: ${tasks.length} 个任务`);
+
+      // Query task parsed info
+      if (taskId && taskId !== 'unknown_task') {
+        API.getTaskParsedInfo(taskId).then(resp => {
+          if (resp && resp.status === 'success' && resp.data && resp.data.daily_claim_time && resp.data.daily_claim_time !== '不限') {
+            const claimTime = resp.data.daily_claim_time;
+            const parts = claimTime.split(':');
+            const adjusted = parts[0] + ':' + parts[1] + ':57';
+            const currentCfg = Panel.state.taskConfigs[taskId];
+            if (currentCfg && currentCfg.start_time !== adjusted) {
+              Panel.updateTaskConfig(taskId, 'start_time', adjusted, { silent: true, noRender: true });
+              Util.info(`AI解析: 自动设置抢码时间 ${claimTime} -> ${adjusted}（提前3秒）`);
+            }
+          }
+        }).catch(e => {
+          Util.log(`查询任务解析信息失败: ${e.message || e}`);
+        });
+      }
 
       const currentTask = Util.findTaskById(tasks, taskId);
       if (!taskName) taskName = Util.getTaskName(currentTask);
