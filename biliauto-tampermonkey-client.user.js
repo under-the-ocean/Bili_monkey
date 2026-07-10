@@ -410,12 +410,12 @@
     },
 
     getTaskParsedInfo(taskId) {
-      return this.request('GET', '/api/astrbot/task-parsed?task_id=' + encodeURIComponent(taskId));
+      return this.request('GET', '/api/stats/task-parsed?task_id=' + encodeURIComponent(taskId));
     },
 
     /** 提交奖励说明用于AI解析（从info hook触发） */
     submitAwardDescription(taskId, awardDescription, firstSeenAt) {
-      return this.request('POST', '/api/astrbot/award-description', {
+      return this.request('POST', '/api/stats/award-description', {
         task_id: taskId,
         award_description: awardDescription,
         first_seen_at: firstSeenAt
