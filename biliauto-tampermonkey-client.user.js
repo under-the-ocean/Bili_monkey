@@ -2108,16 +2108,25 @@ updatePageLog(text) {
       this.responseCache[taskId] = responses;
 
       const previous = this.cache[taskId];
-      if (!previous || code === 0 || previous.response_code !== 0) {
+      const isSuccess = code === 0;
+      const wasAlreadySuccess = previous && previous.response_code === 0;
+      const isDuplicate = wasAlreadySuccess && isSuccess;
+      if (!previous || (isSuccess && !wasAlreadySuccess) || (!isSuccess && !wasAlreadySuccess && previous.response_code !== 0)) {
         this.cache[taskId] = { ...logEntry, responses };
+      } else if (previous && wasAlreadySuccess && !isSuccess) {
+        return;
       } else {
         previous.responses = responses;
       }
+      if (isDuplicate) return;
       const logMsg = `【API响应】task_id=${taskId} code=${code} status=${status} msg=${reason || message}`;
       Util.log(logMsg);
       Util.log('原始响应:', respJson);
       if (Panel && Panel.updatePageLog) {
         Panel.updatePageLog(logMsg);
+      }
+      if (isSuccess && !wasAlreadySuccess) {
+        Util.notify('抢码成功', `[${taskName || taskId}] ${reason}`);
       }
     },
 
