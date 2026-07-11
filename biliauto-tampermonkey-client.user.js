@@ -1998,7 +1998,7 @@ updatePageLog(text) {
     },
 
     saveMissionInfo(json, url) {
-      Util.log(`saveMissionInfo 被调用: url=${url} code=${json && json.code} hasData=${!!(json && json.data)}`);
+      Util.info(`saveMissionInfo 被调用: url=${url} code=${json && json.code} hasData=${!!(json && json.data)}`);
       if (!json || json.code !== 0 || !json.data) {
         if (json && json.code !== 0) {
           Util.info(`info API 返回非0: code=${json.code} message=${json.message}`);
@@ -2015,7 +2015,7 @@ updatePageLog(text) {
       const actName = data.act_name || '';
       const awardName = data.reward_info && data.reward_info.award_name || '';
       const awardDesc = data.reward_info && data.reward_info.award_description || '';
-      Util.log(`  info 数据解析: task_id="${taskId}" task_name="${taskName}" act_name="${actName}" award_name="${awardName}"`);
+      Util.info(`info 数据解析: task_id="${taskId}" task_name="${taskName}" act_name="${actName}" award_name="${awardName}" award_description=${awardDesc ? '存在(' + awardDesc.length + '字)' : '空'}`);
       if (taskId && taskName) {
         this.missionInfo[taskId] = {
           task_id: taskId,
@@ -2026,8 +2026,10 @@ updatePageLog(text) {
         };
         Util.info(`任务信息已捕获: [${taskId}] ${actName ? actName + ' - ' : ''}${taskName}${awardName ? ' [' + awardName + ']' : ''}`);
         if (awardDesc) {
+          Util.info(`准备提交奖励说明给AI解析: task_id=${taskId} desc_len=${awardDesc.length}`);
           const firstSeenAt = Util.formatTime(ServerTime.nowDate());
           API.submitAwardDescription(taskId, awardDesc, firstSeenAt).then(resp => {
+            Util.info(`AI解析提交响应: ${JSON.stringify(resp)}`);
             if (resp && resp.status === 'success' && resp.task_parsed && resp.task_parsed.daily_claim_time && resp.task_parsed.daily_claim_time !== '不限') {
               const ct = resp.task_parsed.daily_claim_time;
               const p = ct.split(':');
@@ -2036,8 +2038,10 @@ updatePageLog(text) {
               Panel.updateTaskConfig(taskId, 'start_time', adjusted, { silent: true, noRender: true });
             }
           }).catch(e => {
-            Util.log(`提交奖励说明失败: ${e.message || e}`);
+            Util.info(`提交奖励说明失败: ${e.message || e}`);
           });
+        } else {
+          Util.info(`info API 未返回 award_description，跳过AI解析`);
         }
         if (this._missionInfoCallback) {
           this._missionInfoCallback(taskId, taskName, actName);
