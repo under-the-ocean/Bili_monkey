@@ -2662,6 +2662,38 @@ updatePageLog(text) {
         }).catch(e => {
           Util.log(`查询任务解析信息失败: ${e.message || e}`);
         });
+
+        // 如果 hook 未捕获 award_description，直接从 B站 API 获取
+        const missionInfo = RewardMonitor.getMissionPageInfo(taskId);
+        if (!missionInfo || !missionInfo.award_description) {
+          Util.info('hook 未捕获 award_description，尝试直接请求 B站 info API...');
+          const infoUrl = 'https://api.bilibili.com/x/activity_components/mission/info?task_id=' + encodeURIComponent(taskId);
+          fetch(infoUrl, { credentials: 'include' }).then(r => r.json()).then(infoJson => {
+            if (infoJson && infoJson.code === 0 && infoJson.data) {
+              const desc = infoJson.data.reward_info && infoJson.data.reward_info.award_description || '';
+              if (desc) {
+                Util.info(`直接请求 B站 info API 成功，award_description 存在(${desc.length}字)`);
+                const firstSeenAt = Util.formatTime(ServerTime.nowDate());
+                API.submitAwardDescription(taskId, desc, firstSeenAt).then(r => {
+                  Util.info(`AI解析提交响应: ${JSON.stringify(r)}`);
+                  if (r && r.status === 'success' && r.task_parsed && r.task_parsed.daily_claim_time && r.task_parsed.daily_claim_time !== '不限') {
+                    const ct = r.task_parsed.daily_claim_time;
+                    const p = ct.split(':');
+                    const adjusted = p[0] + ':' + p[1] + ':57';
+                    Util.info(`AI解析: 自动设置抢码时间 ${ct} -> ${adjusted}（提前3秒）`);
+                    Panel.updateTaskConfig(taskId, 'start_time', adjusted, { silent: true, noRender: true });
+                  }
+                }).catch(e => Util.log(`提交奖励说明失败: ${e.message || e}`));
+              } else {
+                Util.info('B站 info API 返回的 award_description 为空');
+              }
+            } else {
+              Util.info(`B站 info API 返回异常: ${infoJson && infoJson.message || '未知'}`);
+            }
+          }).catch(e => {
+            Util.log(`直接请求 B站 info API 失败: ${e.message || e}`);
+          });
+        }
       }
 
       const currentTask = Util.findTaskById(tasks, taskId);
