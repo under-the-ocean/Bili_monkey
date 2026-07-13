@@ -563,6 +563,22 @@
     _updateDisplay() {
       const el = document.getElementById('biliauto-time-offset');
       if (el) el.textContent = this.getOffsetDisplay();
+    },
+
+    _autoTimer: null,
+
+    startAutoCalibrate() {
+      if (this._autoTimer) return;
+      this._autoTimer = setInterval(() => {
+        this.calibrate();
+      }, 1800000);
+    },
+
+    stopAutoCalibrate() {
+      if (this._autoTimer) {
+        clearInterval(this._autoTimer);
+        this._autoTimer = null;
+      }
     }
   };
   // ========================
@@ -607,6 +623,7 @@
 
       this.applyDarkModeOptions();
       ServerTime.calibrate();
+      ServerTime.startAutoCalibrate();
       this.applyTheme();
       this.setupPanelPosition();
       this.setupDrag();
@@ -1124,7 +1141,8 @@ updatePageLog(text) {
       this._currentTaskTimer = setTimeout(async () => {
         this._currentTaskTimer = null;
         if (this.state.running) return;
-	        try {
+        await ServerTime.calibrate();
+        try {
 	          const latestCfg = this.syncCurrentTaskConfigFromInputs({ log: false }) || this.state.taskConfigs[taskId] || Util.defaultTaskConfig(taskId);
 	          this.state.running = true;
 	          this.setStatus('Auto run starting: ' + taskId);
@@ -2470,14 +2488,25 @@ updatePageLog(text) {
     },
 
     async waitUntil(targetTime) {
+      await ServerTime.calibrate();
       const diff = targetTime.getTime() - ServerTime.now();
       if (diff <= 0) {
         Util.log('waitUntil: 目标时间已过，立即执行');
         return;
       }
       Util.info(`等待 ${(diff / 1000).toFixed(1)} 秒 (到 ${Util.formatTime(targetTime)}) 后开始执行...`);
-      await Util.sleep(diff);
-      Util.info('等待结束，开始执行');
+      return new Promise(resolve => {
+        const poll = () => {
+          const remaining = targetTime.getTime() - ServerTime.now();
+          if (remaining <= 0) {
+            Util.info('等待结束，开始执行');
+            resolve();
+            return;
+          }
+          setTimeout(poll, remaining > 1000 ? 100 : 50);
+        };
+        poll();
+      });
     }
   };
 
