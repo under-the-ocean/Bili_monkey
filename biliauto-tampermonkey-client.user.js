@@ -86,19 +86,43 @@
   // 工具函数
   // ========================
   const Util = {
+    _logBuffer: [],
+    _logBufferMax: 200,
+
+    _log(level, args) {
+      const entry = {
+        level,
+        msg: Array.from(args).map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '),
+        time: new Date().toLocaleTimeString()
+      };
+      this._logBuffer.push(entry);
+      if (this._logBuffer.length > this._logBufferMax) {
+        this._logBuffer.splice(0, this._logBuffer.length - this._logBufferMax);
+      }
+    },
+
+    getLogs() {
+      const logs = this._logBuffer.slice();
+      this._logBuffer = [];
+      return logs;
+    },
+
     log(...args) {
-      if (CONFIG.DEBUG) console.log('[BiliAuto]', ...args);
+      if (CONFIG.DEBUG) { this._log('DEBUG', args); console.log('[BiliAuto]', ...args); }
     },
 
     info(...args) {
+      this._log('INFO', args);
       console.info('[BiliAuto]', ...args);
     },
 
     warn(...args) {
+      this._log('WARN', args);
       console.warn('[BiliAuto]', ...args);
     },
 
     error(...args) {
+      this._log('ERROR', args);
       console.error('[BiliAuto]', ...args);
     },
 
@@ -420,6 +444,10 @@
         award_description: awardDescription,
         first_seen_at: firstSeenAt
       });
+    },
+
+    uploadLogs(payload) {
+      return this.request('POST', '/api/stats/client-logs', payload);
     },
 
     /** 批量上报结果 - 对标 Python batch_upload_results */
@@ -2513,18 +2541,32 @@ updatePageLog(text) {
   // ========================
   // 批量上传 - 对标 Python server.py batch_upload_results
   // ========================
-  async function batchUploadAllResults(results) {
+async function batchUploadAllResults(results) {
     const uploadResults = Object.values(results || {}).filter(item => item && item.task_id);
     const uploadPayload = {
-      device_name: CONFIG.DEVICE_NAME,
-      total_tasks: uploadResults.length,
-      results: uploadResults,
-      upload_time: Util.formatTime()
+        device_name: CONFIG.DEVICE_NAME,
+        total_tasks: uploadResults.length,
+        results: uploadResults,
+        upload_time: Util.formatTime()
     };
     Util.info(`批量上传: ${uploadResults.length} 个当前执行任务结果`);
     Util.log('批量上传结果:', uploadPayload);
-    return await API.uploadWithRetry(uploadPayload);
-  }
+    const resp = await API.uploadWithRetry(uploadPayload);
+    // 上传日志
+    try {
+        const logs = Util.getLogs();
+        if (logs.length > 0) {
+            API.uploadLogs({
+                device_name: CONFIG.DEVICE_NAME,
+                task_id: uploadResults.length > 0 ? uploadResults[0].task_id : '',
+                logs: logs.slice(-100)
+            }).then(r => Util.log(`日志上传结果: ${r && r.status}`)).catch(() => {});
+        }
+    } catch(e) {
+        Util.log(`日志上传失败: ${e.message}`);
+    }
+    return resp;
+}
 
   // ========================
   // 当前页面任务流程
