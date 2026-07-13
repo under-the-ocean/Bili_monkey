@@ -2405,7 +2405,7 @@ updatePageLog(text) {
     },
 
     async runSingleTask(taskId, config, selector, results) {
-      const startSpec = Util.parseTimeSpec(config.start_time || CONFIG.DEFAULT_START_TIME);
+      const startSpec = Util.parseTimeSpec(config.start_time || CONFIG.DEFAULT_START_TIME, ServerTime.nowDate());
       const startTime = startSpec.target;
       const intervalMs = Math.max(0, Number(config.interval || CONFIG.DEFAULT_CLICK_INTERVAL_MS / 1000) * 1000);
       const durationMs = Math.max(1, Number(config.duration || CONFIG.DEFAULT_CLICK_DURATION_MS / 1000) * 1000);
