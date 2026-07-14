@@ -390,15 +390,18 @@
 	                  }
 	                } catch {}
 	              }
-	              if (res.status === 401) {
-	                try {
-	                  const parsed = JSON.parse(body);
-	                  if (parsed && parsed.code === 'AUTH_REQUIRED') {
-	                    Panel.showLoginOverlay('登录失效，请重新登录');
-	                    reject(Object.assign(new Error(parsed.message || '未登录'), { code: 'AUTH_REQUIRED' }));
-	                    return;
-	                  }
-	                } catch {}
+if (res.status === 401) {
+                try {
+                  const parsed = JSON.parse(body);
+                  if (parsed && parsed.code === 'AUTH_REQUIRED') {
+                    GM_setValue('api_key', '');
+                    CONFIG.API_KEY = '';
+                    Util.notify('登录失效', parsed.message || '登录已失效，请重新登录');
+                    Panel.showLoginOverlay(parsed.message || '登录失效，请重新登录');
+                    reject(Object.assign(new Error(parsed.message || '未登录'), { code: 'AUTH_REQUIRED' }));
+                    return;
+                  }
+                } catch {}
 	              }
 	              reject(new Error(`HTTP ${res.status}: ${body.slice(0, 200)}`));
 	              return;
