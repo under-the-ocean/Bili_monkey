@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BiliAutoClicker - 油猴客户端
 // @namespace    https://github.com/under-the-ocean
-// @version      1.1.3
+// @version      1.1.4
 // @match        https://www.bilibili.com/blackboard/era/award-exchange.html?*
 // @connect      bili.982835785.xyz
 // @connect      api.live.bilibili.com
@@ -70,7 +70,7 @@
     DEFAULT_START_TIME: '00:29:57',
     MAX_RELOAD_ATTEMPTS: 3,
 
-    VERSION: '1.1.3',
+    VERSION: '1.1.4',
     RETRY_COUNT: 2,
     DEBUG: true
   };
@@ -149,6 +149,20 @@
 
     text(el) {
       return el ? (el.innerText || el.textContent || '').trim() : '';
+    },
+
+    claimTimeMinusSeconds(timeStr, minusSec = 3) {
+      const parts = String(timeStr || '').trim().split(':').map(Number);
+      if (parts.length < 2 || parts.some(n => !Number.isFinite(n))) return timeStr;
+      const [h, m, s = 0] = parts;
+      let totalSec = h * 3600 + m * 60 + s - minusSec;
+      // 处理跨天借位
+      if (totalSec < 0) totalSec += 86400;
+      const nh = Math.floor(totalSec / 3600) % 24;
+      const nm = Math.floor(totalSec / 60) % 60;
+      const ns = totalSec % 60;
+      const pad = n => String(n).padStart(2, '0');
+      return `${pad(nh)}:${pad(nm)}:${pad(ns)}`;
     },
 
     normalizeStartTimeInput(timeStr) {
@@ -1186,6 +1200,12 @@ updatePageLog(text) {
           return;
         }
         await ServerTime.calibrate();
+        // calibrate 后再次检查 running，防止 await 期间其他链已开始执行
+        if (this.state.running) {
+          Util.warn('calibrate 后发现任务已在执行，5秒后重新调度');
+          setTimeout(() => this.scheduleCurrentTask(), 5000);
+          return;
+        }
         try {
 	          const latestCfg = this.syncCurrentTaskConfigFromInputs({ log: false }) || this.state.taskConfigs[taskId] || Util.defaultTaskConfig(taskId);
 	          this.state.running = true;
@@ -1517,7 +1537,11 @@ updatePageLog(text) {
       Util.info('登录完成');
       if (Util.notify) Util.notify('BiliAuto 登录成功', '已完成授权');
       await new Promise(r => setTimeout(r, 500));
-      main();
+      if (Panel.state.running) {
+        Util.warn('登录成功但任务正在执行，跳过重新进入 main');
+      } else {
+        main();
+      }
     },
 
     jumpManual() {
@@ -2108,8 +2132,7 @@ updatePageLog(text) {
             Util.info(`AI解析提交响应: ${JSON.stringify(resp)}`);
             if (resp && resp.status === 'success' && resp.task_parsed && resp.task_parsed.daily_claim_time && resp.task_parsed.daily_claim_time !== '不限') {
               const ct = resp.task_parsed.daily_claim_time;
-              const p = ct.split(':');
-              const adjusted = p[0] + ':' + p[1] + ':57';
+              const adjusted = Util.claimTimeMinusSeconds(ct, 3);
               Util.info(`AI解析: 自动设置抢码时间 ${ct} -> ${adjusted}（提前3秒）`);
               Panel.updateTaskConfig(taskId, 'start_time', adjusted, { silent: true, noRender: true });
             }
@@ -2572,7 +2595,22 @@ updatePageLog(text) {
   // ========================
   // 批量上传 - 对标 Python server.py batch_upload_results
   // ========================
+let _batchUploadPromise = null;
 async function batchUploadAllResults(results) {
+    // 互斥：防止并发调用导致重复上传同一批日志
+    if (_batchUploadPromise) {
+        Util.log('batchUploadAllResults: 等待上一次上传完成');
+        await _batchUploadPromise;
+    }
+    _batchUploadPromise = _doBatchUpload(results);
+    try {
+        return await _batchUploadPromise;
+    } finally {
+        _batchUploadPromise = null;
+    }
+}
+
+async function _doBatchUpload(results) {
     const uploadResults = Object.values(results || {}).filter(item => item && item.task_id);
     const uploadPayload = {
         device_name: CONFIG.DEVICE_NAME,
@@ -2583,18 +2621,27 @@ async function batchUploadAllResults(results) {
     Util.info(`批量上传: ${uploadResults.length} 个当前执行任务结果`);
     Util.log('批量上传结果:', uploadPayload);
     const resp = await API.uploadWithRetry(uploadPayload);
-    // 上传日志：先复制不清空，上传成功后再清空，失败时保留日志供下次重试
+    // 上传日志：先复制不清空，上传成功后只移除已上传的条数，失败时保留日志供下次重试
     try {
         const logs = Util.getLogs();
         if (logs.length > 0) {
+            const toUpload = logs.slice(-100);
+            const uploadedCount = toUpload.length;
+            const snapshotLen = logs.length;
             const logResp = await API.uploadLogs({
                 device_name: CONFIG.DEVICE_NAME,
                 task_id: uploadResults.length > 0 ? uploadResults[0].task_id : '',
-                logs: logs.slice(-100)
+                logs: toUpload
             });
             if (logResp && logResp.status === 'success') {
-                Util.clearLogs();
-                Util.log(`日志上传成功，已清空缓冲`);
+                // 移除已上传的条目（快照时最后 uploadedCount 条），保留上传期间新增的日志
+                if (Util._logBuffer.length >= snapshotLen) {
+                    Util._logBuffer.splice(snapshotLen - uploadedCount, uploadedCount);
+                } else {
+                    // 缓冲区被前端裁剪过，从末尾移除
+                    Util._logBuffer.splice(-uploadedCount);
+                }
+                Util.log(`日志上传成功，已移除 ${uploadedCount} 条`);
             } else {
                 Util.warn(`日志上传返回非成功状态: ${logResp && logResp.status}，保留日志缓冲`);
             }
@@ -2722,7 +2769,7 @@ async function batchUploadAllResults(results) {
             section_title: domPageInfo.section_title,
             award_info: domPageInfo.award_info,
             award_description: (missionPageInfo && missionPageInfo.award_description) || '',
-            first_seen_at: ServerTime.formatTime ? ServerTime.formatTime() : Util.formatTime(),
+            first_seen_at: Util.formatTime(ServerTime.nowDate()),
             extract_time: Util.formatTime()
           };
           Util.log(`上传页面信息: task_id=${taskId} section_title="${domPageInfo.section_title}" award_info="${domPageInfo.award_info}"`);
@@ -2730,10 +2777,7 @@ async function batchUploadAllResults(results) {
             Util.log(`页面信息上传成功:`, resp && resp.status);
             if (resp && resp.task_parsed && resp.task_parsed.daily_claim_time && resp.task_parsed.daily_claim_time !== '不限') {
               const claimTime = resp.task_parsed.daily_claim_time;
-              const parts = claimTime.split(':');
-              const h = parts[0] || '00';
-              const m = parts[1] || '00';
-              const adjusted = h + ':' + m + ':57';
+              const adjusted = Util.claimTimeMinusSeconds(claimTime, 3);
               Util.info(`自动设置抢码时间: ${claimTime} -> ${adjusted}（提前3秒）`);
               Panel.updateTaskConfig(taskId, 'start_time', adjusted, { silent: true, noRender: true });
             }
@@ -2759,8 +2803,7 @@ async function batchUploadAllResults(results) {
         API.getTaskParsedInfo(taskId).then(resp => {
           if (resp && resp.status === 'success' && resp.data && resp.data.daily_claim_time && resp.data.daily_claim_time !== '不限') {
             const claimTime = resp.data.daily_claim_time;
-            const parts = claimTime.split(':');
-            const adjusted = parts[0] + ':' + parts[1] + ':57';
+            const adjusted = Util.claimTimeMinusSeconds(claimTime, 3);
             const currentCfg = Panel.state.taskConfigs[taskId];
             if (currentCfg && currentCfg.start_time !== adjusted) {
               Panel.updateTaskConfig(taskId, 'start_time', adjusted, { silent: true, noRender: true });
@@ -2786,8 +2829,7 @@ async function batchUploadAllResults(results) {
                   Util.info(`AI解析提交响应: ${JSON.stringify(r)}`);
                   if (r && r.status === 'success' && r.task_parsed && r.task_parsed.daily_claim_time && r.task_parsed.daily_claim_time !== '不限') {
                     const ct = r.task_parsed.daily_claim_time;
-                    const p = ct.split(':');
-                    const adjusted = p[0] + ':' + p[1] + ':57';
+                    const adjusted = Util.claimTimeMinusSeconds(ct, 3);
                     Util.info(`AI解析: 自动设置抢码时间 ${ct} -> ${adjusted}（提前3秒）`);
                     Panel.updateTaskConfig(taskId, 'start_time', adjusted, { silent: true, noRender: true });
                   }
@@ -2822,10 +2864,9 @@ async function batchUploadAllResults(results) {
           const refreshedTasksResp = await API.getTasks();
           if (refreshedTasksResp.status === 'success') {
             const refreshedTasks = Util.normalizeTasks(refreshedTasksResp.data || {});
-            // 先清除执行锁再 setData，避免 setData 内 scheduleCurrentTask 受阻
-            Panel.state.running = false;
+            // 不释放 running 锁直接 setData，scheduleCurrentTask 会因 running=true 跳过
+            // 延迟到 finally 释放锁后，下次 scheduleCurrentTask 调用时自然重建
             Panel.setData(baseConfig, refreshedTasks);
-            Panel.state.running = true;
             // 用刷新后的任务名称更新已捕获的结果
             let updateCount = 0;
             for (const key of Object.keys(results)) {
@@ -2853,10 +2894,36 @@ async function batchUploadAllResults(results) {
         Util.info('========================================');
       } finally {
         Panel.state.running = false;
+        // 释放锁后重新调度，确保下次定时任务能正常建立
+        Panel.scheduleCurrentTask();
       }
     } catch (e) {
       Util.error('主流程异常:', e);
       Util.notify('BiliAuto 异常', e.message || String(e));
+
+      // 异常时也上传客户端日志，便于排查
+      try {
+        const logs = Util.getLogs();
+        if (logs.length > 0) {
+          const uploadedCount = logs.length > 100 ? 100 : logs.length;
+          const snapshotLen = logs.length;
+          const logResp = await API.uploadLogs({
+            device_name: CONFIG.DEVICE_NAME,
+            task_id: Util.extractTaskIdFromPage() || 'unknown_task',
+            logs: logs.slice(-100)
+          });
+          if (logResp && logResp.status === 'success') {
+            if (Util._logBuffer.length >= snapshotLen) {
+              Util._logBuffer.splice(snapshotLen - uploadedCount, uploadedCount);
+            } else {
+              Util._logBuffer.splice(-uploadedCount);
+            }
+            Util.log('异常时日志上传成功');
+          }
+        }
+      } catch (logErr) {
+        Util.warn('异常时日志上传失败:', logErr);
+      }
 
       try {
         Util.warn('异常时尝试上传失败结果...');
