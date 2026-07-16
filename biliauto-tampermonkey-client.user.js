@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BiliAutoClicker - 油猴客户端
 // @namespace    https://github.com/under-the-ocean
-// @version      1.1.2
+// @version      1.1.3
 // @match        https://www.bilibili.com/blackboard/era/award-exchange.html?*
 // @connect      bili.982835785.xyz
 // @connect      api.live.bilibili.com
@@ -70,7 +70,7 @@
     DEFAULT_START_TIME: '00:29:57',
     MAX_RELOAD_ATTEMPTS: 3,
 
-    VERSION: '1.1.2',
+    VERSION: '1.1.3',
     RETRY_COUNT: 2,
     DEBUG: true
   };
@@ -102,9 +102,11 @@
     },
 
     getLogs() {
-      const logs = this._logBuffer.slice();
+      return this._logBuffer.slice();
+    },
+
+    clearLogs() {
       this._logBuffer = [];
-      return logs;
     },
 
     log(...args) {
@@ -1156,11 +1158,16 @@ updatePageLog(text) {
     },
 
     scheduleCurrentTask() {
+      // 正在执行时不清除已有定时器，避免配置更新竞态导致任务永久丢失
+      if (this.state.running) {
+        Util.log('scheduleCurrentTask: 任务正在执行，保留现有定时器');
+        return;
+      }
       if (this._currentTaskTimer) {
         clearTimeout(this._currentTaskTimer);
         this._currentTaskTimer = null;
       }
-      if (!this.state.baseConfig || this.state.running) return;
+      if (!this.state.baseConfig) return;
       const taskId = Util.extractTaskIdFromPage() || 'unknown_task';
       if (!taskId || taskId === 'unknown_task') return;
       const cfg = this.state.taskConfigs[taskId] || Util.defaultTaskConfig(taskId);
@@ -1171,7 +1178,13 @@ updatePageLog(text) {
       this.updatePageLog('[AutoSchedule] task_id=' + taskId + ' start=' + parsed.normalized + ' countdown=' + (delayMs / 1000).toFixed(3) + 's');
       this._currentTaskTimer = setTimeout(async () => {
         this._currentTaskTimer = null;
-        if (this.state.running) return;
+        // 触发时如果仍在执行，短暂延迟后重新调度而非丢弃
+        if (this.state.running) {
+          Util.warn('定时触发时任务仍在执行，5秒后重新调度');
+          this.setStatus('任务仍在执行，5秒后重新调度');
+          setTimeout(() => this.scheduleCurrentTask(), 5000);
+          return;
+        }
         await ServerTime.calibrate();
         try {
 	          const latestCfg = this.syncCurrentTaskConfigFromInputs({ log: false }) || this.state.taskConfigs[taskId] || Util.defaultTaskConfig(taskId);
@@ -1551,11 +1564,20 @@ updatePageLog(text) {
       const current = selected.find(task => task.task_value === currentTask);
       const others = selected.filter(task => task.task_value !== currentTask);
       Util.log(`面板: 当前页面任务=${currentTask}, 其余=${others.length} 个将在新标签页打开`);
+      let blockedCount = 0;
       for (let i = 0; i < others.length; i++) {
         const url = Util.buildRewardUrl(baseUrl, others[i].task_value);
         Util.log(`面板: 打开新标签页 [${i + 1}/${others.length}]: ${others[i].task_value}`);
-        setTimeout(() => window.open(url, '_blank'), i * 2000);
+        setTimeout(() => {
+          const win = window.open(url, '_blank');
+          if (!win) {
+            blockedCount++;
+            Util.warn(`新标签页被浏览器拦截: ${others[i].task_value}`);
+            this.setStatus(`警告: ${blockedCount} 个任务标签页被拦截，请手动打开`);
+          }
+        }, i * 2000);
       }
+      try {
 	      if (current) {
 	        const currentCfg = this.syncCurrentTaskConfigFromInputs({ log: true }) || this.state.taskConfigs[current.task_value] || Util.defaultTaskConfig(current.task_value);
 	        Util.log(`面板: 执行当前页面任务: ${current.task_value}`);
@@ -1563,7 +1585,12 @@ updatePageLog(text) {
 	        this.setStatus('上传结果中...');
 	        await batchUploadAllResults(results);
 	      }
+      } catch (e) {
+        this.setStatus('执行失败: ' + (e.message || e));
+        Util.error('runSelected 执行失败:', e);
+      } finally {
 	      this.state.running = false;
+      }
       Util.info('面板: 全部执行触发完成');
       this.setStatus('执行触发完成');
     },
@@ -2310,7 +2337,8 @@ updatePageLog(text) {
     async performContinuousClick(selector, intervalMs, durationMs) {
       let successCount = 0;
       let failCount = 0;
-      const endTime = Date.now() + durationMs;
+      const startTime = Date.now();
+      const endTime = startTime + durationMs;
       const taskId = RewardMonitor.currentTaskId();
       // 从任务配置读取点击模式（默认dom保证安全）
       const taskCfg = Panel && Panel.state && Panel.state.taskConfigs && Panel.state.taskConfigs[taskId];
@@ -2324,13 +2352,47 @@ updatePageLog(text) {
       Util.info(`开始连点: selector=${selector}, interval=${intervalMs}ms, duration=${durationMs}ms, mode=${clickMode}, 结束时间=${Util.formatTime(new Date(endTime))}`);
       logToPanel(`【连点开始】task_id=${taskId} 间隔=${intervalMs}ms 时长=${(durationMs / 1000).toFixed(3)}秒`);
       const btn = Util.getByXPath(selector);
-      /*
-       * 原始 DOM 判断方式暂时注释，等 API hook 结果验证稳定后删除。
-       * const isSuccessText = (el) => el && (el.textContent || '').includes('查看奖励');
-       */
       if (btn) Executor.activateButton(btn);
+
+      // 执行单次点击的内部函数
+      const doClick = () => {
+        try {
+          if (isDirectMode) {
+            const directFn = typeof unsafeWindow !== 'undefined' && unsafeWindow.__biliauto_receive_direct;
+            if (directFn && directFn('user')) {
+              successCount++;
+            } else {
+              failCount++;
+            }
+          } else {
+            if (btn) {
+              btn.click();
+              successCount++;
+            } else {
+              failCount++;
+            }
+          }
+        } catch {
+          failCount++;
+        }
+      };
+
+      // 立即执行第一次点击，避免后台标签页首个定时器回调延迟导致 0 次点击
+      doClick();
+      {
+        const now = Date.now();
+        const captured = RewardMonitor.get(taskId);
+        if (captured && captured._continuedClickLogged !== true) {
+          captured._continuedClickLogged = true;
+          const summary = `【API 捕获】/mission/receive 响应 code=${captured.response_code}`;
+          Util.info(summary);
+          logToPanel(summary);
+        }
+        Util.log(`【首次点击】成功 ${successCount} 失败 ${failCount}`);
+      }
+
       return new Promise((resolve) => {
-        let lastLogTime = 0;
+        let lastLogTime = Date.now();
         const timer = setInterval(() => {
           const now = Date.now();
           const remaining = Math.max(0, endTime - now);
@@ -2342,17 +2404,8 @@ updatePageLog(text) {
             Util.info(summary);
             logToPanel(summary);
           }
-          /*
-           * 原始 DOM 判断方式暂时注释，当前只以 /mission/receive API 响应为准。
-          if (isSuccessText(btn)) {
-            clearInterval(timer);
-            const summary = `【DOM 检测】按钮文字已变为"查看奖励"，领取成功`;
-            Util.info(summary);
-            logToPanel(summary);
-            resolve({ success_count: successCount, fail_count: failCount, early_exit: true });
-            return;
-          }
-           */
+          // 先执行点击，再检查是否到期，确保至少执行一次点击
+          doClick();
           if (now >= endTime) {
             clearInterval(timer);
             const summary = `【连点结束】成功 ${successCount} 次, 失败 ${failCount} 次, 总点击 ${successCount + failCount} 次`;
@@ -2361,34 +2414,9 @@ updatePageLog(text) {
             resolve({ success_count: successCount, fail_count: failCount });
             return;
           }
-          try {
-            if (isDirectMode) {
-              // 直接API模式：绕过B站1s throttle，通过Vue组件直接调用handelReceive
-              const directFn = typeof unsafeWindow !== 'undefined' && unsafeWindow.__biliauto_receive_direct;
-              if (directFn && directFn('user')) {
-                successCount++;
-              } else {
-                failCount++;
-                const reason = typeof unsafeWindow !== 'undefined' && unsafeWindow.__biliauto_receive_direct_last_reason;
-                if (reason && now - lastLogTime > 500) {
-                  Util.log('direct mode attempt failed: ' + reason);
-                }
-              }
-            } else {
-              // DOM点击模式（低风险）：使用原始按钮点击，受B站1s限制
-              if (btn) {
-                btn.click();
-                successCount++;
-              } else {
-                failCount++;
-              }
-            }
-          } catch {
-            failCount++;
-          }
           if (now - lastLogTime > 2000) {
             lastLogTime = now;
-            const elapsed = ((now - (endTime - durationMs)) / 1000).toFixed(3);
+            const elapsed = ((now - startTime) / 1000).toFixed(3);
             const progressMsg = `【连点进度】${elapsed}s / ${(durationMs / 1000).toFixed(3)}s 成功 ${successCount} 失败 ${failCount}`;
             Util.log(progressMsg);
             logToPanel(progressMsg);
@@ -2555,18 +2583,24 @@ async function batchUploadAllResults(results) {
     Util.info(`批量上传: ${uploadResults.length} 个当前执行任务结果`);
     Util.log('批量上传结果:', uploadPayload);
     const resp = await API.uploadWithRetry(uploadPayload);
-    // 上传日志
+    // 上传日志：先复制不清空，上传成功后再清空，失败时保留日志供下次重试
     try {
         const logs = Util.getLogs();
         if (logs.length > 0) {
-            API.uploadLogs({
+            const logResp = await API.uploadLogs({
                 device_name: CONFIG.DEVICE_NAME,
                 task_id: uploadResults.length > 0 ? uploadResults[0].task_id : '',
                 logs: logs.slice(-100)
-            }).then(r => Util.log(`日志上传结果: ${r && r.status}`)).catch(() => {});
+            });
+            if (logResp && logResp.status === 'success') {
+                Util.clearLogs();
+                Util.log(`日志上传成功，已清空缓冲`);
+            } else {
+                Util.warn(`日志上传返回非成功状态: ${logResp && logResp.status}，保留日志缓冲`);
+            }
         }
     } catch(e) {
-        Util.log(`日志上传失败: ${e.message}`);
+        Util.warn(`日志上传失败: ${e.message}，保留日志缓冲供下次重试`);
     }
     return resp;
 }
@@ -2776,40 +2810,50 @@ async function batchUploadAllResults(results) {
 
       const taskConfigs = Util.loadTaskConfigs(tasks);
       Util.log(`加载了 ${Object.keys(taskConfigs).length} 个任务配置`);
-      const results = await runCurrentPageTask(baseConfig, taskId, taskConfigs[taskId] || Util.defaultTaskConfig(taskId), taskName);
-
-      // 上传页面信息后，服务端已自动更新 task_key，重新拉取任务列表以获取最新名称
-      Util.log('任务执行完成，重新拉取任务列表刷新名称...');
+      // 设置执行锁，防止面板定时器或配置更新触发重复执行
+      Panel.state.running = true;
+      let results;
       try {
-        const refreshedTasksResp = await API.getTasks();
-        if (refreshedTasksResp.status === 'success') {
-          const refreshedTasks = Util.normalizeTasks(refreshedTasksResp.data || {});
-          Panel.setData(baseConfig, refreshedTasks);
-          // 用刷新后的任务名称更新已捕获的结果
-          let updateCount = 0;
-          for (const key of Object.keys(results)) {
-            const refreshedTask = Util.findTaskById(refreshedTasks, key);
-            if (refreshedTask) {
-              const newName = Util.getTaskName(refreshedTask);
-              if (newName && newName !== results[key].task_name) {
-                Util.log(`任务名称更新: ${results[key].task_name} -> ${newName}`);
-                results[key].task_name = newName;
-                updateCount++;
+        results = await runCurrentPageTask(baseConfig, taskId, taskConfigs[taskId] || Util.defaultTaskConfig(taskId), taskName);
+
+        // 上传页面信息后，服务端已自动更新 task_key，重新拉取任务列表以获取最新名称
+        Util.log('任务执行完成，重新拉取任务列表刷新名称...');
+        try {
+          const refreshedTasksResp = await API.getTasks();
+          if (refreshedTasksResp.status === 'success') {
+            const refreshedTasks = Util.normalizeTasks(refreshedTasksResp.data || {});
+            // 先清除执行锁再 setData，避免 setData 内 scheduleCurrentTask 受阻
+            Panel.state.running = false;
+            Panel.setData(baseConfig, refreshedTasks);
+            Panel.state.running = true;
+            // 用刷新后的任务名称更新已捕获的结果
+            let updateCount = 0;
+            for (const key of Object.keys(results)) {
+              const refreshedTask = Util.findTaskById(refreshedTasks, key);
+              if (refreshedTask) {
+                const newName = Util.getTaskName(refreshedTask);
+                if (newName && newName !== results[key].task_name) {
+                  Util.log(`任务名称更新: ${results[key].task_name} -> ${newName}`);
+                  results[key].task_name = newName;
+                  updateCount++;
+                }
               }
             }
+            Util.log(`刷新任务列表完成，更新了 ${updateCount} 个任务名称`);
           }
-          Util.log(`刷新任务列表完成，更新了 ${updateCount} 个任务名称`);
+        } catch (e) {
+          Util.warn('刷新任务列表失败:', e);
         }
-      } catch (e) {
-        Util.warn('刷新任务列表失败:', e);
+
+        Util.info(`准备批量上传 ${Object.keys(results).length} 个当前任务结果`);
+        await batchUploadAllResults(results);
+
+        Util.info('========================================');
+        Util.info('主流程完成');
+        Util.info('========================================');
+      } finally {
+        Panel.state.running = false;
       }
-
-      Util.info(`准备批量上传 ${Object.keys(results).length} 个当前任务结果`);
-      await batchUploadAllResults(results);
-
-      Util.info('========================================');
-      Util.info('主流程完成');
-      Util.info('========================================');
     } catch (e) {
       Util.error('主流程异常:', e);
       Util.notify('BiliAuto 异常', e.message || String(e));
@@ -2832,6 +2876,8 @@ async function batchUploadAllResults(results) {
         Util.log('异常结果已上传');
       } catch (uploadErr) {
         Util.warn('上传异常结果失败:', uploadErr);
+      } finally {
+        Panel.state.running = false;
       }
     }
   }
