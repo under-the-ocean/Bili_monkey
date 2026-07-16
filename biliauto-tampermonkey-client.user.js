@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BiliAutoClicker - 油猴客户端
 // @namespace    https://github.com/under-the-ocean
-// @version      1.1.4
+// @version      1.1.5
 // @match        https://www.bilibili.com/blackboard/era/award-exchange.html?*
 // @connect      bili.982835785.xyz
 // @connect      api.live.bilibili.com
@@ -70,7 +70,7 @@
     DEFAULT_START_TIME: '00:29:57',
     MAX_RELOAD_ATTEMPTS: 3,
 
-    VERSION: '1.1.4',
+    VERSION: '1.1.5',
     RETRY_COUNT: 2,
     DEBUG: true
   };
@@ -2564,7 +2564,22 @@ updatePageLog(text) {
           interval: config.interval,
           duration: config.duration,
           start_time: config.start_time
-        }
+        },
+        click_stats: {
+          success_count: successCount,
+          fail_count: clickStats.fail_count || 0,
+          total_count: totalCount,
+          elapsed_time: elapsedTime
+        },
+        api_responses: (RewardMonitor.responseCache[taskId] || []).map(r => ({
+          response_code: r.response_code,
+          status: r.status,
+          message: r.message,
+          cdkey: r.cdkey || '',
+          timestamp: r.timestamp,
+          http_status: r.status_code || 0,
+          url: r.url || ''
+        }))
       };
       return results[taskId];
     },
@@ -2621,6 +2636,20 @@ async function _doBatchUpload(results) {
     Util.info(`批量上传: ${uploadResults.length} 个当前执行任务结果`);
     Util.log('批量上传结果:', uploadPayload);
     const resp = await API.uploadWithRetry(uploadPayload);
+    // 构建执行摘要：点击参数、API响应、点击结果
+    const executionSummary = uploadResults.map(r => ({
+      task_id: r.task_id,
+      task_name: r.task_name || '',
+      device_name: r.device_name || CONFIG.DEVICE_NAME,
+      status: r.status,
+      response_code: r.response_code,
+      message: r.message || '',
+      cdkey: r.cdkey || '',
+      timestamp: r.timestamp || Util.formatTime(),
+      click_params: r.task_config || {},
+      click_stats: r.click_stats || {},
+      api_responses: r.api_responses || []
+    }));
     // 上传日志：先复制不清空，上传成功后只移除已上传的条数，失败时保留日志供下次重试
     try {
         const logs = Util.getLogs();
@@ -2631,7 +2660,8 @@ async function _doBatchUpload(results) {
             const logResp = await API.uploadLogs({
                 device_name: CONFIG.DEVICE_NAME,
                 task_id: uploadResults.length > 0 ? uploadResults[0].task_id : '',
-                logs: toUpload
+                logs: toUpload,
+                execution_summary: executionSummary
             });
             if (logResp && logResp.status === 'success') {
                 // 移除已上传的条目（快照时最后 uploadedCount 条），保留上传期间新增的日志
@@ -2907,10 +2937,24 @@ async function _doBatchUpload(results) {
         if (logs.length > 0) {
           const uploadedCount = logs.length > 100 ? 100 : logs.length;
           const snapshotLen = logs.length;
+          const errTaskId = Util.extractTaskIdFromPage() || 'unknown_task';
           const logResp = await API.uploadLogs({
             device_name: CONFIG.DEVICE_NAME,
-            task_id: Util.extractTaskIdFromPage() || 'unknown_task',
-            logs: logs.slice(-100)
+            task_id: errTaskId,
+            logs: logs.slice(-100),
+            execution_summary: [{
+              task_id: errTaskId,
+              task_name: '',
+              device_name: CONFIG.DEVICE_NAME,
+              status: '异常',
+              response_code: 500,
+              message: e.message || String(e),
+              cdkey: '',
+              timestamp: Util.formatTime(),
+              click_params: {},
+              click_stats: {},
+              api_responses: []
+            }]
           });
           if (logResp && logResp.status === 'success') {
             if (Util._logBuffer.length >= snapshotLen) {
