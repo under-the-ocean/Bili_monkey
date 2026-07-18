@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BiliAutoClicker - 油猴客户端
 // @namespace    https://github.com/under-the-ocean
-// @version      1.1.5
+// @version      1.1.6
 // @match        https://www.bilibili.com/blackboard/era/award-exchange.html?*
 // @connect      bili.982835785.xyz
 // @connect      api.live.bilibili.com
@@ -70,7 +70,7 @@
     DEFAULT_START_TIME: '00:29:57',
     MAX_RELOAD_ATTEMPTS: 3,
 
-    VERSION: '1.1.5',
+    VERSION: '1.1.6',
     RETRY_COUNT: 2,
     DEBUG: true
   };
@@ -213,8 +213,11 @@
         const nums = parts.map(Number);
         if (nums.every(Number.isFinite)) {
           const [hh, mm, ss = 0] = nums;
-          const pad = n => String(Math.max(0, Math.floor(n))).padStart(2, '0');
-          return `${tomorrow ? '明天 ' : ''}${pad(hh)}:${pad(mm)}:${pad(ss)}`;
+          const padInt = n => String(Math.max(0, Math.floor(n))).padStart(2, '0');
+          const ssInt = Math.floor(ss);
+          const ms = Math.round((ss - ssInt) * 1000);
+          const msStr = ms > 0 ? '.' + String(ms).padStart(3, '0') : '';
+          return `${tomorrow ? '明天 ' : ''}${padInt(hh)}:${padInt(mm)}:${padInt(ssInt)}${msStr}`;
         }
       }
       return value;
@@ -245,8 +248,10 @@
       if (parts.length === 2 || parts.length === 3) {
         const [hours, minutes, seconds = 0] = parts;
         if ([hours, minutes, seconds].every(Number.isFinite)) {
+          const ssInt = Math.floor(seconds);
+          const ms = Math.round((seconds - ssInt) * 1000);
           const target = new Date(now);
-          target.setHours(hours, minutes, seconds, 0);
+          target.setHours(hours, minutes, ssInt, ms);
           if (forceTomorrow || target.getTime() <= now.getTime()) target.setDate(target.getDate() + 1);
           return { raw, normalized: value, target, delayMs: Math.max(0, target.getTime() - now.getTime()), mode: forceTomorrow ? 'tomorrow-clock' : 'clock' };
         }
@@ -1171,56 +1176,183 @@ updatePageLog(text) {
       this.render();
     },
 
+    _triggerScheduledTask(taskId) {
+      // 清理所有定时器
+      this._cleanupTimers();
+      if (this.state.running) {
+        Util.warn('定时触发时任务仍在执行，5秒后重新调度');
+        this.setStatus('任务仍在执行，5秒后重新调度');
+        setTimeout(() => this.scheduleCurrentTask(), 5000);
+        return;
+      }
+      ServerTime.calibrate().then(() => {
+        if (this.state.running) {
+          Util.warn('calibrate 后发现任务已在执行，5秒后重新调度');
+          setTimeout(() => this.scheduleCurrentTask(), 5000);
+          return;
+        }
+        this._doExecuteTask(taskId);
+      });
+    },
+
+    _doExecuteTask(taskId) {
+      const latestCfg = this.syncCurrentTaskConfigFromInputs({ log: false }) || this.state.taskConfigs[taskId] || Util.defaultTaskConfig(taskId);
+      this.state.running = true;
+      this.setStatus('Auto run starting: ' + taskId);
+      runCurrentPageTask(this.state.baseConfig, taskId, latestCfg).then(results => {
+        this.setStatus('上传结果中...');
+        return batchUploadAllResults(results);
+      }).then(() => {
+        this.setStatus('Auto run completed');
+      }).catch(e => {
+        this.setStatus('Auto run failed: ' + (e.message || e));
+        Util.error('Auto run failed:', e);
+      }).finally(() => {
+        this.state.running = false;
+      });
+    },
+
+    _hasTaskTimedOut(targetTime) {
+      return ServerTime.now() >= targetTime;
+    },
+
+    _cleanupTimers() {
+      if (this._calibrationTimer) {
+        clearTimeout(this._calibrationTimer);
+        this._calibrationTimer = null;
+      }
+      this._currentTargetTime = null;
+      this._currentScheduledTaskId = null;
+    },
+
+    // visibilitychange + focus 监听 - 标签页恢复可见时立即检查是否需要触发
+    _setupVisibilityCheck() {
+      if (this._visibilityInstalled) return;
+      this._visibilityInstalled = true;
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden || !this._currentTargetTime) return;
+        if (this._hasTaskTimedOut(this._currentTargetTime)) {
+          const taskId = this._currentScheduledTaskId;
+          if (taskId) {
+            Util.log('visibilitychange 检测到已过目标时间，立即触发');
+            this._triggerScheduledTask(taskId);
+          }
+        }
+      });
+      window.addEventListener('focus', () => {
+        if (!this._currentTargetTime) return;
+        if (this._hasTaskTimedOut(this._currentTargetTime)) {
+          const taskId = this._currentScheduledTaskId;
+          if (taskId) {
+            Util.log('window focus 检测到已过目标时间，立即触发');
+            this._triggerScheduledTask(taskId);
+          }
+        }
+      });
+    },
+
+    // 初始化后台 Web Worker 定时器
+    // Chrome 节流主线程 setInterval/setTimeout 但不节流 Worker 内的定时器
+    // Worker 是一个独立的 JS 线程，其定时器不受页面可见性影响
+    _initBackgroundWorker() {
+      if (this._bgWorker) return;
+      try {
+        const code = 'setInterval(function(){postMessage("tick")},100)';
+        const blob = new Blob([code], { type: 'application/javascript' });
+        const url = URL.createObjectURL(blob);
+        const worker = new Worker(url);
+        URL.revokeObjectURL(url);
+        worker.onmessage = () => {
+          if (this._currentTargetTime && !this.state.running) {
+            if (this._hasTaskTimedOut(this._currentTargetTime)) {
+              const taskId = this._currentScheduledTaskId;
+              if (taskId) {
+                Util.log('Web Worker 检测到已过目标时间，触发执行');
+                this._cleanupTimers();
+                this._triggerScheduledTask(taskId);
+              }
+            }
+          }
+        };
+        this._bgWorker = worker;
+        Util.info('后台 Web Worker 已启动 (100ms 精度，不受浏览器节流)');
+      } catch (e) {
+        Util.warn('Web Worker 创建失败，回退到 setInterval 轮询:', e.message);
+        if (this._bgFallbackTimer) {
+          clearInterval(this._bgFallbackTimer);
+        }
+        this._bgFallbackTimer = setInterval(() => {
+          if (this._currentTargetTime && !this.state.running) {
+            if (this._hasTaskTimedOut(this._currentTargetTime)) {
+              const taskId = this._currentScheduledTaskId;
+              if (taskId) {
+                Util.log('setInterval 轮询检测到已过目标时间，触发执行');
+                this._cleanupTimers();
+                this._triggerScheduledTask(taskId);
+              }
+            }
+          }
+        }, 200);
+      }
+    },
+
+    // 自适应校准：距目标时间越近，校准越频繁
+    // >1小时  → 30分钟一次
+    // >10分钟 → 5分钟一次
+    // >1分钟  → 30秒一次
+    // ≤1分钟  → 5秒一次
+    _startAdaptiveCalibration(targetTime) {
+      if (this._calibrationTimer) {
+        clearTimeout(this._calibrationTimer);
+        this._calibrationTimer = null;
+      }
+      const calcInterval = () => {
+        const remaining = targetTime - ServerTime.now();
+        if (remaining > 3600000) return 1800000;
+        if (remaining > 600000) return 300000;
+        if (remaining > 60000) return 30000;
+        if (remaining > 5000) return 5000;
+        return null;
+      };
+      const scheduleNext = () => {
+        const interval = calcInterval();
+        if (interval === null) return;
+        this._calibrationTimer = setTimeout(() => {
+          if (this._currentTargetTime !== targetTime) return;
+          ServerTime.calibrate().finally(() => {
+            if (this._currentTargetTime === targetTime) {
+              scheduleNext();
+            }
+          });
+        }, interval);
+      };
+      scheduleNext();
+    },
+
     scheduleCurrentTask() {
-      // 正在执行时不清除已有定时器，避免配置更新竞态导致任务永久丢失
       if (this.state.running) {
         Util.log('scheduleCurrentTask: 任务正在执行，保留现有定时器');
         return;
       }
-      if (this._currentTaskTimer) {
-        clearTimeout(this._currentTaskTimer);
-        this._currentTaskTimer = null;
-      }
+      this._cleanupTimers();
+      this._setupVisibilityCheck();
+      this._initBackgroundWorker();
       if (!this.state.baseConfig) return;
       const taskId = Util.extractTaskIdFromPage() || 'unknown_task';
       if (!taskId || taskId === 'unknown_task') return;
       const cfg = this.state.taskConfigs[taskId] || Util.defaultTaskConfig(taskId);
       const parsed = Util.parseTimeSpec(cfg.start_time || CONFIG.DEFAULT_START_TIME, ServerTime.nowDate());
       if (!parsed || !Number.isFinite(parsed.delayMs)) return;
-      const delayMs = Math.max(0, parsed.delayMs);
-      Util.log('schedule current task:', taskId, parsed.normalized, 'delay=', delayMs);
-      this.updatePageLog('[AutoSchedule] task_id=' + taskId + ' start=' + parsed.normalized + ' countdown=' + (delayMs / 1000).toFixed(3) + 's');
-      this._currentTaskTimer = setTimeout(async () => {
-        this._currentTaskTimer = null;
-        // 触发时如果仍在执行，短暂延迟后重新调度而非丢弃
-        if (this.state.running) {
-          Util.warn('定时触发时任务仍在执行，5秒后重新调度');
-          this.setStatus('任务仍在执行，5秒后重新调度');
-          setTimeout(() => this.scheduleCurrentTask(), 5000);
-          return;
+      const targetTime = parsed.target.getTime();
+      this._currentTargetTime = targetTime;
+      this._currentScheduledTaskId = taskId;
+      Util.log('schedule current task:', taskId, parsed.normalized, 'delay=', parsed.delayMs);
+      this.updatePageLog('[AutoSchedule] task_id=' + taskId + ' start=' + parsed.normalized + ' countdown=' + (parsed.delayMs / 1000).toFixed(3) + 's');
+      ServerTime.calibrate().then(() => {
+        if (this._currentTargetTime === targetTime) {
+          this._startAdaptiveCalibration(targetTime);
         }
-        await ServerTime.calibrate();
-        // calibrate 后再次检查 running，防止 await 期间其他链已开始执行
-        if (this.state.running) {
-          Util.warn('calibrate 后发现任务已在执行，5秒后重新调度');
-          setTimeout(() => this.scheduleCurrentTask(), 5000);
-          return;
-        }
-        try {
-	          const latestCfg = this.syncCurrentTaskConfigFromInputs({ log: false }) || this.state.taskConfigs[taskId] || Util.defaultTaskConfig(taskId);
-	          this.state.running = true;
-	          this.setStatus('Auto run starting: ' + taskId);
-	          const results = await runCurrentPageTask(this.state.baseConfig, taskId, latestCfg);
-	          this.setStatus('上传结果中...');
-	          await batchUploadAllResults(results);
-	          this.setStatus('Auto run completed');
-	        } catch (e) {
-	          this.setStatus('Auto run failed: ' + (e.message || e));
-	          Util.error('Auto run failed:', e);
-	        } finally {
-	          this.state.running = false;
-	        }
-      }, delayMs);
+      });
     },
 
     toggleDarkMode() {
