@@ -1221,6 +1221,7 @@ updatePageLog(text) {
         clearTimeout(this._calibrationTimer);
         this._calibrationTimer = null;
       }
+      this._stopKeepAliveAudio();
       this._currentTargetTime = null;
       this._currentScheduledTaskId = null;
     },
@@ -1251,11 +1252,41 @@ updatePageLog(text) {
       });
     },
 
+    // 创建无声 AudioContext 保持页面活跃，阻止 Chrome 后台节流
+    // Chrome 只节流不播放音频的后台页面，AudioContext 一旦创建，页面被视为"音频活跃"
+    _startKeepAliveAudio() {
+      if (this._keepAliveCtx) return;
+      try {
+        const AudioCtor = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtor) return;
+        const ctx = new AudioCtor();
+        // 创建一个无声的振荡器（音量 0），什么都不播放
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        gain.gain.value = 0;
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        this._keepAliveCtx = ctx;
+        Util.log('AudioContext 保活已启动，阻止后台节流');
+      } catch (e) {
+        Util.warn('AudioContext 保活创建失败:', e.message);
+      }
+    },
+
+    _stopKeepAliveAudio() {
+      if (this._keepAliveCtx) {
+        try { this._keepAliveCtx.close(); } catch (e) {}
+        this._keepAliveCtx = null;
+      }
+    },
+
     // 初始化后台 Web Worker 定时器
-    // Chrome 节流主线程 setInterval/setTimeout 但不节流 Worker 内的定时器
-    // Worker 是一个独立的 JS 线程，其定时器不受页面可见性影响
+    // Chrome 节流后台标签页的定时器（包括 Worker 内），但不会节流正在播放音频的页面
+    // 通过 _startKeepAliveAudio 创建无声 AudioContext 来阻止节流
     _initBackgroundWorker() {
       if (this._bgWorker) return;
+      this._startKeepAliveAudio();
       try {
         const code = 'setInterval(function(){postMessage("tick")},100)';
         const blob = new Blob([code], { type: 'application/javascript' });
@@ -1275,7 +1306,7 @@ updatePageLog(text) {
           }
         };
         this._bgWorker = worker;
-        Util.info('后台 Web Worker 已启动 (100ms 精度，不受浏览器节流)');
+        Util.info('后台 Web Worker 已启动 (100ms 精度，AudioContext 保活)');
       } catch (e) {
         Util.warn('Web Worker 创建失败，回退到 setInterval 轮询:', e.message);
         if (this._bgFallbackTimer) {
