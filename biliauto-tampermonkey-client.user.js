@@ -1297,7 +1297,10 @@ updatePageLog(text) {
     // Chrome 节流后台标签页的定时器（包括 Worker 内），但不会节流正在播放音频的页面
     // 通过 _startKeepAliveAudio 创建无声 AudioContext 来阻止节流
     _initBackgroundWorker() {
-      if (this._bgWorker) return;
+      if (this._bgWorker) {
+        try { this._bgWorker.terminate(); } catch (e) {}
+        this._bgWorker = null;
+      }
       this._startKeepAliveAudio();
       try {
         const code = 'setInterval(function(){postMessage("tick")},100)';
@@ -1397,10 +1400,12 @@ updatePageLog(text) {
       if (!parsed || !Number.isFinite(parsed.delayMs)) return;
       this._currentStartTimeStr = startTimeStr;
       this._currentScheduledTaskId = taskId;
+      this._scheduleGeneration = (this._scheduleGeneration || 0) + 1;
+      const gen = this._scheduleGeneration;
       Util.log('schedule current task:', taskId, parsed.normalized, 'delay=', parsed.delayMs);
       this.updatePageLog('[AutoSchedule] task_id=' + taskId + ' start=' + parsed.normalized + ' countdown=' + (parsed.delayMs / 1000).toFixed(3) + 's');
       ServerTime.calibrate().then(() => {
-        if (this._currentStartTimeStr === startTimeStr) {
+        if (this._currentStartTimeStr === startTimeStr && this._scheduleGeneration === gen) {
           this._startAdaptiveCalibration();
         }
       });
@@ -1540,8 +1545,13 @@ updatePageLog(text) {
 
     async runCurrent() {
       if (this.state.running) {
-        this.setStatus('正在执行中...');
-        return;
+        if (this._currentScheduledTaskId) {
+          Util.warn('runCurrent: 自动调度任务正在等待，强制重置 running 状态');
+          this.state.running = false;
+        } else {
+          this.setStatus('正在执行中...');
+          return;
+        }
       }
       if (!this.state.baseConfig || !this.state.baseConfig.reward_claim_selector) {
         this.setStatus('缺少领取按钮选择器配置');
@@ -1551,18 +1561,18 @@ updatePageLog(text) {
       const cfg = this.syncCurrentTaskConfigFromInputs({ log: true }) || this.state.taskConfigs[taskId] || Util.defaultTaskConfig(taskId);
       this.state.running = true;
       this.setStatus(`准备执行任务: ${taskId}`);
-	      Util.info(`面板: 执行当前页面任务: ${taskId}`);
-	      try {
-	        const results = await runCurrentPageTask(this.state.baseConfig, taskId, cfg);
-	        this.setStatus('上传结果中...');
-	        await batchUploadAllResults(results);
-	        this.setStatus('执行完成');
-	      } catch (e) {
-	        this.setStatus('执行失败: ' + (e.message || e));
-	        Util.error('执行失败:', e);
-	      } finally {
-	        this.state.running = false;
-	      }
+      Util.info(`面板: 执行当前页面任务: ${taskId}`);
+      try {
+        const results = await runCurrentPageTask(this.state.baseConfig, taskId, cfg);
+        this.setStatus('上传结果中...');
+        await batchUploadAllResults(results);
+        this.setStatus('执行完成');
+      } catch (e) {
+        this.setStatus('执行失败: ' + (e.message || e));
+        Util.error('执行失败:', e);
+      } finally {
+        this.state.running = false;
+      }
     },
 
     showLoginOverlay(reason) {
