@@ -1177,19 +1177,15 @@ updatePageLog(text) {
     },
 
     _triggerScheduledTask(taskId) {
-      // 清理所有定时器
       this._cleanupTimers();
       if (this.state.running) {
-        Util.warn('定时触发时任务仍在执行，5秒后重新调度');
-        this.setStatus('任务仍在执行，5秒后重新调度');
-        setTimeout(() => this.scheduleCurrentTask(), 5000);
-        return;
+        Util.warn('_triggerScheduledTask: running 状态卡住，强制重置');
+        this.state.running = false;
       }
       ServerTime.calibrate().then(() => {
         if (this.state.running) {
-          Util.warn('calibrate 后发现任务已在执行，5秒后重新调度');
-          setTimeout(() => this.scheduleCurrentTask(), 5000);
-          return;
+          Util.warn('calibrate 后发现 running 卡住，强制重置');
+          this.state.running = false;
         }
         this._doExecuteTask(taskId);
       });
@@ -1311,7 +1307,11 @@ updatePageLog(text) {
         URL.revokeObjectURL(url);
         worker.onmessage = () => {
           this._checkKeepAlive();
-          if (this._hasTaskTimedOut() && !this.state.running) {
+          if (this._hasTaskTimedOut()) {
+            if (this.state.running) {
+              Util.warn('Worker: 时间已到但 running 卡住，强制重置');
+              this.state.running = false;
+            }
             const taskId = this._currentScheduledTaskId;
             if (taskId) {
               Util.log('Web Worker 检测到已过目标时间，触发执行');
@@ -1329,7 +1329,11 @@ updatePageLog(text) {
         }
         this._bgFallbackTimer = setInterval(() => {
           this._checkKeepAlive();
-          if (this._hasTaskTimedOut() && !this.state.running) {
+          if (this._hasTaskTimedOut()) {
+            if (this.state.running) {
+              Util.warn('Fallback: 时间已到但 running 卡住，强制重置');
+              this.state.running = false;
+            }
             const taskId = this._currentScheduledTaskId;
             if (taskId) {
               Util.log('setInterval 轮询检测到已过目标时间，触发执行');
@@ -1378,8 +1382,8 @@ updatePageLog(text) {
 
     scheduleCurrentTask() {
       if (this.state.running) {
-        Util.log('scheduleCurrentTask: 任务正在执行，保留现有定时器');
-        return;
+        Util.warn('scheduleCurrentTask: running 状态卡住，强制重置并重新调度');
+        this.state.running = false;
       }
       this._cleanupTimers();
       this._setupVisibilityCheck();
