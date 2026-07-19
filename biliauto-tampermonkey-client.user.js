@@ -1282,6 +1282,21 @@ updatePageLog(text) {
       }
     },
 
+    _checkKeepAlive() {
+      if (!this._keepAliveCtx) {
+        this._startKeepAliveAudio();
+        return;
+      }
+      // 如果 AudioContext 被 Chrome 挂起 (suspended)，恢复它
+      if (this._keepAliveCtx.state === 'suspended') {
+        this._keepAliveCtx.resume().catch(() => {
+          // 恢复失败，重建
+          this._stopKeepAliveAudio();
+          this._startKeepAliveAudio();
+        });
+      }
+    },
+
     // 初始化后台 Web Worker 定时器
     // Chrome 节流后台标签页的定时器（包括 Worker 内），但不会节流正在播放音频的页面
     // 通过 _startKeepAliveAudio 创建无声 AudioContext 来阻止节流
@@ -1295,6 +1310,7 @@ updatePageLog(text) {
         const worker = new Worker(url);
         URL.revokeObjectURL(url);
         worker.onmessage = () => {
+          this._checkKeepAlive();
           if (this._hasTaskTimedOut() && !this.state.running) {
             const taskId = this._currentScheduledTaskId;
             if (taskId) {
@@ -1312,6 +1328,7 @@ updatePageLog(text) {
           clearInterval(this._bgFallbackTimer);
         }
         this._bgFallbackTimer = setInterval(() => {
+          this._checkKeepAlive();
           if (this._hasTaskTimedOut() && !this.state.running) {
             const taskId = this._currentScheduledTaskId;
             if (taskId) {
