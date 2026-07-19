@@ -1335,7 +1335,6 @@ updatePageLog(text) {
               Util.log('setInterval 轮询检测到已过目标时间，触发执行');
               this._cleanupTimers();
               this._triggerScheduledTask(taskId);
-              }
             }
           }
         }, 200);
