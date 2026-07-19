@@ -1212,8 +1212,10 @@ updatePageLog(text) {
       });
     },
 
-    _hasTaskTimedOut(targetTime) {
-      return ServerTime.now() >= targetTime;
+    _hasTaskTimedOut() {
+      if (!this._currentStartTimeStr) return false;
+      const parsed = Util.parseTimeSpec(this._currentStartTimeStr, ServerTime.nowDate());
+      return parsed && Number.isFinite(parsed.delayMs) && parsed.delayMs <= 0;
     },
 
     _cleanupTimers() {
@@ -1222,7 +1224,7 @@ updatePageLog(text) {
         this._calibrationTimer = null;
       }
       this._stopKeepAliveAudio();
-      this._currentTargetTime = null;
+      this._currentStartTimeStr = null;
       this._currentScheduledTaskId = null;
     },
 
@@ -1231,8 +1233,8 @@ updatePageLog(text) {
       if (this._visibilityInstalled) return;
       this._visibilityInstalled = true;
       document.addEventListener('visibilitychange', () => {
-        if (document.hidden || !this._currentTargetTime) return;
-        if (this._hasTaskTimedOut(this._currentTargetTime)) {
+        if (document.hidden) return;
+        if (this._hasTaskTimedOut()) {
           const taskId = this._currentScheduledTaskId;
           if (taskId) {
             Util.log('visibilitychange 检测到已过目标时间，立即触发');
@@ -1241,8 +1243,7 @@ updatePageLog(text) {
         }
       });
       window.addEventListener('focus', () => {
-        if (!this._currentTargetTime) return;
-        if (this._hasTaskTimedOut(this._currentTargetTime)) {
+        if (this._hasTaskTimedOut()) {
           const taskId = this._currentScheduledTaskId;
           if (taskId) {
             Util.log('window focus 检测到已过目标时间，立即触发');
@@ -1294,14 +1295,12 @@ updatePageLog(text) {
         const worker = new Worker(url);
         URL.revokeObjectURL(url);
         worker.onmessage = () => {
-          if (this._currentTargetTime && !this.state.running) {
-            if (this._hasTaskTimedOut(this._currentTargetTime)) {
-              const taskId = this._currentScheduledTaskId;
-              if (taskId) {
-                Util.log('Web Worker 检测到已过目标时间，触发执行');
-                this._cleanupTimers();
-                this._triggerScheduledTask(taskId);
-              }
+          if (this._hasTaskTimedOut() && !this.state.running) {
+            const taskId = this._currentScheduledTaskId;
+            if (taskId) {
+              Util.log('Web Worker 检测到已过目标时间，触发执行');
+              this._cleanupTimers();
+              this._triggerScheduledTask(taskId);
             }
           }
         };
@@ -1313,13 +1312,12 @@ updatePageLog(text) {
           clearInterval(this._bgFallbackTimer);
         }
         this._bgFallbackTimer = setInterval(() => {
-          if (this._currentTargetTime && !this.state.running) {
-            if (this._hasTaskTimedOut(this._currentTargetTime)) {
-              const taskId = this._currentScheduledTaskId;
-              if (taskId) {
-                Util.log('setInterval 轮询检测到已过目标时间，触发执行');
-                this._cleanupTimers();
-                this._triggerScheduledTask(taskId);
+          if (this._hasTaskTimedOut() && !this.state.running) {
+            const taskId = this._currentScheduledTaskId;
+            if (taskId) {
+              Util.log('setInterval 轮询检测到已过目标时间，触发执行');
+              this._cleanupTimers();
+              this._triggerScheduledTask(taskId);
               }
             }
           }
@@ -1332,13 +1330,15 @@ updatePageLog(text) {
     // >10分钟 → 5分钟一次
     // >1分钟  → 30秒一次
     // ≤1分钟  → 5秒一次
-    _startAdaptiveCalibration(targetTime) {
+    _startAdaptiveCalibration() {
       if (this._calibrationTimer) {
         clearTimeout(this._calibrationTimer);
         this._calibrationTimer = null;
       }
       const calcInterval = () => {
-        const remaining = targetTime - ServerTime.now();
+        const parsed = Util.parseTimeSpec(this._currentStartTimeStr, ServerTime.nowDate());
+        if (!parsed || !Number.isFinite(parsed.delayMs)) return null;
+        const remaining = parsed.delayMs;
         if (remaining > 3600000) return 1800000;
         if (remaining > 600000) return 300000;
         if (remaining > 60000) return 30000;
@@ -1349,9 +1349,9 @@ updatePageLog(text) {
         const interval = calcInterval();
         if (interval === null) return;
         this._calibrationTimer = setTimeout(() => {
-          if (this._currentTargetTime !== targetTime) return;
+          if (!this._currentStartTimeStr) return;
           ServerTime.calibrate().finally(() => {
-            if (this._currentTargetTime === targetTime) {
+            if (this._currentStartTimeStr) {
               scheduleNext();
             }
           });
@@ -1372,16 +1372,16 @@ updatePageLog(text) {
       const taskId = Util.extractTaskIdFromPage() || 'unknown_task';
       if (!taskId || taskId === 'unknown_task') return;
       const cfg = this.state.taskConfigs[taskId] || Util.defaultTaskConfig(taskId);
-      const parsed = Util.parseTimeSpec(cfg.start_time || CONFIG.DEFAULT_START_TIME, ServerTime.nowDate());
+      const startTimeStr = cfg.start_time || CONFIG.DEFAULT_START_TIME;
+      const parsed = Util.parseTimeSpec(startTimeStr, ServerTime.nowDate());
       if (!parsed || !Number.isFinite(parsed.delayMs)) return;
-      const targetTime = parsed.target.getTime();
-      this._currentTargetTime = targetTime;
+      this._currentStartTimeStr = startTimeStr;
       this._currentScheduledTaskId = taskId;
       Util.log('schedule current task:', taskId, parsed.normalized, 'delay=', parsed.delayMs);
       this.updatePageLog('[AutoSchedule] task_id=' + taskId + ' start=' + parsed.normalized + ' countdown=' + (parsed.delayMs / 1000).toFixed(3) + 's');
       ServerTime.calibrate().then(() => {
-        if (this._currentTargetTime === targetTime) {
-          this._startAdaptiveCalibration(targetTime);
+        if (this._currentStartTimeStr === startTimeStr) {
+          this._startAdaptiveCalibration();
         }
       });
     },
