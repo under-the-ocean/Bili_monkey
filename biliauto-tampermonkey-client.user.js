@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BiliAutoClicker - 油猴客户端
 // @namespace    https://github.com/under-the-ocean
-// @version      1.1.7
+// @version      1.1.8
 // @match        https://www.bilibili.com/blackboard/era/award-exchange.html?*
 // @connect      bili.982835785.xyz
 // @connect      api.live.bilibili.com
@@ -70,7 +70,7 @@
     DEFAULT_START_TIME: '00:29:57',
     MAX_RELOAD_ATTEMPTS: 3,
 
-    VERSION: '1.1.7',
+    VERSION: '1.1.8',
     RETRY_COUNT: 2,
     DEBUG: true
   };
@@ -915,7 +915,9 @@ if (res.status === 401) {
         if (!box) return;
         const currentTask = Util.extractTaskIdFromPage() || 'unknown_task';
         const field = target.getAttribute('data-field');
-        this.updateTaskConfig(currentTask, field, target.value, { silent: true, noRender: true });
+        // 仅保存到 state，不触发 GM_setValue 和 scheduleCurrentTask（避免每次按键都重建调度）
+        const current = this.state.taskConfigs[currentTask] || Util.defaultTaskConfig(currentTask);
+        this.state.taskConfigs[currentTask] = { ...current, [field]: target.value };
         target.dataset.currentConfigLiveBound = '1';
       });
 
@@ -1839,8 +1841,13 @@ updatePageLog(text) {
         const intervalInput = currentConfigEl.querySelector('[data-field="interval"]');
         const durationInput = currentConfigEl.querySelector('[data-field="duration"]');
         if (startTimeInput) startTimeInput.value = cfg.start_time || CONFIG.DEFAULT_START_TIME;
-        if (intervalInput) intervalInput.value = cfg.interval || CONFIG.DEFAULT_CLICK_INTERVAL_MS / 1000;
-        if (durationInput) durationInput.value = cfg.duration || CONFIG.DEFAULT_CLICK_DURATION_MS / 1000;
+        // 不覆盖用户正在编辑的输入框（仅首次渲染或值确实不同时更新）
+        if (intervalInput && !intervalInput.dataset.currentConfigLiveBound) {
+          intervalInput.value = cfg.interval || CONFIG.DEFAULT_CLICK_INTERVAL_MS / 1000;
+        }
+        if (durationInput && !durationInput.dataset.currentConfigLiveBound) {
+          durationInput.value = cfg.duration || CONFIG.DEFAULT_CLICK_DURATION_MS / 1000;
+        }
         this.syncModeSwitch(currentConfigEl, cfg.click_mode || CONFIG.DEFAULT_CLICK_MODE);
       }
 
