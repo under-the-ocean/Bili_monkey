@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BiliAutoClicker - 油猴客户端
 // @namespace    https://github.com/under-the-ocean
-// @version      1.1.8
+// @version      1.1.9
 // @match        https://www.bilibili.com/blackboard/era/award-exchange.html?*
 // @connect      bili.982835785.xyz
 // @connect      api.live.bilibili.com
@@ -70,7 +70,7 @@
     DEFAULT_START_TIME: '00:29:57',
     MAX_RELOAD_ATTEMPTS: 3,
 
-    VERSION: '1.1.8',
+    VERSION: '1.1.9',
     RETRY_COUNT: 2,
     DEBUG: true
   };
@@ -2705,19 +2705,19 @@ updatePageLog(text) {
     },
 
     async runSingleTask(taskId, config, selector, results) {
-      const startSpec = Util.parseTimeSpec(config.start_time || CONFIG.DEFAULT_START_TIME, ServerTime.nowDate());
-      const startTime = startSpec.target;
+      const startTimeStr = config.start_time || CONFIG.DEFAULT_START_TIME;
       const intervalMs = Math.max(0, Number(config.interval || CONFIG.DEFAULT_CLICK_INTERVAL_MS / 1000) * 1000);
       const durationMs = Math.max(1, Number(config.duration || CONFIG.DEFAULT_CLICK_DURATION_MS / 1000) * 1000);
-      const waitSec = Math.max(0, (startTime.getTime() - ServerTime.now()) / 1000);
+      // 交由 waitUntil 内部校准后重新计算 startTime，避免校准前后基准不一致导致提前点击
+      const actualStartTime = await this.waitUntil(startTimeStr);
+      const startSpec = Util.parseTimeSpec(startTimeStr, ServerTime.nowDate());
       if (startSpec.invalid) {
         const warnMsg = `任务 ${taskId} 的开始时间 "${config.start_time}" 无法识别，已回退为 ${startSpec.normalized}`;
         Util.warn(warnMsg);
         Panel.updatePageLog(`【时间回退】${warnMsg}`);
       }
-      Util.info(`任务配置: task_id=${taskId} start=${startSpec.normalized} wait=${waitSec.toFixed(3)}s interval=${intervalMs}ms duration=${durationMs}ms`);
-      Panel.updatePageLog(`【任务配置】task_id=${taskId} 开始时间=${startSpec.normalized} 等待=${waitSec.toFixed(3)}s 间隔=${intervalMs}ms 时长=${(durationMs / 1000).toFixed(3)}s`);
-      await this.waitUntil(startTime);
+      Util.info(`任务配置: task_id=${taskId} start=${startSpec.normalized} interval=${intervalMs}ms duration=${durationMs}ms`);
+      Panel.updatePageLog(`【任务配置】task_id=${taskId} 开始时间=${startSpec.normalized} 间隔=${intervalMs}ms 时长=${(durationMs / 1000).toFixed(3)}s`);
       RewardMonitor.clear(taskId);
       Util.info(`开始执行任务: ${taskId}`);
       Panel.updatePageLog(`【任务开始】task_id=${taskId} 计划时间=${startSpec.normalized} 实际时间=${Util.formatTime()}`);
@@ -2784,12 +2784,15 @@ updatePageLog(text) {
       return results[taskId];
     },
 
-    async waitUntil(targetTime) {
+    async waitUntil(startTimeStr) {
       await ServerTime.calibrate();
+      // 校准后重新计算目标时间，保证基准一致
+      const freshSpec = Util.parseTimeSpec(startTimeStr, ServerTime.nowDate());
+      const targetTime = freshSpec.target;
       const diff = targetTime.getTime() - ServerTime.now();
       if (diff <= 0) {
         Util.log('waitUntil: 目标时间已过，立即执行');
-        return;
+        return targetTime;
       }
       Util.info(`等待 ${(diff / 1000).toFixed(1)} 秒 (到 ${Util.formatTime(targetTime)}) 后开始执行...`);
       return new Promise(resolve => {
@@ -2797,7 +2800,7 @@ updatePageLog(text) {
           const remaining = targetTime.getTime() - ServerTime.now();
           if (remaining <= 0) {
             Util.info('等待结束，开始执行');
-            resolve();
+            resolve(targetTime);
             return;
           }
           setTimeout(poll, remaining > 1000 ? 100 : 50);
