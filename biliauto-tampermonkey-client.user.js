@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BiliAutoClicker - 油猴客户端
 // @namespace    https://github.com/under-the-ocean
-// @version      1.2.1
+// @version      1.3.1
 // @match        https://www.bilibili.com/blackboard/era/award-exchange.html?*
 // @connect      bili.982835785.xyz
 // @connect      api.live.bilibili.com
@@ -15,7 +15,7 @@
 // @grant        GM_getResourceURL
 // @grant        unsafeWindow
 // @resource     TEMPLATE_HTML https://gh-proxy.com/https://raw.githubusercontent.com/under-the-ocean/Bili_monkey/main/template.html
-// @resource     CUSTOM_FONT  https://gh-proxy.com/https://raw.githubusercontent.com/under-the-ocean/Bili_monkey/main/zh-cn.ttf
+// @resource     CUSTOM_FONT  https://gh-proxy.com/https://raw.githubusercontent.com/under-the-ocean/Bili_monkey/main/zh-cn.woff2
 // @run-at       document-start
 // @downloadURL  https://gh-proxy.com/https://raw.githubusercontent.com/under-the-ocean/Bili_monkey/main/biliauto-tampermonkey-client.user.js
 // @updateURL    https://gh-proxy.com/https://raw.githubusercontent.com/under-the-ocean/Bili_monkey/main/biliauto-tampermonkey-client.user.js
@@ -70,9 +70,10 @@
     DEFAULT_START_TIME: '00:29:57',
     MAX_RELOAD_ATTEMPTS: 3,
 
-    VERSION: '1.2.1',
+    VERSION: '1.3.1',
     RETRY_COUNT: 2,
-    DEBUG: true
+    // 调试日志默认关闭，减少生产环境控制台噪音与上传日志体积；如需排查可在油猴存储将 debug_mode 置为 true
+    DEBUG: GM_getValue('debug_mode', false)
   };
 
   if (!GM_getValue('device_id') && !CONFIG.QQ_ID) {
@@ -852,48 +853,28 @@ if (res.status === 401) {
       const tpl = GM_getResourceText('TEMPLATE_HTML');
       const fontUrl = GM_getResourceURL('CUSTOM_FONT');
       Util.log(`模板获取结果: ${tpl ? `成功，长度=${tpl.length}字符` : '失败（返回空或undefined）'}`);
-      
+
       if (!tpl) {
         Util.error('模板加载失败！原因: GM_getResourceText 返回空值');
         Util.log('远程模板地址: https://gh-proxy.com/https://raw.githubusercontent.com/under-the-ocean/Bili_monkey/main/template.html');
         Util.log('请检查：1. 网络连接 2. GitHub访问是否正常 3. 代理服务是否可用');
         return this.getSubTemplate('error', { ERROR_MSG: 'GM_getResourceText 返回空值' });
       }
-      
+
       Util.log('模板加载成功，开始替换变量...');
       const beforeLength = tpl.length;
+      // 模板仅使用两类插值：
+      //   ${CONFIG.KEY?'a':'b'}  —— 三元开关（如登录后才显示的元素）
+      //   ${CONFIG.KEY}          —— 直接取值（VERSION / ACCOUNT_NAME / API_BASE 等）
+      // 兜底清除任何残留的 ${...}，避免未处理的表达式以字面量形式渲染。
+      // 运行期动态内容一律走 getSubTemplate 的 {{KEY}} 占位机制，不在此处 eval。
+      // ${FONT_URL} 需在兜底清除前替换为字体资源的 blob 链接。
       let result = tpl
-        .replace(/\$\{VERSION\}/g, CONFIG.VERSION)
         .replace(/\$\{FONT_URL\}/g, fontUrl)
-        .replace(/\$\{DEVICE_ID_SHORT\}/g, CONFIG.DEVICE_ID.slice(0, 8))
-        .replace(/\$\{CONFIG\.QQ_ID\}/g, CONFIG.QQ_ID || '')
-        .replace(/\$\{CONFIG\.ACCOUNT_NAME\}/g, CONFIG.ACCOUNT_NAME || CONFIG.QQ_ID || '')
-        .replace(/\$\{CONFIG\.(\w+)\?('([^']*)')\s*:\s*('([^']*)')\}/g, (match, key, trueStr, trueVal, falseStr, falseVal) => (CONFIG[key] ? trueVal : falseVal))
-        .replace(/\$\{this\.escape\(([^)]+)\)\}/g, (match, expr) => {
-          try { const val = eval(expr); return this.escape(String(val ?? '')); } catch(e) { return ''; }
-        })
-        .replace(/\$\{this\.escapeAttr\(([^)]+)\)\}/g, (match, expr) => {
-          try { const val = eval(expr); return this.escapeAttr(String(val ?? '')); } catch(e) { return ''; }
-        })
-        .replace(/\$\{this\.state\.([^}]+)\}/g, (match, key) => {
-          try { const val = key.split('.').reduce((o, k) => o?.[k], this.state); return String(val ?? ''); } catch(e) { return ''; }
-        })
-        .replace(/\$\{this\.([^}]+)\}/g, (match, key) => {
-          try { const val = key.split('.').reduce((o, k) => o?.[k], this); return String(val ?? ''); } catch(e) { return ''; }
-        })
-        .replace(/\$\{i \+ 1\}/g, '')
-        .replace(/\$\{cfg\.([^}]+)\}/g, '')
-        .replace(/\$\{currentTask\}/g, '')
-        .replace(/\$\{current\.([^}]+)\}/g, '')
-        .replace(/\$\{CONFIG\.(\w+)\}/g, (match, key) => CONFIG[key] || '')
-        .replace(/\$\{others\[i\]\.([^}]+)\}/g, '')
-        .replace(/\$\{selected\.length\}/g, '')
-        .replace(/\$\{others\.length\}/g, '')
-        .replace(/\$\{tasks\.length\}/g, '')
-        .replace(/\$\{url\}/g, '')
-        .replace(/\$\{title\}/g, '')
-        .replace(/\$\{onlyTaskIds \? ' \(指定ID\)' : ''\}/g, '');
-      
+        .replace(/\$\{CONFIG\.(\w+)\?'([^']*)'\s*:\s*'([^']*)'\}/g, (match, key, trueVal, falseVal) => (CONFIG[key] ? trueVal : falseVal))
+        .replace(/\$\{CONFIG\.(\w+)\}/g, (match, key) => (CONFIG[key] != null ? String(CONFIG[key]) : ''))
+        .replace(/\$\{[^}]*\}/g, '');
+
       Util.log(`模板变量替换完成: 处理前=${beforeLength}字符, 处理后=${result.length}字符`);
       Util.log('=== 模板加载完成 ===');
       return result;
@@ -1185,21 +1166,6 @@ updatePageLog(text) {
       this.render();
     },
 
-    _triggerScheduledTask(taskId) {
-      this._cleanupTimers();
-      if (this.state.running) {
-        Util.warn('_triggerScheduledTask: running 状态卡住，强制重置');
-        this.state.running = false;
-      }
-      ServerTime.calibrate().then(() => {
-        if (this.state.running) {
-          Util.warn('calibrate 后发现 running 卡住，强制重置');
-          this.state.running = false;
-        }
-        this._doExecuteTask(taskId);
-      });
-    },
-
     _doExecuteTask(taskId) {
       const latestCfg = this.syncCurrentTaskConfigFromInputs({ log: false }) || this.state.taskConfigs[taskId] || Util.defaultTaskConfig(taskId);
       this.state.running = true;
@@ -1217,10 +1183,48 @@ updatePageLog(text) {
       });
     },
 
-    _hasTaskTimedOut() {
-      if (!this._currentStartTimeStr) return false;
+    // 距目标的剩余毫秒（服务器校准时间基准）；无有效调度返回 null
+    _remainingMs() {
+      if (!this._currentStartTimeStr) return null;
       const parsed = Util.parseTimeSpec(this._currentStartTimeStr, ServerTime.nowDate());
-      return parsed && Number.isFinite(parsed.delayMs) && parsed.delayMs <= 0;
+      return parsed && Number.isFinite(parsed.delayMs) ? parsed.delayMs : null;
+    },
+
+    // 幂等触发：仅当到点且本代未触发过时执行一次。
+    // 精确定时器（主）、Worker 心跳、可见性/焦点（后备）都汇入此处，靠 generation + _fired 去重。
+    // 触发路径不含任何网络请求，offset 由自适应校准提前备好。
+    _maybeFire(gen) {
+      if (gen !== this._scheduleGeneration) return;   // 已被新一轮调度取代
+      if (this._fired) return;                        // 本代已触发
+      const remaining = this._remainingMs();
+      if (remaining === null || remaining > 0) return; // 还没到点
+      const taskId = this._currentScheduledTaskId;
+      if (!taskId) return;
+      this._fired = true;
+      Util.info(`[Scheduler] 到点触发 task_id=${taskId}`);
+      this.updatePageLog(`[Scheduler] 到点触发 task_id=${taskId}`);
+      this._cleanupTimers();      // 清理调度定时器并置空调度状态，防止重复触发
+      this._doExecuteTask(taskId);
+    },
+
+    // 主线程精确定时器：远端用较粗 setTimeout，临近逐级加密，最后 ≤10ms 自旋精确命中目标时刻。
+    // 全程使用缓存 offset（ServerTime.now），不发起网络请求。
+    _armPreciseTimer(gen) {
+      const step = () => {
+        if (gen !== this._scheduleGeneration || this._fired) return;
+        const remaining = this._remainingMs();
+        if (remaining === null) return;
+        if (remaining <= 10) {
+          // 最后一小段自旋，规避 setTimeout 的 ~4ms 钳制，精确命中
+          const targetNow = ServerTime.now() + remaining;
+          while (ServerTime.now() < targetNow) { /* busy-wait ≤10ms */ }
+          this._maybeFire(gen);
+          return;
+        }
+        const next = remaining > 2000 ? 250 : (remaining > 500 ? 30 : 5);
+        this._preciseTimer = setTimeout(step, next);
+      };
+      step();
     },
 
     _cleanupTimers() {
@@ -1228,34 +1232,24 @@ updatePageLog(text) {
         clearTimeout(this._calibrationTimer);
         this._calibrationTimer = null;
       }
-      this._stopKeepAliveAudio();
+      if (this._preciseTimer) {
+        clearTimeout(this._preciseTimer);
+        this._preciseTimer = null;
+      }
+      // 注意：不在此停止 AudioContext 保活——连点执行期同样需要防后台节流，
+      // 保活由 Worker 心跳持续维护，仅在页面卸载时随进程释放。
       this._currentStartTimeStr = null;
       this._currentScheduledTaskId = null;
     },
 
-    // visibilitychange + focus 监听 - 标签页恢复可见时立即检查是否需要触发
+    // visibilitychange + focus 监听 - 标签页恢复可见时立即补一次幂等检查（后备触发源）
     _setupVisibilityCheck() {
       if (this._visibilityInstalled) return;
       this._visibilityInstalled = true;
       document.addEventListener('visibilitychange', () => {
-        if (document.hidden) return;
-        if (this._hasTaskTimedOut()) {
-          const taskId = this._currentScheduledTaskId;
-          if (taskId) {
-            Util.log('visibilitychange 检测到已过目标时间，立即触发');
-            this._triggerScheduledTask(taskId);
-          }
-        }
+        if (!document.hidden) this._maybeFire(this._scheduleGeneration);
       });
-      window.addEventListener('focus', () => {
-        if (this._hasTaskTimedOut()) {
-          const taskId = this._currentScheduledTaskId;
-          if (taskId) {
-            Util.log('window focus 检测到已过目标时间，立即触发');
-            this._triggerScheduledTask(taskId);
-          }
-        }
-      });
+      window.addEventListener('focus', () => this._maybeFire(this._scheduleGeneration));
     },
 
     // 创建无声 AudioContext 保持页面活跃，阻止 Chrome 后台节流
@@ -1317,23 +1311,13 @@ updatePageLog(text) {
         const url = URL.createObjectURL(blob);
         const worker = new Worker(url);
         URL.revokeObjectURL(url);
+        // 后备心跳：维护 AudioContext 保活，并在主线程精确定时器被后台节流时兜底触发（幂等）
         worker.onmessage = () => {
           this._checkKeepAlive();
-          if (this._hasTaskTimedOut()) {
-            if (this.state.running) {
-              Util.warn('Worker: 时间已到但 running 卡住，强制重置');
-              this.state.running = false;
-            }
-            const taskId = this._currentScheduledTaskId;
-            if (taskId) {
-              Util.log('Web Worker 检测到已过目标时间，触发执行');
-              this._cleanupTimers();
-              this._triggerScheduledTask(taskId);
-            }
-          }
+          this._maybeFire(this._scheduleGeneration);
         };
         this._bgWorker = worker;
-        Util.info('后台 Web Worker 已启动 (100ms 精度，AudioContext 保活)');
+        Util.info('后台 Web Worker 已启动 (100ms 心跳后备，AudioContext 保活)');
       } catch (e) {
         Util.warn('Web Worker 创建失败，回退到 setInterval 轮询:', e.message);
         if (this._bgFallbackTimer) {
@@ -1341,18 +1325,7 @@ updatePageLog(text) {
         }
         this._bgFallbackTimer = setInterval(() => {
           this._checkKeepAlive();
-          if (this._hasTaskTimedOut()) {
-            if (this.state.running) {
-              Util.warn('Fallback: 时间已到但 running 卡住，强制重置');
-              this.state.running = false;
-            }
-            const taskId = this._currentScheduledTaskId;
-            if (taskId) {
-              Util.log('setInterval 轮询检测到已过目标时间，触发执行');
-              this._cleanupTimers();
-              this._triggerScheduledTask(taskId);
-            }
-          }
+          this._maybeFire(this._scheduleGeneration);
         }, 200);
       }
     },
@@ -1393,13 +1366,10 @@ updatePageLog(text) {
     },
 
     scheduleCurrentTask() {
-      if (this.state.running) {
-        Util.warn('scheduleCurrentTask: running 状态卡住，强制重置并重新调度');
-        this.state.running = false;
-      }
+      // 不再强行重置 running（幂等 _fired + generation 已保证不会重复执行）
       this._cleanupTimers();
       this._setupVisibilityCheck();
-      this._initBackgroundWorker();
+      this._initBackgroundWorker();      // 后备心跳 + AudioContext 保活
       if (!this.state.baseConfig) return;
       const taskId = Util.extractTaskIdFromPage() || 'unknown_task';
       if (!taskId || taskId === 'unknown_task') return;
@@ -1409,14 +1379,16 @@ updatePageLog(text) {
       if (!parsed || !Number.isFinite(parsed.delayMs)) return;
       this._currentStartTimeStr = startTimeStr;
       this._currentScheduledTaskId = taskId;
+      this._fired = false;
       this._scheduleGeneration = (this._scheduleGeneration || 0) + 1;
       const gen = this._scheduleGeneration;
       Util.log('schedule current task:', taskId, parsed.normalized, 'delay=', parsed.delayMs);
       this.updatePageLog('[AutoSchedule] task_id=' + taskId + ' start=' + parsed.normalized + ' countdown=' + (parsed.delayMs / 1000).toFixed(3) + 's');
+      // 立即用当前缓存 offset 武装主线程精确定时器（不等待网络）；
+      // 随后异步校准并启动自适应校准，仅在早于目标足够时间时提升 offset 精度。
+      this._armPreciseTimer(gen);
       ServerTime.calibrate().then(() => {
-        if (this._currentStartTimeStr === startTimeStr && this._scheduleGeneration === gen) {
-          this._startAdaptiveCalibration();
-        }
+        if (this._scheduleGeneration === gen) this._startAdaptiveCalibration();
       });
     },
 
@@ -1954,11 +1926,127 @@ updatePageLog(text) {
   };
 
   // ========================
+  // 网络 hook 安装器（单一实现，两种注入方式共用）
+  // - unsafeWindow 路径：直接以 unsafeWindow 为 win 调用，规避 CSP 对内联脚本的拦截
+  // - 页面注入路径：将本函数源码注入 <script> 在页面上下文执行（unsafeWindow 为沙箱代理时兜底）
+  // 必须完全自包含（不引用 Util 等外层作用域），仅通过 win.postMessage 与主脚本通信。
+  // win.__BILIAUTO_REWARD_HOOK_INSTALLED__ 幂等守卫确保两条路径只有一条真正生效。
+  // ========================
+  const installNetworkHooks = function biliautoInstallNetworkHooks(win) {
+    try {
+      if (!win || win.__BILIAUTO_REWARD_HOOK_INSTALLED__) return false;
+      win.__BILIAUTO_REWARD_HOOK_INSTALLED__ = true;
+      var SOURCE = 'BILIAUTO_REWARD_MONITOR';
+      var API_PREFIX = '/x/activity_components/mission/';
+      var getUrl = function (input) {
+        if (typeof input === 'string') return input;
+        if (input && input.url) return input.url;
+        return '';
+      };
+      var getKind = function (url) {
+        if (!url || url.indexOf(API_PREFIX) === -1) return '';
+        if (url.indexOf('/mission/receive') !== -1) return 'receive';
+        if (url.indexOf('/mission/info') !== -1) return 'info';
+        if (url.indexOf('/mission/mylist') !== -1) return 'mylist';
+        return 'mission';
+      };
+      var readTaskId = function (url, body) {
+        try {
+          var fromUrl = new win.URL(url, win.location.href).searchParams.get('task_id');
+          if (fromUrl) return fromUrl;
+        } catch (e) {}
+        try {
+          if (typeof body === 'string') return new win.URLSearchParams(body).get('task_id') || '';
+          if (win.URLSearchParams && body instanceof win.URLSearchParams) return body.get('task_id') || '';
+          if (win.FormData && body instanceof win.FormData) return body.get('task_id') || '';
+        } catch (e) {}
+        return '';
+      };
+      var post = function (kind, url, status, text, body) {
+        try {
+          win.postMessage({
+            source: SOURCE,
+            payload: { kind: kind, url: url, status: status, text: text || '', taskId: readTaskId(url, body) }
+          }, '*');
+        } catch (e) {}
+      };
+      if (win.fetch) {
+        var rawFetch = win.fetch;
+        win.fetch = function (input, init) {
+          var url = getUrl(input);
+          var body = init && init.body;
+          var kind = getKind(url);
+          return rawFetch.apply(this, arguments).then(function (resp) {
+            if (kind) {
+              try {
+                resp.clone().text().then(function (text) { post(kind, url, resp.status, text, body); }).catch(function () {});
+              } catch (e) {}
+            }
+            return resp;
+          });
+        };
+      }
+      if (win.XMLHttpRequest) {
+        var RawXHR = win.XMLHttpRequest;
+        var rawOpen = RawXHR.prototype.open;
+        var rawSend = RawXHR.prototype.send;
+        RawXHR.prototype.open = function (method, url) {
+          this.__biliautoUrl = url || '';
+          this.__biliautoMethod = method || '';
+          return rawOpen.apply(this, arguments);
+        };
+        RawXHR.prototype.send = function (body) {
+          var xhr = this;
+          var url = xhr.__biliautoUrl || '';
+          var kind = getKind(url);
+          if (kind) {
+            xhr.addEventListener('loadend', function () {
+              post(kind, url, xhr.status, xhr.responseText || '', body);
+            });
+          }
+          return rawSend.apply(this, arguments);
+        };
+      }
+      // 直接调用 B站 receive 组件方法，绕过页面 1s 节流；保留 isExchangeLoading 检查防止并发请求
+      win.__biliauto_receive_direct = function (source) {
+        var setReason = function (reason) { win.__biliauto_receive_direct_last_reason = reason || 'unknown'; };
+        try {
+          var appEl = win.document.querySelector('#app');
+          if (!appEl || !appEl.__vue__) { setReason('#app or __vue__ not found'); return false; }
+          var root = appEl.__vue__;
+          var visited = [];
+          var findReceiveComponent = function (vm) {
+            if (!vm || visited.indexOf(vm) >= 0) return null;
+            visited.push(vm);
+            if (typeof vm.handelReceive === 'function') return vm;
+            var children = vm.$children || [];
+            for (var i = 0; i < children.length; i++) {
+              var found = findReceiveComponent(children[i]);
+              if (found) return found;
+            }
+            return null;
+          };
+          var indexComp = findReceiveComponent(root);
+          if (!indexComp || typeof indexComp.handelReceive !== 'function') { setReason('component with handelReceive not found'); return false; }
+          if (indexComp.isExchangeLoading) { setReason('blocked by isExchangeLoading'); return false; }
+          indexComp.handelReceive(source || 'script');
+          setReason('handelReceive invoked');
+          return true;
+        } catch (err) {
+          setReason('invoke failed: ' + (err && err.message || String(err)));
+          return false;
+        }
+      };
+      return true;
+    } catch (e) {
+      return false;
+    }
+  };
+
+  // ========================
   // 领取接口监控 + 任务信息捕获
   // ========================
   const RewardMonitor = {
-    RECEIVE_API_PATH: '/x/activity_components/mission/receive',
-    INFO_API_PATH: '/x/activity_components/mission/info',
     cache: {},
     responseCache: {},
     missionInfo: {},
@@ -2003,132 +2091,10 @@ updatePageLog(text) {
     _installUnsafeWindowHook() {
       try {
         const pageWindow = typeof unsafeWindow !== 'undefined' ? unsafeWindow : null;
-        if (!pageWindow || pageWindow.__BILIAUTO_REWARD_HOOK_INSTALLED__) return false;
-        pageWindow.__BILIAUTO_REWARD_HOOK_INSTALLED__ = true;
-        const apiPrefix = '/x/activity_components/mission/';
-        const getUrl = (input) => {
-          if (typeof input === 'string') return input;
-          if (input && input.url) return input.url;
-          return '';
-        };
-        const getKind = (url) => {
-          if (!url || url.indexOf(apiPrefix) === -1) return '';
-          if (url.indexOf('/mission/receive') !== -1) return 'receive';
-          if (url.indexOf('/mission/info') !== -1) return 'info';
-          if (url.indexOf('/mission/mylist') !== -1) return 'mylist';
-          return 'mission';
-        };
-        const readTaskId = (url, body) => {
-          try {
-            const fromUrl = new URL(url, location.href).searchParams.get('task_id');
-            if (fromUrl) return fromUrl;
-          } catch {}
-          try {
-            if (typeof body === 'string') return new URLSearchParams(body).get('task_id') || '';
-            if (pageWindow.URLSearchParams && body instanceof pageWindow.URLSearchParams) return body.get('task_id') || '';
-            if (pageWindow.FormData && body instanceof pageWindow.FormData) return body.get('task_id') || '';
-          } catch {}
-          return '';
-        };
-        const post = (kind, url, status, text, body) => {
-          pageWindow.postMessage({
-            source: 'BILIAUTO_REWARD_MONITOR',
-            payload: {
-              kind,
-              url,
-              status,
-              text: text || '',
-              taskId: readTaskId(url, body)
-            }
-          }, '*');
-        };
-        if (pageWindow.fetch) {
-          const rawFetch = pageWindow.fetch;
-          pageWindow.fetch = function (input, init) {
-            const url = getUrl(input);
-            const body = init && init.body;
-            const kind = getKind(url);
-            return rawFetch.apply(this, arguments).then((resp) => {
-              if (kind) {
-                try {
-                  resp.clone().text().then((text) => post(kind, url, resp.status, text, body)).catch(() => {});
-                } catch {}
-              }
-              return resp;
-            });
-          };
-        }
-        if (pageWindow.XMLHttpRequest) {
-          const RawXHR = pageWindow.XMLHttpRequest;
-          const rawOpen = RawXHR.prototype.open;
-          const rawSend = RawXHR.prototype.send;
-          RawXHR.prototype.open = function (method, url) {
-            this.__biliautoUrl = url || '';
-            this.__biliautoMethod = method || '';
-            return rawOpen.apply(this, arguments);
-          };
-          RawXHR.prototype.send = function (body) {
-            const xhr = this;
-            const url = xhr.__biliautoUrl || '';
-            const kind = getKind(url);
-            if (kind) {
-              xhr.addEventListener('loadend', function () {
-                post(kind, url, xhr.status, xhr.responseText || '', body);
-              });
-            }
-            return rawSend.apply(this, arguments);
-          };
-        }
-        Util.info('RewardMonitor unsafeWindow hook installed');
-        // 暴露直接调用 B站 receive 的函数，绕过 1s throttle
-        // 保留 isExchangeLoading 检查防止并发请求
-        pageWindow.__biliauto_receive_direct = function(source) {
-          var setReason = function(reason) {
-            pageWindow.__biliauto_receive_direct_last_reason = reason || 'unknown';
-          };
-          try {
-            var appEl = document.querySelector('#app');
-            if (!appEl || !appEl.__vue__) {
-              setReason('#app or __vue__ not found');
-              Util.warn('direct mode: #app or __vue__ not found');
-              return false;
-            }
-            var root = appEl.__vue__;
-            var visited = [];
-            var findReceiveComponent = function(vm) {
-              if (!vm || visited.indexOf(vm) >= 0) return null;
-              visited.push(vm);
-              if (typeof vm.handelReceive === 'function') return vm;
-              var children = vm.$children || [];
-              for (var i = 0; i < children.length; i++) {
-                var found = findReceiveComponent(children[i]);
-                if (found) return found;
-              }
-              return null;
-            };
-            var indexComp = findReceiveComponent(root);
-            if (!indexComp || typeof indexComp.handelReceive !== 'function') {
-              setReason('component with handelReceive not found');
-              Util.warn('direct mode: component with handelReceive not found');
-              return false;
-            }
-            if (indexComp.isExchangeLoading) {
-              setReason('blocked by isExchangeLoading');
-              Util.log('direct mode: blocked by isExchangeLoading');
-              return false; // ??????????
-            }
-            indexComp.handelReceive(source || 'script');
-            setReason('handelReceive invoked');
-            Util.log('direct mode: handelReceive invoked');
-            return true;
-          } catch (err) {
-            var message = err && err.message || String(err);
-            setReason('invoke failed: ' + message);
-            Util.warn('direct mode invoke failed: ' + message);
-            return false;
-          }
-        };
-        return true;
+        if (!pageWindow) return false;
+        const ok = installNetworkHooks(pageWindow);
+        if (ok) Util.info('RewardMonitor unsafeWindow hook installed');
+        return ok;
       } catch (e) {
         Util.warn(`RewardMonitor unsafeWindow hook failed: ${e.message}`);
         return false;
@@ -2137,92 +2103,8 @@ updatePageLog(text) {
 
     _injectPageHook() {
       if (document.getElementById('biliauto-reward-page-hook')) return;
-      const code = `
-        ;(function () {
-          if (window.__BILIAUTO_REWARD_HOOK_INSTALLED__) return;
-          window.__BILIAUTO_REWARD_HOOK_INSTALLED__ = true;
-          var SOURCE = 'BILIAUTO_REWARD_MONITOR';
-          var API_PREFIX = '/x/activity_components/mission/';
-          function getUrl(input) {
-            if (typeof input === 'string') return input;
-            if (input && input.url) return input.url;
-            return '';
-          }
-          function getKind(url) {
-            if (!url || url.indexOf(API_PREFIX) === -1) return '';
-            if (url.indexOf('/mission/receive') !== -1) return 'receive';
-            if (url.indexOf('/mission/info') !== -1) return 'info';
-            if (url.indexOf('/mission/mylist') !== -1) return 'mylist';
-            return 'mission';
-          }
-          function readTaskId(url, body) {
-            try {
-              var u = new URL(url, location.href);
-              var fromUrl = u.searchParams.get('task_id');
-              if (fromUrl) return fromUrl;
-            } catch (e) {}
-            try {
-              if (typeof body === 'string') return new URLSearchParams(body).get('task_id') || '';
-              if (body instanceof URLSearchParams) return body.get('task_id') || '';
-              if (body instanceof FormData) return body.get('task_id') || '';
-            } catch (e) {}
-            return '';
-          }
-          function post(kind, url, status, text, body) {
-            try {
-              window.postMessage({
-                source: SOURCE,
-                payload: {
-                  kind: kind,
-                  url: url,
-                  status: status,
-                  text: text || '',
-                  taskId: readTaskId(url, body)
-                }
-              }, '*');
-            } catch (e) {}
-          }
-          if (window.fetch) {
-            var rawFetch = window.fetch;
-            window.fetch = function (input, init) {
-              var url = getUrl(input);
-              var body = init && init.body;
-              var kind = getKind(url);
-              return rawFetch.apply(this, arguments).then(function (resp) {
-                if (kind) {
-                  try {
-                    resp.clone().text().then(function (text) {
-                      post(kind, url, resp.status, text, body);
-                    }).catch(function () {});
-                  } catch (e) {}
-                }
-                return resp;
-              });
-            };
-          }
-          if (window.XMLHttpRequest) {
-            var RawXHR = window.XMLHttpRequest;
-            var rawOpen = RawXHR.prototype.open;
-            var rawSend = RawXHR.prototype.send;
-            RawXHR.prototype.open = function (method, url) {
-              this.__biliautoUrl = url || '';
-              this.__biliautoMethod = method || '';
-              return rawOpen.apply(this, arguments);
-            };
-            RawXHR.prototype.send = function (body) {
-              var xhr = this;
-              var url = xhr.__biliautoUrl || '';
-              var kind = getKind(url);
-              if (kind) {
-                xhr.addEventListener('loadend', function () {
-                  post(kind, url, xhr.status, xhr.responseText || '', body);
-                });
-              }
-              return rawSend.apply(this, arguments);
-            };
-          }
-        })();
-      `;
+      // 注入与 unsafeWindow 路径完全相同的安装器源码，在页面上下文以 window 为 win 执行
+      const code = ';(' + installNetworkHooks.toString() + ')(window);';
       const script = document.createElement('script');
       script.id = 'biliauto-reward-page-hook';
       script.textContent = code;
@@ -2257,61 +2139,6 @@ updatePageLog(text) {
 
     currentTaskId() {
       return Util.extractTaskIdFromPage() || 'unknown_task';
-    },
-
-    captureFetch(input, response) {
-      const url = typeof input === 'string' ? input : input && input.url;
-      if (!url) {
-        Util.log(`fetch 捕获: 无法获取 URL (input=${typeof input})`);
-        return;
-      }
-      if (url.includes(this.RECEIVE_API_PATH)) {
-        Util.log(`捕获 fetch receive API: ${url} status=${response.status}`);
-        response.text().then(text => {
-          Util.log(`  receive 响应内容(${text.length}字符): ${text.slice(0, 300)}`);
-          try {
-            const json = JSON.parse(text);
-            this.save(this.currentTaskId(), json, url, response.status);
-          } catch (e) {
-            Util.warn(`  receive 响应JSON解析失败: ${e.message}`);
-          }
-        }).catch(e => Util.warn(`  receive 响应读取失败: ${e.message}`));
-      } else if (url.includes(this.INFO_API_PATH)) {
-        Util.log(`捕获 fetch info API: ${url} status=${response.status}`);
-        response.text().then(text => {
-          Util.log(`  info 响应内容(${text.length}字符): ${text.slice(0, 500)}`);
-          try {
-            const parsed = JSON.parse(text);
-            this.saveMissionInfo(parsed, url);
-          } catch (e) {
-            Util.warn(`  info 响应解析失败: ${e.message}`);
-          }
-        }).catch(e => Util.warn(`  info 响应读取失败: ${e.message}`));
-      } else if (url.includes('/x/activity_components/mission/')) {
-        Util.log(`fetch 捕获其他 mission API: ${url} status=${response.status}`);
-      }
-    },
-
-    captureXhr(xhr) {
-      const url = xhr.__biliautoUrl || '';
-      if (url.includes(this.RECEIVE_API_PATH)) {
-        Util.log(`捕获 XHR receive API: ${url} status=${xhr.status}`);
-        try {
-          this.save(this.currentTaskId(), JSON.parse(xhr.responseText || '{}'), url, xhr.status);
-        } catch {}
-      } else if (url.includes(this.INFO_API_PATH)) {
-        Util.log(`捕获 XHR info API: ${url} status=${xhr.status}`);
-        try {
-          const raw = xhr.responseText || '';
-          Util.log(`  info 响应内容(${raw.length}字符): ${raw.slice(0, 500)}`);
-          const json = JSON.parse(raw);
-          this.saveMissionInfo(json, url);
-        } catch (e) {
-          Util.warn(`  XHR info 解析失败: ${e.message}`);
-        }
-      } else if (url.includes('/x/activity_components/mission/')) {
-        Util.log(`XHR 捕获其他 mission API: ${url} status=${xhr.status}`);
-      }
     },
 
     saveMissionInfo(json, url) {
@@ -2680,23 +2507,6 @@ updatePageLog(text) {
         logToPanel(resultMsg);
         return { ok, response_code: captured.response_code, message: resultMsg };
       }
-      /*
-       * 原始 DOM 判断方式暂时注释，等 API hook 结果验证稳定后删除。
-      const deadline = Date.now() + 5000;
-      while (Date.now() < deadline) {
-        if (btn && (btn.textContent || '').includes('查看奖励')) {
-          const resultMsg = '✅ 领取成功: 按钮文字已变为"查看奖励"';
-          Util.log(resultMsg);
-          logToPanel(resultMsg);
-          return { ok: true, response_code: 0, message: resultMsg };
-        }
-        await Util.sleep(100);
-      }
-      const resultMsg = '❌ 超时未检测到"查看奖励"，领取可能失败';
-      Util.log(resultMsg);
-      logToPanel(resultMsg);
-      return { ok: false, response_code: -1, message: resultMsg };
-       */
       const resultMsg = '未捕获到 /mission/receive API 响应，暂不使用 DOM/按钮文字判断';
       Util.warn(resultMsg);
       logToPanel(resultMsg);
@@ -2750,15 +2560,6 @@ updatePageLog(text) {
           message: `API领取结果: ${captured.message || ''}`
         };
       } else {
-        /*
-         * 原始 DOM 判断方式暂时注释，等 API hook 结果验证稳定后删除。
-         * if (clickStats.early_exit) {
-         *   claimResult = { ok: true, response_code: 0, message: '✅ 按钮文字已变为"查看奖励"' };
-         * } else {
-         *   const btn = Util.getByXPath(selector);
-         *   claimResult = await this.judgeClaimResult(btn, taskId);
-         * }
-         */
         const btn = Util.getByXPath(selector);
         claimResult = await this.judgeClaimResult(btn, taskId);
       }
@@ -2802,25 +2603,38 @@ updatePageLog(text) {
     },
 
     async waitUntil(startTimeStr) {
-      await ServerTime.calibrate();
-      // 校准后重新计算目标时间，保证基准一致
-      const freshSpec = Util.parseTimeSpec(startTimeStr, ServerTime.nowDate());
-      const targetTime = freshSpec.target;
-      const diff = targetTime.getTime() - ServerTime.now();
+      // 仅在剩余时间充足（>6s）时做一次网络校准以提升 offset 精度；
+      // 临近目标只用缓存 offset，避免把网络 RTT 注入临界路径导致点击延后。
+      let spec = Util.parseTimeSpec(startTimeStr, ServerTime.nowDate());
+      if (spec.target.getTime() - ServerTime.now() > 6000) {
+        await ServerTime.calibrate();
+        spec = Util.parseTimeSpec(startTimeStr, ServerTime.nowDate());
+      }
+      const targetTime = spec.target;
+      const targetMs = targetTime.getTime();
+      const diff = targetMs - ServerTime.now();
       if (diff <= 0) {
         Util.log('waitUntil: 目标时间已过，立即执行');
         return targetTime;
       }
-      Util.info(`等待 ${(diff / 1000).toFixed(1)} 秒 (到 ${Util.formatTime(targetTime)}) 后开始执行...`);
+      Util.info(`等待 ${(diff / 1000).toFixed(3)} 秒 (到 ${Util.formatTime(targetTime)}) 后开始执行...`);
       return new Promise(resolve => {
         const poll = () => {
-          const remaining = targetTime.getTime() - ServerTime.now();
+          const remaining = targetMs - ServerTime.now();
           if (remaining <= 0) {
             Util.info('等待结束，开始执行');
             resolve(targetTime);
             return;
           }
-          setTimeout(poll, remaining > 1000 ? 100 : 50);
+          if (remaining <= 10) {
+            // 最后 ≤10ms 自旋，规避 setTimeout 的 ~4ms 钳制精确命中
+            const targetNow = ServerTime.now() + remaining;
+            while (ServerTime.now() < targetNow) { /* busy-wait ≤10ms */ }
+            Util.info('等待结束，开始执行');
+            resolve(targetTime);
+            return;
+          }
+          setTimeout(poll, remaining > 2000 ? 250 : (remaining > 500 ? 30 : 5));
         };
         poll();
       });
