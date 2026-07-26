@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BiliAutoClicker - 油猴客户端
 // @namespace    https://github.com/under-the-ocean
-// @version      1.1.9
+// @version      1.2.0
 // @match        https://www.bilibili.com/blackboard/era/award-exchange.html?*
 // @connect      bili.982835785.xyz
 // @connect      api.live.bilibili.com
@@ -70,7 +70,7 @@
     DEFAULT_START_TIME: '00:29:57',
     MAX_RELOAD_ATTEMPTS: 3,
 
-    VERSION: '1.1.9',
+    VERSION: '1.2.0',
     RETRY_COUNT: 2,
     DEBUG: true
   };
@@ -342,6 +342,28 @@
         click_mode: CONFIG.DEFAULT_CLICK_MODE,
         selected: false
       };
+    },
+
+    /** 标准化单个配置字段值 */
+    normalizeConfigField(field, rawValue) {
+      if (field === 'start_time') {
+        return Util.normalizeStartTimeInput(rawValue) || CONFIG.DEFAULT_START_TIME;
+      }
+      if (field === 'interval') {
+        const val = Number(rawValue);
+        return Number.isFinite(val) && val >= 0 ? val : CONFIG.DEFAULT_CLICK_INTERVAL_MS / 1000;
+      }
+      if (field === 'duration') {
+        const val = Number(rawValue);
+        return Number.isFinite(val) && val > 0 ? val : CONFIG.DEFAULT_CLICK_DURATION_MS / 1000;
+      }
+      if (field === 'click_mode') {
+        return rawValue === 'direct' ? 'direct' : 'dom';
+      }
+      if (field === 'selected') {
+        return Boolean(rawValue);
+      }
+      return rawValue;
     },
 
     loadTaskConfigs(tasks) {
@@ -1056,12 +1078,13 @@ if (res.status === 401) {
         }
       }
       this.saveTaskConfigs();
-      if (taskId === (Util.extractTaskIdFromPage() || 'unknown_task')) {
+      // 仅 start_time/selected 变更才重建调度，interval/duration/click_mode 变更不触发调度
+      if (taskId === (Util.extractTaskIdFromPage() || 'unknown_task') && (field === 'start_time' || field === 'selected')) {
         this.scheduleCurrentTask();
       }
       // 关键配置变更后立即回显规范化结果
       if (!options.silent) this.setStatus(`配置已保存：${field} = ${nextValue}`);
-      if (!options.noRender && (field === 'selected' || field === 'start_time')) {
+      if (!options.noRender && (field === 'start_time' || field === 'selected')) {
         this.renderList();
         this.render();
       }
