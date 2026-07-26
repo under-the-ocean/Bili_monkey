@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BiliAutoClicker - 油猴客户端
 // @namespace    https://github.com/under-the-ocean
-// @version      1.2.0
+// @version      1.2.1
 // @match        https://www.bilibili.com/blackboard/era/award-exchange.html?*
 // @connect      bili.982835785.xyz
 // @connect      api.live.bilibili.com
@@ -70,7 +70,7 @@
     DEFAULT_START_TIME: '00:29:57',
     MAX_RELOAD_ATTEMPTS: 3,
 
-    VERSION: '1.2.0',
+    VERSION: '1.2.1',
     RETRY_COUNT: 2,
     DEBUG: true
   };
@@ -927,20 +927,7 @@ if (res.status === 401) {
         else if (action === 'logout') this.logout();
         else if (action === 'startLogin') this.startLogin();
         else if (action === 'testClick') this.testClick();
-        else if (action === 'runCurrent') this.runCurrent();
-      });
-
-      panel.addEventListener('input', (e) => {
-        const target = e.target.closest('[data-field]');
-        if (!target) return;
-        const box = target.closest('[data-ba="currentTaskConfig"]');
-        if (!box) return;
-        const currentTask = Util.extractTaskIdFromPage() || 'unknown_task';
-        const field = target.getAttribute('data-field');
-        // 仅保存到 state，不触发 GM_setValue 和 scheduleCurrentTask（避免每次按键都重建调度）
-        const current = this.state.taskConfigs[currentTask] || Util.defaultTaskConfig(currentTask);
-        this.state.taskConfigs[currentTask] = { ...current, [field]: target.value };
-        target.dataset.currentConfigLiveBound = '1';
+        else if (action === 'saveConfig') this.saveConfig();
       });
 
       panel.addEventListener('change', (e) => {
@@ -955,8 +942,6 @@ if (res.status === 401) {
           }
           const currentTaskConfig = fieldTarget.closest('[data-ba="currentTaskConfig"]');
           if (currentTaskConfig) {
-            const currentTask = Util.extractTaskIdFromPage() || 'unknown_task';
-            this.updateTaskConfig(currentTask, field, value);
             return;
           }
         }
@@ -967,8 +952,7 @@ if (res.status === 401) {
         if (action === 'taskConfig') {
           this.updateTaskConfig(target.getAttribute('data-taskid'), target.getAttribute('data-field'), target.value);
         } else if (action === 'currentTaskConfig') {
-          const currentTask = Util.extractTaskIdFromPage() || 'unknown_task';
-          this.updateTaskConfig(currentTask, target.getAttribute('data-field'), target.value);
+          return;
         }
       });
 
@@ -1566,6 +1550,16 @@ updatePageLog(text) {
       this.setStatus(msg);
       this.updatePageLog(`【测试点击】${msg}`);
       Util.info('测试点击:', msg);
+    },
+
+    async saveConfig() {
+      const taskId = Util.extractTaskIdFromPage() || 'unknown_task';
+      const cfg = this.syncCurrentTaskConfigFromInputs({ log: true }) || this.state.taskConfigs[taskId] || Util.defaultTaskConfig(taskId);
+      this.state.taskConfigs[taskId] = cfg;
+      this.saveTaskConfigs();
+      this.setStatus(`✅ 配置已保存，正在刷新任务列表...`);
+      Util.info('面板: 配置已保存:', taskId, cfg);
+      await this.refresh();
     },
 
     async runCurrent() {
