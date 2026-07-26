@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BiliAutoClicker - 油猴客户端
 // @namespace    https://github.com/under-the-ocean
-// @version      1.2.2
+// @version      1.3.0
 // @match        https://www.bilibili.com/blackboard/era/award-exchange.html?*
 // @connect      bili.982835785.xyz
 // @connect      api.live.bilibili.com
@@ -12,8 +12,10 @@
 // @grant        GM_deleteValue
 // @grant        GM_listValues
 // @grant        GM_getResourceText
+// @grant        GM_getResourceURL
 // @grant        unsafeWindow
 // @resource     TEMPLATE_HTML https://gh-proxy.com/https://raw.githubusercontent.com/under-the-ocean/Bili_monkey/main/template.html
+// @resource     CUSTOM_FONT  https://gh-proxy.com/https://raw.githubusercontent.com/under-the-ocean/Bili_monkey/main/zh-cn.woff2
 // @run-at       document-start
 // @downloadURL  https://gh-proxy.com/https://raw.githubusercontent.com/under-the-ocean/Bili_monkey/main/biliauto-tampermonkey-client.user.js
 // @updateURL    https://gh-proxy.com/https://raw.githubusercontent.com/under-the-ocean/Bili_monkey/main/biliauto-tampermonkey-client.user.js
@@ -68,7 +70,7 @@
     DEFAULT_START_TIME: '00:29:57',
     MAX_RELOAD_ATTEMPTS: 3,
 
-    VERSION: '1.2.2',
+    VERSION: '1.3.0',
     RETRY_COUNT: 2,
     // 调试日志默认关闭，减少生产环境控制台噪音与上传日志体积；如需排查可在油猴存储将 debug_mode 置为 true
     DEBUG: GM_getValue('debug_mode', false)
@@ -849,6 +851,7 @@ if (res.status === 401) {
       Util.log('=== 模板加载开始 ===');
       Util.log('尝试从 @resource TEMPLATE_HTML 获取模板...');
       const tpl = GM_getResourceText('TEMPLATE_HTML');
+      const fontUrl = GM_getResourceURL('CUSTOM_FONT');
       Util.log(`模板获取结果: ${tpl ? `成功，长度=${tpl.length}字符` : '失败（返回空或undefined）'}`);
 
       if (!tpl) {
@@ -865,7 +868,9 @@ if (res.status === 401) {
       //   ${CONFIG.KEY}          —— 直接取值（VERSION / ACCOUNT_NAME / API_BASE 等）
       // 兜底清除任何残留的 ${...}，避免未处理的表达式以字面量形式渲染。
       // 运行期动态内容一律走 getSubTemplate 的 {{KEY}} 占位机制，不在此处 eval。
+      // ${FONT_URL} 需在兜底清除前替换为字体资源的 blob 链接。
       let result = tpl
+        .replace(/\$\{FONT_URL\}/g, fontUrl)
         .replace(/\$\{CONFIG\.(\w+)\?'([^']*)'\s*:\s*'([^']*)'\}/g, (match, key, trueVal, falseVal) => (CONFIG[key] ? trueVal : falseVal))
         .replace(/\$\{CONFIG\.(\w+)\}/g, (match, key) => (CONFIG[key] != null ? String(CONFIG[key]) : ''))
         .replace(/\$\{[^}]*\}/g, '');
@@ -1161,21 +1166,6 @@ updatePageLog(text) {
       this.render();
     },
 
-    _triggerScheduledTask(taskId) {
-      this._cleanupTimers();
-      if (this.state.running) {
-        Util.warn('_triggerScheduledTask: running 状态卡住，强制重置');
-        this.state.running = false;
-      }
-      ServerTime.calibrate().then(() => {
-        if (this.state.running) {
-          Util.warn('calibrate 后发现 running 卡住，强制重置');
-          this.state.running = false;
-        }
-        this._doExecuteTask(taskId);
-      });
-    },
-
     _doExecuteTask(taskId) {
       const latestCfg = this.syncCurrentTaskConfigFromInputs({ log: false }) || this.state.taskConfigs[taskId] || Util.defaultTaskConfig(taskId);
       this.state.running = true;
@@ -1193,10 +1183,48 @@ updatePageLog(text) {
       });
     },
 
-    _hasTaskTimedOut() {
-      if (!this._currentStartTimeStr) return false;
+    // 距目标的剩余毫秒（服务器校准时间基准）；无有效调度返回 null
+    _remainingMs() {
+      if (!this._currentStartTimeStr) return null;
       const parsed = Util.parseTimeSpec(this._currentStartTimeStr, ServerTime.nowDate());
-      return parsed && Number.isFinite(parsed.delayMs) && parsed.delayMs <= 0;
+      return parsed && Number.isFinite(parsed.delayMs) ? parsed.delayMs : null;
+    },
+
+    // 幂等触发：仅当到点且本代未触发过时执行一次。
+    // 精确定时器（主）、Worker 心跳、可见性/焦点（后备）都汇入此处，靠 generation + _fired 去重。
+    // 触发路径不含任何网络请求，offset 由自适应校准提前备好。
+    _maybeFire(gen) {
+      if (gen !== this._scheduleGeneration) return;   // 已被新一轮调度取代
+      if (this._fired) return;                        // 本代已触发
+      const remaining = this._remainingMs();
+      if (remaining === null || remaining > 0) return; // 还没到点
+      const taskId = this._currentScheduledTaskId;
+      if (!taskId) return;
+      this._fired = true;
+      Util.info(`[Scheduler] 到点触发 task_id=${taskId}`);
+      this.updatePageLog(`[Scheduler] 到点触发 task_id=${taskId}`);
+      this._cleanupTimers();      // 清理调度定时器并置空调度状态，防止重复触发
+      this._doExecuteTask(taskId);
+    },
+
+    // 主线程精确定时器：远端用较粗 setTimeout，临近逐级加密，最后 ≤10ms 自旋精确命中目标时刻。
+    // 全程使用缓存 offset（ServerTime.now），不发起网络请求。
+    _armPreciseTimer(gen) {
+      const step = () => {
+        if (gen !== this._scheduleGeneration || this._fired) return;
+        const remaining = this._remainingMs();
+        if (remaining === null) return;
+        if (remaining <= 10) {
+          // 最后一小段自旋，规避 setTimeout 的 ~4ms 钳制，精确命中
+          const targetNow = ServerTime.now() + remaining;
+          while (ServerTime.now() < targetNow) { /* busy-wait ≤10ms */ }
+          this._maybeFire(gen);
+          return;
+        }
+        const next = remaining > 2000 ? 250 : (remaining > 500 ? 30 : 5);
+        this._preciseTimer = setTimeout(step, next);
+      };
+      step();
     },
 
     _cleanupTimers() {
@@ -1204,34 +1232,24 @@ updatePageLog(text) {
         clearTimeout(this._calibrationTimer);
         this._calibrationTimer = null;
       }
-      this._stopKeepAliveAudio();
+      if (this._preciseTimer) {
+        clearTimeout(this._preciseTimer);
+        this._preciseTimer = null;
+      }
+      // 注意：不在此停止 AudioContext 保活——连点执行期同样需要防后台节流，
+      // 保活由 Worker 心跳持续维护，仅在页面卸载时随进程释放。
       this._currentStartTimeStr = null;
       this._currentScheduledTaskId = null;
     },
 
-    // visibilitychange + focus 监听 - 标签页恢复可见时立即检查是否需要触发
+    // visibilitychange + focus 监听 - 标签页恢复可见时立即补一次幂等检查（后备触发源）
     _setupVisibilityCheck() {
       if (this._visibilityInstalled) return;
       this._visibilityInstalled = true;
       document.addEventListener('visibilitychange', () => {
-        if (document.hidden) return;
-        if (this._hasTaskTimedOut()) {
-          const taskId = this._currentScheduledTaskId;
-          if (taskId) {
-            Util.log('visibilitychange 检测到已过目标时间，立即触发');
-            this._triggerScheduledTask(taskId);
-          }
-        }
+        if (!document.hidden) this._maybeFire(this._scheduleGeneration);
       });
-      window.addEventListener('focus', () => {
-        if (this._hasTaskTimedOut()) {
-          const taskId = this._currentScheduledTaskId;
-          if (taskId) {
-            Util.log('window focus 检测到已过目标时间，立即触发');
-            this._triggerScheduledTask(taskId);
-          }
-        }
-      });
+      window.addEventListener('focus', () => this._maybeFire(this._scheduleGeneration));
     },
 
     // 创建无声 AudioContext 保持页面活跃，阻止 Chrome 后台节流
@@ -1293,23 +1311,13 @@ updatePageLog(text) {
         const url = URL.createObjectURL(blob);
         const worker = new Worker(url);
         URL.revokeObjectURL(url);
+        // 后备心跳：维护 AudioContext 保活，并在主线程精确定时器被后台节流时兜底触发（幂等）
         worker.onmessage = () => {
           this._checkKeepAlive();
-          if (this._hasTaskTimedOut()) {
-            if (this.state.running) {
-              Util.warn('Worker: 时间已到但 running 卡住，强制重置');
-              this.state.running = false;
-            }
-            const taskId = this._currentScheduledTaskId;
-            if (taskId) {
-              Util.log('Web Worker 检测到已过目标时间，触发执行');
-              this._cleanupTimers();
-              this._triggerScheduledTask(taskId);
-            }
-          }
+          this._maybeFire(this._scheduleGeneration);
         };
         this._bgWorker = worker;
-        Util.info('后台 Web Worker 已启动 (100ms 精度，AudioContext 保活)');
+        Util.info('后台 Web Worker 已启动 (100ms 心跳后备，AudioContext 保活)');
       } catch (e) {
         Util.warn('Web Worker 创建失败，回退到 setInterval 轮询:', e.message);
         if (this._bgFallbackTimer) {
@@ -1317,18 +1325,7 @@ updatePageLog(text) {
         }
         this._bgFallbackTimer = setInterval(() => {
           this._checkKeepAlive();
-          if (this._hasTaskTimedOut()) {
-            if (this.state.running) {
-              Util.warn('Fallback: 时间已到但 running 卡住，强制重置');
-              this.state.running = false;
-            }
-            const taskId = this._currentScheduledTaskId;
-            if (taskId) {
-              Util.log('setInterval 轮询检测到已过目标时间，触发执行');
-              this._cleanupTimers();
-              this._triggerScheduledTask(taskId);
-            }
-          }
+          this._maybeFire(this._scheduleGeneration);
         }, 200);
       }
     },
@@ -1369,13 +1366,10 @@ updatePageLog(text) {
     },
 
     scheduleCurrentTask() {
-      if (this.state.running) {
-        Util.warn('scheduleCurrentTask: running 状态卡住，强制重置并重新调度');
-        this.state.running = false;
-      }
+      // 不再强行重置 running（幂等 _fired + generation 已保证不会重复执行）
       this._cleanupTimers();
       this._setupVisibilityCheck();
-      this._initBackgroundWorker();
+      this._initBackgroundWorker();      // 后备心跳 + AudioContext 保活
       if (!this.state.baseConfig) return;
       const taskId = Util.extractTaskIdFromPage() || 'unknown_task';
       if (!taskId || taskId === 'unknown_task') return;
@@ -1385,14 +1379,16 @@ updatePageLog(text) {
       if (!parsed || !Number.isFinite(parsed.delayMs)) return;
       this._currentStartTimeStr = startTimeStr;
       this._currentScheduledTaskId = taskId;
+      this._fired = false;
       this._scheduleGeneration = (this._scheduleGeneration || 0) + 1;
       const gen = this._scheduleGeneration;
       Util.log('schedule current task:', taskId, parsed.normalized, 'delay=', parsed.delayMs);
       this.updatePageLog('[AutoSchedule] task_id=' + taskId + ' start=' + parsed.normalized + ' countdown=' + (parsed.delayMs / 1000).toFixed(3) + 's');
+      // 立即用当前缓存 offset 武装主线程精确定时器（不等待网络）；
+      // 随后异步校准并启动自适应校准，仅在早于目标足够时间时提升 offset 精度。
+      this._armPreciseTimer(gen);
       ServerTime.calibrate().then(() => {
-        if (this._currentStartTimeStr === startTimeStr && this._scheduleGeneration === gen) {
-          this._startAdaptiveCalibration();
-        }
+        if (this._scheduleGeneration === gen) this._startAdaptiveCalibration();
       });
     },
 
@@ -2607,25 +2603,38 @@ updatePageLog(text) {
     },
 
     async waitUntil(startTimeStr) {
-      await ServerTime.calibrate();
-      // 校准后重新计算目标时间，保证基准一致
-      const freshSpec = Util.parseTimeSpec(startTimeStr, ServerTime.nowDate());
-      const targetTime = freshSpec.target;
-      const diff = targetTime.getTime() - ServerTime.now();
+      // 仅在剩余时间充足（>6s）时做一次网络校准以提升 offset 精度；
+      // 临近目标只用缓存 offset，避免把网络 RTT 注入临界路径导致点击延后。
+      let spec = Util.parseTimeSpec(startTimeStr, ServerTime.nowDate());
+      if (spec.target.getTime() - ServerTime.now() > 6000) {
+        await ServerTime.calibrate();
+        spec = Util.parseTimeSpec(startTimeStr, ServerTime.nowDate());
+      }
+      const targetTime = spec.target;
+      const targetMs = targetTime.getTime();
+      const diff = targetMs - ServerTime.now();
       if (diff <= 0) {
         Util.log('waitUntil: 目标时间已过，立即执行');
         return targetTime;
       }
-      Util.info(`等待 ${(diff / 1000).toFixed(1)} 秒 (到 ${Util.formatTime(targetTime)}) 后开始执行...`);
+      Util.info(`等待 ${(diff / 1000).toFixed(3)} 秒 (到 ${Util.formatTime(targetTime)}) 后开始执行...`);
       return new Promise(resolve => {
         const poll = () => {
-          const remaining = targetTime.getTime() - ServerTime.now();
+          const remaining = targetMs - ServerTime.now();
           if (remaining <= 0) {
             Util.info('等待结束，开始执行');
             resolve(targetTime);
             return;
           }
-          setTimeout(poll, remaining > 1000 ? 100 : 50);
+          if (remaining <= 10) {
+            // 最后 ≤10ms 自旋，规避 setTimeout 的 ~4ms 钳制精确命中
+            const targetNow = ServerTime.now() + remaining;
+            while (ServerTime.now() < targetNow) { /* busy-wait ≤10ms */ }
+            Util.info('等待结束，开始执行');
+            resolve(targetTime);
+            return;
+          }
+          setTimeout(poll, remaining > 2000 ? 250 : (remaining > 500 ? 30 : 5));
         };
         poll();
       });
