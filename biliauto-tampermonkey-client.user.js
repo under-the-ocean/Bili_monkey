@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BiliAutoClicker - 油猴客户端
 // @namespace    https://github.com/under-the-ocean
-// @version      1.3.4
+// @version      1.3.5
 // @match        https://www.bilibili.com/blackboard/era/award-exchange.html?*
 // @connect      bili.982835785.xyz
 // @connect      api.live.bilibili.com
@@ -70,7 +70,7 @@
     DEFAULT_START_TIME: '00:29:57',
     MAX_RELOAD_ATTEMPTS: 3,
 
-    VERSION: '1.3.4',
+    VERSION: '1.3.5',
     RETRY_COUNT: 2,
     // 调试日志默认关闭，减少生产环境控制台噪音与上传日志体积；如需排查可在油猴存储将 debug_mode 置为 true
     DEBUG: GM_getValue('debug_mode', false)
@@ -914,6 +914,20 @@ if (res.status === 401) {
         else if (action === 'saveConfig') this.saveConfig();
       });
 
+      panel.addEventListener('input', (e) => {
+        const target = e.target.closest('[data-field]');
+        if (!target) return;
+        const box = target.closest('[data-ba="currentTaskConfig"]');
+        if (!box) return;
+        const currentTask = Util.extractTaskIdFromPage() || 'unknown_task';
+        const field = target.getAttribute('data-field');
+        // 仅保存到 state，不触发 GM_setValue 和 scheduleCurrentTask（避免每次按键都重建调度）
+        // 但要让 UI 状态（如倒计时）随输入即时变化
+        const current = this.state.taskConfigs[currentTask] || Util.defaultTaskConfig(currentTask);
+        this.state.taskConfigs[currentTask] = { ...current, [field]: target.value };
+        if (field === 'start_time') this._refreshCountdown();
+      });
+
       panel.addEventListener('change', (e) => {
         const fieldTarget = e.target.closest('[data-field]');
         if (fieldTarget) {
@@ -926,6 +940,8 @@ if (res.status === 401) {
           }
           const currentTaskConfig = fieldTarget.closest('[data-ba="currentTaskConfig"]');
           if (currentTaskConfig) {
+            const currentTask = Util.extractTaskIdFromPage() || 'unknown_task';
+            this.updateTaskConfig(currentTask, field, value);
             return;
           }
         }
