@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BiliAutoClicker - 油猴客户端
 // @namespace    https://github.com/under-the-ocean
-// @version      1.3.7
+// @version      1.3.8
 // @match        https://www.bilibili.com/blackboard/era/award-exchange.html?*
 // @connect      bili.982835785.xyz
 // @connect      api.live.bilibili.com
@@ -70,7 +70,7 @@
     DEFAULT_START_TIME: '00:29:57',
     MAX_RELOAD_ATTEMPTS: 3,
 
-    VERSION: '1.3.7',
+    VERSION: '1.3.8',
     RETRY_COUNT: 2,
     // 调试日志默认关闭，减少生产环境控制台噪音与上传日志体积；如需排查可在油猴存储将 debug_mode 置为 true
     DEBUG: GM_getValue('debug_mode', false)
@@ -2501,6 +2501,15 @@ updatePageLog(text) {
             const summary = `【API 捕获】/mission/receive 响应 code=${captured.response_code}`;
             Util.info(summary);
             logToPanel(summary);
+          }
+          // 任务结束判定：捕获到成功的 API 响应（response_code === 0）立即退出，避免继续无效点击
+          if (captured && captured.response_code === 0) {
+            clearInterval(timer);
+            const summary = `【连点提前结束】已捕获领取成功响应 code=0，剩余 ${(remaining / 1000).toFixed(3)}s 不再点击`;
+            Util.info(summary);
+            logToPanel(summary);
+            resolve({ success_count: successCount, fail_count: failCount, early_exit: true });
+            return;
           }
           // 先执行点击，再检查是否到期，确保至少执行一次点击
           doClick();
