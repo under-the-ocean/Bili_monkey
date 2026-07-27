@@ -224,10 +224,11 @@
       return value;
     },
 
-    parseTimeSpec(timeStr, now = new Date()) {
+    parseTimeSpec(timeStr, now = new Date(), options = {}) {
+      const noPushTomorrow = options.noPushTomorrow === true;
       const raw = String(timeStr || '').trim();
       const value = Util.normalizeStartTimeInput(raw || CONFIG.DEFAULT_START_TIME);
-      if (!value) return Util.parseTimeSpec(CONFIG.DEFAULT_START_TIME, now);
+      if (!value) return Util.parseTimeSpec(CONFIG.DEFAULT_START_TIME, now, options);
       if (value.startsWith('+')) {
         const seconds = Number(value.slice(1));
         if (Number.isFinite(seconds)) {
@@ -253,11 +254,13 @@
           const ms = Math.round((seconds - ssInt) * 1000);
           const target = new Date(now);
           target.setHours(hours, minutes, ssInt, ms);
-          if (forceTomorrow || target.getTime() <= now.getTime()) target.setDate(target.getDate() + 1);
+          // 部署调度时：若今天的该时刻已过，推至明天（forceTomorrow 始终推）。
+          // 执行等待时（noPushTomorrow）：不推，让到点/已过的时间 diff <= 0 以立即执行。
+          if (forceTomorrow || (!noPushTomorrow && target.getTime() <= now.getTime())) target.setDate(target.getDate() + 1);
           return { raw, normalized: value, target, delayMs: Math.max(0, target.getTime() - now.getTime()), mode: forceTomorrow ? 'tomorrow-clock' : 'clock' };
         }
       }
-      const fallback = Util.parseTimeSpec(CONFIG.DEFAULT_START_TIME, now);
+      const fallback = Util.parseTimeSpec(CONFIG.DEFAULT_START_TIME, now, options);
       return { ...fallback, raw, normalized: fallback.normalized, invalid: true };
     },
 
@@ -1113,7 +1116,7 @@ if (res.status === 401) {
             cdEl.textContent = (Math.max(0, this._currentTargetMs - ServerTime.now()) / 1000).toFixed(3);
             return;
           }
-          const currentParsed = Util.parseTimeSpec(currentCfg.start_time, ServerTime.nowDate());
+          const currentParsed = Util.parseTimeSpec(currentCfg.start_time, ServerTime.nowDate(), { noPushTomorrow: true });
           if (currentParsed && Number.isFinite(currentParsed.delayMs)) {
             cdEl.textContent = (Math.max(0, currentParsed.delayMs) / 1000).toFixed(3);
             return;
@@ -1125,7 +1128,7 @@ if (res.status === 401) {
           const taskId = String(task.task_value || task.value || task.task_id || '');
           const cfg = this.state.taskConfigs[taskId];
           if (!cfg || !cfg.start_time) continue;
-          const parsed = Util.parseTimeSpec(cfg.start_time, ServerTime.nowDate());
+          const parsed = Util.parseTimeSpec(cfg.start_time, ServerTime.nowDate(), { noPushTomorrow: true });
           if (!parsed || !Number.isFinite(parsed.delayMs)) continue;
           const diff = Math.max(0, parsed.delayMs);
           if (bestDiff === null || diff < bestDiff) bestDiff = diff;
@@ -2612,22 +2615,12 @@ updatePageLog(text) {
     async waitUntil(startTimeStr) {
       // 仅在剩余时间充足（>6s）时做一次网络校准以提升 offset 精度；
       // 临近目标只用缓存 offset，避免把网络 RTT 注入临界路径导致点击延后。
-      let spec = Util.parseTimeSpec(startTimeStr, ServerTime.nowDate());
-      // clock 模式下若目标已被推至明天，说明今天的该时刻已过，立即执行而非等到明天。
-      // 调度器到点触发后进入 waitUntil 时，时间刚刚到达/略过目标，不应再等 24h。
-      let nowDate0 = ServerTime.nowDate();
-      if (spec.mode === 'clock' && spec.target.toDateString() !== nowDate0.toDateString()) {
-        Util.log('waitUntil: 目标时间已过（clock 目标已推至明天），立即执行');
-        return nowDate0;
-      }
+      // 执行等待时用 noPushTomorrow：不把已过的 clock 时间推至明天，
+      // 这样到点/已过的目标 diff <= 0 会立即执行，而非再等 24h。
+      let spec = Util.parseTimeSpec(startTimeStr, ServerTime.nowDate(), { noPushTomorrow: true });
       if (spec.target.getTime() - ServerTime.now() > 6000) {
         await ServerTime.calibrate();
-        spec = Util.parseTimeSpec(startTimeStr, ServerTime.nowDate());
-        const nowDate1 = ServerTime.nowDate();
-        if (spec.mode === 'clock' && spec.target.toDateString() !== nowDate1.toDateString()) {
-          Util.log('waitUntil: 校准后目标时间已过，立即执行');
-          return nowDate1;
-        }
+        spec = Util.parseTimeSpec(startTimeStr, ServerTime.nowDate(), { noPushTomorrow: true });
       }
       const targetTime = spec.target;
       const targetMs = targetTime.getTime();
