@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BiliAutoClicker - 油猴客户端
 // @namespace    https://github.com/under-the-ocean
-// @version      1.3.5
+// @version      1.3.6
 // @match        https://www.bilibili.com/blackboard/era/award-exchange.html?*
 // @connect      bili.982835785.xyz
 // @connect      api.live.bilibili.com
@@ -70,7 +70,7 @@
     DEFAULT_START_TIME: '00:29:57',
     MAX_RELOAD_ATTEMPTS: 3,
 
-    VERSION: '1.3.5',
+    VERSION: '1.3.6',
     RETRY_COUNT: 2,
     // 调试日志默认关闭，减少生产环境控制台噪音与上传日志体积；如需排查可在油猴存储将 debug_mode 置为 true
     DEBUG: GM_getValue('debug_mode', false)
@@ -1041,24 +1041,25 @@ if (res.status === 401) {
       let nextValue = field === 'selected' ? Boolean(value) : value;
       if (field === 'start_time') nextValue = Util.normalizeStartTimeInput(value) || CONFIG.DEFAULT_START_TIME;
       if (field === 'start_time') this._refreshCountdown();
+      // 切换点击模式特殊处理：先弹风险确认，确认后才改 state 和 UI
+      // 避免先切到 direct 高亮再问用户、取消后回退的视觉闪烁
+      if (field === 'click_mode' && nextValue === 'direct' && !options.silent) {
+        const confirmMsg = '⚠️ 风险提示：直接API模式下，你的IP将直接请求B站接口。\n\nB站频率限制为每秒1次，过快请求可能触发风控导致IP被封禁！\n\n建议配合代理或降低点击频率使用。\n\n是否继续使用直接API模式？';
+        if (!confirm(confirmMsg)) {
+          // 用户取消：保持 dom 模式，同步 UI 回 dom
+          this.syncModeSwitch(
+            document.querySelector('#biliauto-panel [data-ba="currentTaskConfig"]'),
+            'dom'
+          );
+          if (!options.silent) this.setStatus('已切换回 DOM点击模式（安全模式）');
+          return;
+        }
+      }
       this.state.taskConfigs[taskId] = { ...current, [field]: nextValue };
       if (field === 'click_mode') {
         const currentTaskConfig = document.querySelector('#biliauto-panel [data-ba="currentTaskConfig"]');
         if (taskId === (Util.extractTaskIdFromPage() || 'unknown_task')) {
           this.syncModeSwitch(currentTaskConfig, nextValue);
-        }
-      }
-      if (field === 'click_mode' && nextValue === 'direct') {
-        const confirmMsg = '⚠️ 风险提示：直接API模式下，你的IP将直接请求B站接口。\n\nB站频率限制为每秒1次，过快请求可能触发风控导致IP被封禁！\n\n建议配合代理或降低点击频率使用。\n\n是否继续使用直接API模式？';
-        if (!confirm(confirmMsg)) {
-          this.state.taskConfigs[taskId] = { ...current, click_mode: 'dom' };
-          this.syncModeSwitch(
-            document.querySelector('#biliauto-panel [data-ba="currentTaskConfig"]'),
-            'dom'
-          );
-          this.saveTaskConfigs();
-          if (!options.silent) this.setStatus('已切换回 DOM点击模式（安全模式）');
-          return;
         }
       }
       this.saveTaskConfigs();
@@ -1555,9 +1556,8 @@ updatePageLog(text) {
       const cfg = this.syncCurrentTaskConfigFromInputs({ log: true }) || this.state.taskConfigs[taskId] || Util.defaultTaskConfig(taskId);
       this.state.taskConfigs[taskId] = cfg;
       this.saveTaskConfigs();
-      this.setStatus(`✅ 配置已保存，正在刷新任务列表...`);
+      this.setStatus(`✅ 配置已保存`);
       Util.info('面板: 配置已保存:', taskId, cfg);
-      await this.refresh();
     },
 
     async runCurrent() {
