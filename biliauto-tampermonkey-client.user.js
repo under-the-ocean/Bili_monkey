@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BiliAutoClicker - 油猴客户端
 // @namespace    https://github.com/under-the-ocean
-// @version      1.3.2
+// @version      1.3.4
 // @match        https://www.bilibili.com/blackboard/era/award-exchange.html?*
 // @connect      bili.982835785.xyz
 // @connect      api.live.bilibili.com
@@ -70,7 +70,7 @@
     DEFAULT_START_TIME: '00:29:57',
     MAX_RELOAD_ATTEMPTS: 3,
 
-    VERSION: '1.3.2',
+    VERSION: '1.3.4',
     RETRY_COUNT: 2,
     // 调试日志默认关闭，减少生产环境控制台噪音与上传日志体积；如需排查可在油猴存储将 debug_mode 置为 true
     DEBUG: GM_getValue('debug_mode', false)
@@ -2621,6 +2621,22 @@ updatePageLog(text) {
       if (spec.target.getTime() - ServerTime.now() > 6000) {
         await ServerTime.calibrate();
         spec = Util.parseTimeSpec(startTimeStr, ServerTime.nowDate(), { noPushTomorrow: true });
+      }
+      // clock 模式过期保护：若已过超过 60s（明显是历史时刻，非刚到点），
+      // 顺延到明天同一时刻。避免白天打开页面时凌晨时刻已过立即误触发。
+      // 刚到点（diff 在 -60s 到 0）仍立即执行，保留时间到不触发的修复兼容性。
+      // 相对时间模式（+0/+30 等）不受影响，保留立即执行语义。
+      const STALE_THRESHOLD_MS = 60 * 1000;
+      const isClockMode = spec.mode === 'clock' || spec.mode === 'tomorrow-clock';
+      if (isClockMode) {
+        const realDiff = spec.target.getTime() - ServerTime.now();
+        if (realDiff < -STALE_THRESHOLD_MS) {
+          const tomorrowTarget = new Date(spec.target.getTime() + 24 * 3600 * 1000);
+          const staleSec = (-realDiff / 1000).toFixed(1);
+          Util.warn(`waitUntil: 目标时刻 ${spec.normalized} 已过 ${staleSec}s（超过 60s 阈值），顺延到明天 ${Util.formatTime(tomorrowTarget)}`);
+          Panel.updatePageLog(`【时间顺延】${spec.normalized} 已过 ${staleSec}s，顺延到明天执行`);
+          spec = { ...spec, target: tomorrowTarget };
+        }
       }
       const targetTime = spec.target;
       const targetMs = targetTime.getTime();
