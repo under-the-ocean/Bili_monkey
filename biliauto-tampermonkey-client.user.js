@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BiliAutoClicker - 油猴客户端
 // @namespace    https://github.com/under-the-ocean
-// @version      1.3.6
+// @version      1.3.7
 // @match        https://www.bilibili.com/blackboard/era/award-exchange.html?*
 // @connect      bili.982835785.xyz
 // @connect      api.live.bilibili.com
@@ -70,7 +70,7 @@
     DEFAULT_START_TIME: '00:29:57',
     MAX_RELOAD_ATTEMPTS: 3,
 
-    VERSION: '1.3.6',
+    VERSION: '1.3.7',
     RETRY_COUNT: 2,
     // 调试日志默认关闭，减少生产环境控制台噪音与上传日志体积；如需排查可在油猴存储将 debug_mode 置为 true
     DEBUG: GM_getValue('debug_mode', false)
@@ -935,13 +935,18 @@ if (res.status === 401) {
           const value = fieldTarget.type === 'checkbox' ? fieldTarget.checked : fieldTarget.value;
           const taskConfig = fieldTarget.closest('[data-ba="taskConfig"]');
           if (taskConfig) {
+            // 任务列表里的 per-task 配置：保留原逻辑即时保存
             this.updateTaskConfig(taskConfig.getAttribute('data-taskid'), field, value);
             return;
           }
           const currentTaskConfig = fieldTarget.closest('[data-ba="currentTaskConfig"]');
           if (currentTaskConfig) {
-            const currentTask = Util.extractTaskIdFromPage() || 'unknown_task';
-            this.updateTaskConfig(currentTask, field, value);
+            // 任务执行中枢区域：只有 click_mode 切换需要特殊处理（含二次确认+即时保存）
+            // start_time/interval/duration 的持久化交给保存按钮
+            if (field === 'click_mode') {
+              const currentTask = Util.extractTaskIdFromPage() || 'unknown_task';
+              this.updateTaskConfig(currentTask, field, value);
+            }
             return;
           }
         }
