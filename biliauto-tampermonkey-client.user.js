@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BiliAutoClicker - 油猴客户端
 // @namespace    https://github.com/under-the-ocean
-// @version      1.3.1
+// @version      1.3.2
 // @match        https://www.bilibili.com/blackboard/era/award-exchange.html?*
 // @connect      bili.982835785.xyz
 // @connect      api.live.bilibili.com
@@ -70,7 +70,7 @@
     DEFAULT_START_TIME: '00:29:57',
     MAX_RELOAD_ATTEMPTS: 3,
 
-    VERSION: '1.3.1',
+    VERSION: '1.3.2',
     RETRY_COUNT: 2,
     // 调试日志默认关闭，减少生产环境控制台噪音与上传日志体积；如需排查可在油猴存储将 debug_mode 置为 true
     DEBUG: GM_getValue('debug_mode', false)
@@ -224,10 +224,11 @@
       return value;
     },
 
-    parseTimeSpec(timeStr, now = new Date()) {
+    parseTimeSpec(timeStr, now = new Date(), options = {}) {
+      const noPushTomorrow = options.noPushTomorrow === true;
       const raw = String(timeStr || '').trim();
       const value = Util.normalizeStartTimeInput(raw || CONFIG.DEFAULT_START_TIME);
-      if (!value) return Util.parseTimeSpec(CONFIG.DEFAULT_START_TIME, now);
+      if (!value) return Util.parseTimeSpec(CONFIG.DEFAULT_START_TIME, now, options);
       if (value.startsWith('+')) {
         const seconds = Number(value.slice(1));
         if (Number.isFinite(seconds)) {
@@ -253,11 +254,13 @@
           const ms = Math.round((seconds - ssInt) * 1000);
           const target = new Date(now);
           target.setHours(hours, minutes, ssInt, ms);
-          if (forceTomorrow || target.getTime() <= now.getTime()) target.setDate(target.getDate() + 1);
+          // 部署调度时：若今天的该时刻已过，推至明天（forceTomorrow 始终推）。
+          // 执行等待时（noPushTomorrow）：不推，让到点/已过的时间 diff <= 0 以立即执行。
+          if (forceTomorrow || (!noPushTomorrow && target.getTime() <= now.getTime())) target.setDate(target.getDate() + 1);
           return { raw, normalized: value, target, delayMs: Math.max(0, target.getTime() - now.getTime()), mode: forceTomorrow ? 'tomorrow-clock' : 'clock' };
         }
       }
-      const fallback = Util.parseTimeSpec(CONFIG.DEFAULT_START_TIME, now);
+      const fallback = Util.parseTimeSpec(CONFIG.DEFAULT_START_TIME, now, options);
       return { ...fallback, raw, normalized: fallback.normalized, invalid: true };
     },
 
@@ -1108,7 +1111,12 @@ if (res.status === 401) {
         const currentTaskId = Util.extractTaskIdFromPage() || 'unknown_task';
         const currentCfg = this.state.taskConfigs[currentTaskId];
         if (currentCfg && currentCfg.start_time) {
-          const currentParsed = Util.parseTimeSpec(currentCfg.start_time, ServerTime.nowDate());
+          // 优先使用调度时缓存的目标时间戳，避免 parseTimeSpec 到点后将目标推至明天导致倒计时跳变到 86400s
+          if (this._currentTargetMs != null && this._currentScheduledTaskId === currentTaskId) {
+            cdEl.textContent = (Math.max(0, this._currentTargetMs - ServerTime.now()) / 1000).toFixed(3);
+            return;
+          }
+          const currentParsed = Util.parseTimeSpec(currentCfg.start_time, ServerTime.nowDate(), { noPushTomorrow: true });
           if (currentParsed && Number.isFinite(currentParsed.delayMs)) {
             cdEl.textContent = (Math.max(0, currentParsed.delayMs) / 1000).toFixed(3);
             return;
@@ -1120,7 +1128,7 @@ if (res.status === 401) {
           const taskId = String(task.task_value || task.value || task.task_id || '');
           const cfg = this.state.taskConfigs[taskId];
           if (!cfg || !cfg.start_time) continue;
-          const parsed = Util.parseTimeSpec(cfg.start_time, ServerTime.nowDate());
+          const parsed = Util.parseTimeSpec(cfg.start_time, ServerTime.nowDate(), { noPushTomorrow: true });
           if (!parsed || !Number.isFinite(parsed.delayMs)) continue;
           const diff = Math.max(0, parsed.delayMs);
           if (bestDiff === null || diff < bestDiff) bestDiff = diff;
@@ -1184,10 +1192,10 @@ updatePageLog(text) {
     },
 
     // 距目标的剩余毫秒（服务器校准时间基准）；无有效调度返回 null
+    // 直接用调度时缓存的目标时间戳，避免 parseTimeSpec 在到点后将目标推至明天导致 delayMs 跳变到 ~24h
     _remainingMs() {
-      if (!this._currentStartTimeStr) return null;
-      const parsed = Util.parseTimeSpec(this._currentStartTimeStr, ServerTime.nowDate());
-      return parsed && Number.isFinite(parsed.delayMs) ? parsed.delayMs : null;
+      if (this._currentTargetMs == null) return null;
+      return this._currentTargetMs - ServerTime.now();
     },
 
     // 幂等触发：仅当到点且本代未触发过时执行一次。
@@ -1240,6 +1248,7 @@ updatePageLog(text) {
       // 保活由 Worker 心跳持续维护，仅在页面卸载时随进程释放。
       this._currentStartTimeStr = null;
       this._currentScheduledTaskId = null;
+      this._currentTargetMs = null;
     },
 
     // visibilitychange + focus 监听 - 标签页恢复可见时立即补一次幂等检查（后备触发源）
@@ -1379,6 +1388,7 @@ updatePageLog(text) {
       if (!parsed || !Number.isFinite(parsed.delayMs)) return;
       this._currentStartTimeStr = startTimeStr;
       this._currentScheduledTaskId = taskId;
+      this._currentTargetMs = parsed.target.getTime();
       this._fired = false;
       this._scheduleGeneration = (this._scheduleGeneration || 0) + 1;
       const gen = this._scheduleGeneration;
@@ -2605,10 +2615,12 @@ updatePageLog(text) {
     async waitUntil(startTimeStr) {
       // 仅在剩余时间充足（>6s）时做一次网络校准以提升 offset 精度；
       // 临近目标只用缓存 offset，避免把网络 RTT 注入临界路径导致点击延后。
-      let spec = Util.parseTimeSpec(startTimeStr, ServerTime.nowDate());
+      // 执行等待时用 noPushTomorrow：不把已过的 clock 时间推至明天，
+      // 这样到点/已过的目标 diff <= 0 会立即执行，而非再等 24h。
+      let spec = Util.parseTimeSpec(startTimeStr, ServerTime.nowDate(), { noPushTomorrow: true });
       if (spec.target.getTime() - ServerTime.now() > 6000) {
         await ServerTime.calibrate();
-        spec = Util.parseTimeSpec(startTimeStr, ServerTime.nowDate());
+        spec = Util.parseTimeSpec(startTimeStr, ServerTime.nowDate(), { noPushTomorrow: true });
       }
       const targetTime = spec.target;
       const targetMs = targetTime.getTime();
