@@ -1108,6 +1108,11 @@ if (res.status === 401) {
         const currentTaskId = Util.extractTaskIdFromPage() || 'unknown_task';
         const currentCfg = this.state.taskConfigs[currentTaskId];
         if (currentCfg && currentCfg.start_time) {
+          // 优先使用调度时缓存的目标时间戳，避免 parseTimeSpec 到点后将目标推至明天导致倒计时跳变到 86400s
+          if (this._currentTargetMs != null && this._currentScheduledTaskId === currentTaskId) {
+            cdEl.textContent = (Math.max(0, this._currentTargetMs - ServerTime.now()) / 1000).toFixed(3);
+            return;
+          }
           const currentParsed = Util.parseTimeSpec(currentCfg.start_time, ServerTime.nowDate());
           if (currentParsed && Number.isFinite(currentParsed.delayMs)) {
             cdEl.textContent = (Math.max(0, currentParsed.delayMs) / 1000).toFixed(3);
@@ -1184,10 +1189,10 @@ updatePageLog(text) {
     },
 
     // 距目标的剩余毫秒（服务器校准时间基准）；无有效调度返回 null
+    // 直接用调度时缓存的目标时间戳，避免 parseTimeSpec 在到点后将目标推至明天导致 delayMs 跳变到 ~24h
     _remainingMs() {
-      if (!this._currentStartTimeStr) return null;
-      const parsed = Util.parseTimeSpec(this._currentStartTimeStr, ServerTime.nowDate());
-      return parsed && Number.isFinite(parsed.delayMs) ? parsed.delayMs : null;
+      if (this._currentTargetMs == null) return null;
+      return this._currentTargetMs - ServerTime.now();
     },
 
     // 幂等触发：仅当到点且本代未触发过时执行一次。
@@ -1240,6 +1245,7 @@ updatePageLog(text) {
       // 保活由 Worker 心跳持续维护，仅在页面卸载时随进程释放。
       this._currentStartTimeStr = null;
       this._currentScheduledTaskId = null;
+      this._currentTargetMs = null;
     },
 
     // visibilitychange + focus 监听 - 标签页恢复可见时立即补一次幂等检查（后备触发源）
@@ -1379,6 +1385,7 @@ updatePageLog(text) {
       if (!parsed || !Number.isFinite(parsed.delayMs)) return;
       this._currentStartTimeStr = startTimeStr;
       this._currentScheduledTaskId = taskId;
+      this._currentTargetMs = parsed.target.getTime();
       this._fired = false;
       this._scheduleGeneration = (this._scheduleGeneration || 0) + 1;
       const gen = this._scheduleGeneration;
@@ -2606,9 +2613,21 @@ updatePageLog(text) {
       // 仅在剩余时间充足（>6s）时做一次网络校准以提升 offset 精度；
       // 临近目标只用缓存 offset，避免把网络 RTT 注入临界路径导致点击延后。
       let spec = Util.parseTimeSpec(startTimeStr, ServerTime.nowDate());
+      // clock 模式下若目标已被推至明天，说明今天的该时刻已过，立即执行而非等到明天。
+      // 调度器到点触发后进入 waitUntil 时，时间刚刚到达/略过目标，不应再等 24h。
+      let nowDate0 = ServerTime.nowDate();
+      if (spec.mode === 'clock' && spec.target.toDateString() !== nowDate0.toDateString()) {
+        Util.log('waitUntil: 目标时间已过（clock 目标已推至明天），立即执行');
+        return nowDate0;
+      }
       if (spec.target.getTime() - ServerTime.now() > 6000) {
         await ServerTime.calibrate();
         spec = Util.parseTimeSpec(startTimeStr, ServerTime.nowDate());
+        const nowDate1 = ServerTime.nowDate();
+        if (spec.mode === 'clock' && spec.target.toDateString() !== nowDate1.toDateString()) {
+          Util.log('waitUntil: 校准后目标时间已过，立即执行');
+          return nowDate1;
+        }
       }
       const targetTime = spec.target;
       const targetMs = targetTime.getTime();
