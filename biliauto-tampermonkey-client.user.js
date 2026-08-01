@@ -923,6 +923,9 @@ if (res.status === 401) {
           }
           const currentTaskConfig = fieldTarget.closest('[data-ba="currentTaskConfig"]');
           if (currentTaskConfig) {
+            if (this._isCurrentConfigDirty()) {
+              this.showToast('配置已修改未保存', 'warn');
+            }
             return;
           }
         }
@@ -1063,6 +1066,56 @@ if (res.status === 401) {
       }
       // 同时更新页面上替换的日志区域
       this.updatePageLog(text);
+    },
+
+    // 浮层提示：自动消失的轻量 toast，替代浏览器原生弹框用于一次性反馈
+    showToast(text, type = 'info') {
+      let toast = document.getElementById('biliauto-toast');
+      if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'biliauto-toast';
+        document.body.appendChild(toast);
+      }
+      const bg = type === 'success' ? 'rgba(6,182,212,0.95)'
+        : type === 'warn' ? 'rgba(245,158,11,0.95)'
+        : 'rgba(15,23,42,0.95)';
+      toast.style.cssText = 'position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:2147483647;padding:10px 18px;border-radius:8px;font-size:13px;font-family:var(--tm-font,Inter,sans-serif);box-shadow:0 4px 16px rgba(0,0,0,0.3);background:' + bg + ';color:#fff;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90vw;text-align:center;';
+      toast.textContent = text;
+      requestAnimationFrame(() => { toast.style.opacity = '1'; });
+      clearTimeout(this._toastTimer);
+      this._toastTimer = setTimeout(() => {
+        toast.style.opacity = '0';
+        setTimeout(() => { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 250);
+      }, 2500);
+    },
+
+    // 检测当前 hero 区输入框值与已保存配置是否不一致（未保存的修改）
+    _isCurrentConfigDirty() {
+      const taskId = Util.extractTaskIdFromPage();
+      if (!taskId || taskId === 'unknown_task') return false;
+      const cfg = this.state.taskConfigs[taskId] || Util.defaultTaskConfig(taskId);
+      const el = document.querySelector('#biliauto-panel [data-ba="currentTaskConfig"]');
+      if (!el) return false;
+      const startInput = el.querySelector('[data-field="start_time"]');
+      const intervalInput = el.querySelector('[data-field="interval"]');
+      const durationInput = el.querySelector('[data-field="duration"]');
+      const modeInput = el.querySelector('[data-field="click_mode"]:checked');
+      if (startInput) {
+        const cur = Util.normalizeStartTimeInput(startInput.value) || CONFIG.DEFAULT_START_TIME;
+        if (cur !== (cfg.start_time || CONFIG.DEFAULT_START_TIME)) return true;
+      }
+      if (intervalInput) {
+        const cur = Number(intervalInput.value);
+        const curVal = Number.isFinite(cur) && cur >= 0 ? cur : CONFIG.DEFAULT_CLICK_INTERVAL_MS / 1000;
+        if (curVal !== Number(cfg.interval)) return true;
+      }
+      if (durationInput) {
+        const cur = Number(durationInput.value);
+        const curVal = Number.isFinite(cur) && cur > 0 ? cur : CONFIG.DEFAULT_CLICK_DURATION_MS / 1000;
+        if (curVal !== Number(cfg.duration)) return true;
+      }
+      if (modeInput && modeInput.value !== (cfg.click_mode || 'dom')) return true;
+      return false;
     },
 
     // 用日志面板替换领取须知内容区域，避免原节点残留空白
@@ -1536,6 +1589,7 @@ updatePageLog(text) {
       const cfg = this.syncCurrentTaskConfigFromInputs({ log: true }) || this.state.taskConfigs[taskId] || Util.defaultTaskConfig(taskId);
       this.state.taskConfigs[taskId] = cfg;
       this.saveTaskConfigs();
+      this.showToast('配置已保存', 'success');
       this.setStatus(`✅ 配置已保存，正在刷新任务列表...`);
       Util.info('面板: 配置已保存:', taskId, cfg);
       await this.refresh();
