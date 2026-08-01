@@ -897,9 +897,6 @@ if (res.status === 401) {
         else if (action === 'manualJump') this.jumpManual();
         else if (action === 'jump') this.jump(target.getAttribute('data-taskid'));
         else if (action === 'copy') this.copy(target.getAttribute('data-taskid'));
-        else if (action === 'select') this.updateTaskConfig(target.getAttribute('data-taskid'), 'selected', target.checked);
-        else if (action === 'runOne') this.runSelected([target.getAttribute('data-taskid')]);
-        else if (action === 'runAll') this.runSelected();
         else if (action === 'addTask') this.addCustomTask();
         else if (action === 'removeTask') this.removeTask(target.getAttribute('data-taskid'));
         else if (action === 'defaults') this.applyDefaults();
@@ -1760,57 +1757,6 @@ updatePageLog(text) {
       } catch {
         this.setStatus('复制失败');
       }
-    },
-
-    async runSelected(onlyTaskIds = null) {
-      if (this.state.running) return;
-      const selected = this.state.tasks.filter(task => {
-        const taskId = task.task_value;
-        if (onlyTaskIds) return onlyTaskIds.includes(taskId);
-        const cfg = this.state.taskConfigs[taskId] || Util.defaultTaskConfig(taskId);
-        return !!cfg.selected;
-      });
-      if (!selected.length) {
-        this.setStatus('没有可执行的任务');
-        return;
-      }
-      this.state.running = true;
-      Util.info(`面板: 执行 ${selected.length} 个任务${onlyTaskIds ? ' (指定ID)' : ''}`);
-      this.setStatus(`准备执行 ${selected.length} 个任务...`);
-      const baseUrl = this.state.baseConfig && this.state.baseConfig.reward_base_url || 'https://www.bilibili.com/blackboard/era/award-exchange.html';
-      const currentTask = Util.extractTaskIdFromPage();
-      const current = selected.find(task => task.task_value === currentTask);
-      const others = selected.filter(task => task.task_value !== currentTask);
-      Util.log(`面板: 当前页面任务=${currentTask}, 其余=${others.length} 个将在新标签页打开`);
-      let blockedCount = 0;
-      for (let i = 0; i < others.length; i++) {
-        const url = Util.buildRewardUrl(baseUrl, others[i].task_value);
-        Util.log(`面板: 打开新标签页 [${i + 1}/${others.length}]: ${others[i].task_value}`);
-        setTimeout(() => {
-          const win = window.open(url, '_blank');
-          if (!win) {
-            blockedCount++;
-            Util.warn(`新标签页被浏览器拦截: ${others[i].task_value}`);
-            this.setStatus(`警告: ${blockedCount} 个任务标签页被拦截，请手动打开`);
-          }
-        }, i * 2000);
-      }
-      try {
-	      if (current) {
-	        const currentCfg = this.syncCurrentTaskConfigFromInputs({ log: true }) || this.state.taskConfigs[current.task_value] || Util.defaultTaskConfig(current.task_value);
-	        Util.log(`面板: 执行当前页面任务: ${current.task_value}`);
-	        const results = await runCurrentPageTask(this.state.baseConfig, current.task_value, currentCfg);
-	        this.setStatus('上传结果中...');
-	        await batchUploadAllResults(results);
-	      }
-      } catch (e) {
-        this.setStatus('执行失败: ' + (e.message || e));
-        Util.error('runSelected 执行失败:', e);
-      } finally {
-	      this.state.running = false;
-      }
-      Util.info('面板: 全部执行触发完成');
-      this.setStatus('执行触发完成');
     },
 
     render() {
