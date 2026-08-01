@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BiliAutoClicker - 油猴客户端
 // @namespace    https://github.com/under-the-ocean
-// @version      1.3.4
+// @version      1.4.0
 // @match        https://www.bilibili.com/blackboard/era/award-exchange.html?*
 // @connect      bili.982835785.xyz
 // @connect      api.live.bilibili.com
@@ -70,7 +70,7 @@
     DEFAULT_START_TIME: '00:29:57',
     MAX_RELOAD_ATTEMPTS: 3,
 
-    VERSION: '1.3.4',
+    VERSION: '1.4.0',
     RETRY_COUNT: 2,
     // 调试日志默认关闭，减少生产环境控制台噪音与上传日志体积；如需排查可在油猴存储将 debug_mode 置为 true
     DEBUG: GM_getValue('debug_mode', false)
@@ -897,9 +897,6 @@ if (res.status === 401) {
         else if (action === 'manualJump') this.jumpManual();
         else if (action === 'jump') this.jump(target.getAttribute('data-taskid'));
         else if (action === 'copy') this.copy(target.getAttribute('data-taskid'));
-        else if (action === 'select') this.updateTaskConfig(target.getAttribute('data-taskid'), 'selected', target.checked);
-        else if (action === 'runOne') this.runSelected([target.getAttribute('data-taskid')]);
-        else if (action === 'runAll') this.runSelected();
         else if (action === 'addTask') this.addCustomTask();
         else if (action === 'removeTask') this.removeTask(target.getAttribute('data-taskid'));
         else if (action === 'defaults') this.applyDefaults();
@@ -926,6 +923,9 @@ if (res.status === 401) {
           }
           const currentTaskConfig = fieldTarget.closest('[data-ba="currentTaskConfig"]');
           if (currentTaskConfig) {
+            if (this._isCurrentConfigDirty()) {
+              this.showToast('配置已修改未保存', 'warn');
+            }
             return;
           }
         }
@@ -1066,6 +1066,56 @@ if (res.status === 401) {
       }
       // 同时更新页面上替换的日志区域
       this.updatePageLog(text);
+    },
+
+    // 浮层提示：自动消失的轻量 toast，替代浏览器原生弹框用于一次性反馈
+    showToast(text, type = 'info') {
+      let toast = document.getElementById('biliauto-toast');
+      if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'biliauto-toast';
+        document.body.appendChild(toast);
+      }
+      const bg = type === 'success' ? 'rgba(6,182,212,0.95)'
+        : type === 'warn' ? 'rgba(245,158,11,0.95)'
+        : 'rgba(15,23,42,0.95)';
+      toast.style.cssText = 'position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:2147483647;padding:10px 18px;border-radius:8px;font-size:13px;font-family:var(--tm-font,Inter,sans-serif);box-shadow:0 4px 16px rgba(0,0,0,0.3);background:' + bg + ';color:#fff;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90vw;text-align:center;';
+      toast.textContent = text;
+      requestAnimationFrame(() => { toast.style.opacity = '1'; });
+      clearTimeout(this._toastTimer);
+      this._toastTimer = setTimeout(() => {
+        toast.style.opacity = '0';
+        setTimeout(() => { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 250);
+      }, 2500);
+    },
+
+    // 检测当前 hero 区输入框值与已保存配置是否不一致（未保存的修改）
+    _isCurrentConfigDirty() {
+      const taskId = Util.extractTaskIdFromPage();
+      if (!taskId || taskId === 'unknown_task') return false;
+      const cfg = this.state.taskConfigs[taskId] || Util.defaultTaskConfig(taskId);
+      const el = document.querySelector('#biliauto-panel [data-ba="currentTaskConfig"]');
+      if (!el) return false;
+      const startInput = el.querySelector('[data-field="start_time"]');
+      const intervalInput = el.querySelector('[data-field="interval"]');
+      const durationInput = el.querySelector('[data-field="duration"]');
+      const modeInput = el.querySelector('[data-field="click_mode"]:checked');
+      if (startInput) {
+        const cur = Util.normalizeStartTimeInput(startInput.value) || CONFIG.DEFAULT_START_TIME;
+        if (cur !== (cfg.start_time || CONFIG.DEFAULT_START_TIME)) return true;
+      }
+      if (intervalInput) {
+        const cur = Number(intervalInput.value);
+        const curVal = Number.isFinite(cur) && cur >= 0 ? cur : CONFIG.DEFAULT_CLICK_INTERVAL_MS / 1000;
+        if (curVal !== Number(cfg.interval)) return true;
+      }
+      if (durationInput) {
+        const cur = Number(durationInput.value);
+        const curVal = Number.isFinite(cur) && cur > 0 ? cur : CONFIG.DEFAULT_CLICK_DURATION_MS / 1000;
+        if (curVal !== Number(cfg.duration)) return true;
+      }
+      if (modeInput && modeInput.value !== (cfg.click_mode || 'dom')) return true;
+      return false;
     },
 
     // 用日志面板替换领取须知内容区域，避免原节点残留空白
@@ -1539,6 +1589,7 @@ updatePageLog(text) {
       const cfg = this.syncCurrentTaskConfigFromInputs({ log: true }) || this.state.taskConfigs[taskId] || Util.defaultTaskConfig(taskId);
       this.state.taskConfigs[taskId] = cfg;
       this.saveTaskConfigs();
+      this.showToast('配置已保存', 'success');
       this.setStatus(`✅ 配置已保存，正在刷新任务列表...`);
       Util.info('面板: 配置已保存:', taskId, cfg);
       await this.refresh();
@@ -1760,57 +1811,6 @@ updatePageLog(text) {
       } catch {
         this.setStatus('复制失败');
       }
-    },
-
-    async runSelected(onlyTaskIds = null) {
-      if (this.state.running) return;
-      const selected = this.state.tasks.filter(task => {
-        const taskId = task.task_value;
-        if (onlyTaskIds) return onlyTaskIds.includes(taskId);
-        const cfg = this.state.taskConfigs[taskId] || Util.defaultTaskConfig(taskId);
-        return !!cfg.selected;
-      });
-      if (!selected.length) {
-        this.setStatus('没有可执行的任务');
-        return;
-      }
-      this.state.running = true;
-      Util.info(`面板: 执行 ${selected.length} 个任务${onlyTaskIds ? ' (指定ID)' : ''}`);
-      this.setStatus(`准备执行 ${selected.length} 个任务...`);
-      const baseUrl = this.state.baseConfig && this.state.baseConfig.reward_base_url || 'https://www.bilibili.com/blackboard/era/award-exchange.html';
-      const currentTask = Util.extractTaskIdFromPage();
-      const current = selected.find(task => task.task_value === currentTask);
-      const others = selected.filter(task => task.task_value !== currentTask);
-      Util.log(`面板: 当前页面任务=${currentTask}, 其余=${others.length} 个将在新标签页打开`);
-      let blockedCount = 0;
-      for (let i = 0; i < others.length; i++) {
-        const url = Util.buildRewardUrl(baseUrl, others[i].task_value);
-        Util.log(`面板: 打开新标签页 [${i + 1}/${others.length}]: ${others[i].task_value}`);
-        setTimeout(() => {
-          const win = window.open(url, '_blank');
-          if (!win) {
-            blockedCount++;
-            Util.warn(`新标签页被浏览器拦截: ${others[i].task_value}`);
-            this.setStatus(`警告: ${blockedCount} 个任务标签页被拦截，请手动打开`);
-          }
-        }, i * 2000);
-      }
-      try {
-	      if (current) {
-	        const currentCfg = this.syncCurrentTaskConfigFromInputs({ log: true }) || this.state.taskConfigs[current.task_value] || Util.defaultTaskConfig(current.task_value);
-	        Util.log(`面板: 执行当前页面任务: ${current.task_value}`);
-	        const results = await runCurrentPageTask(this.state.baseConfig, current.task_value, currentCfg);
-	        this.setStatus('上传结果中...');
-	        await batchUploadAllResults(results);
-	      }
-      } catch (e) {
-        this.setStatus('执行失败: ' + (e.message || e));
-        Util.error('runSelected 执行失败:', e);
-      } finally {
-	      this.state.running = false;
-      }
-      Util.info('面板: 全部执行触发完成');
-      this.setStatus('执行触发完成');
     },
 
     render() {
