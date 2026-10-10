@@ -1,10 +1,12 @@
 // ==UserScript==
 // @name         BiliAutoClicker - 油猴客户端
 // @namespace    https://github.com/under-the-ocean
-// @version      1.4.0
+// @version      1.5.0
 // @match        https://www.bilibili.com/blackboard/era/award-exchange.html?*
 // @connect      bili.982835785.xyz
 // @connect      api.live.bilibili.com
+// @connect      gh-proxy.com
+// @connect      raw.githubusercontent.com
 // @grant        GM_xmlhttpRequest
 // @grant        GM_notification
 // @grant        GM_setValue
@@ -70,7 +72,10 @@
     DEFAULT_START_TIME: '00:29:57',
     MAX_RELOAD_ATTEMPTS: 3,
 
-    VERSION: '1.4.0',
+    VERSION: '1.5.0',
+
+    // GitHub 仓库里的最新脚本（镜像前缀可在油猴存储用 mirror_prefix 覆盖）
+    GH_REPO_RAW: 'https://raw.githubusercontent.com/under-the-ocean/Bili_monkey/main/biliauto-tampermonkey-client.user.js',
     RETRY_COUNT: 2,
     // 调试日志默认关闭，减少生产环境控制台噪音与上传日志体积；如需排查可在油猴存储将 debug_mode 置为 true
     DEBUG: GM_getValue('debug_mode', false)
@@ -266,6 +271,36 @@
 
     parseTime(timeStr) {
       return Util.parseTimeSpec(timeStr).target;
+    },
+
+    /**
+     * 版本号比较：返回 1(a>b) / 0(相等) / -1(a<b)。
+     * 支持 v 前缀、位数不等的段（1.4 == 1.4.0）、预发布后缀（1.5.0-beta < 1.5.0）。
+     * 修掉原先字符串比较的坑：'1.10.0' > '1.9.0' 在字符串比较里是 false。
+     */
+    compareVersion(a, b) {
+      const parse = (v) => {
+        const raw = String(v == null ? '' : v).trim().replace(/^[vV]/, '').split('+')[0];
+        const dashAt = raw.indexOf('-');
+        const core = dashAt >= 0 ? raw.slice(0, dashAt) : raw;
+        const pre = dashAt >= 0 ? raw.slice(dashAt + 1) : '';
+        return { parts: core.split('.').map(x => { const n = parseInt(x, 10); return Number.isFinite(n) ? n : 0; }), pre };
+      };
+      const pa = parse(a), pb = parse(b);
+      const len = Math.max(pa.parts.length, pb.parts.length);
+      for (let i = 0; i < len; i++) {
+        const da = pa.parts[i] || 0;
+        const db = pb.parts[i] || 0;
+        if (da !== db) return da > db ? 1 : -1;
+      }
+      if (pa.pre === pb.pre) return 0;
+      if (!pa.pre) return 1;      // 无后缀 > 有后缀
+      if (!pb.pre) return -1;
+      return pa.pre > pb.pre ? 1 : -1;
+    },
+
+    isNewerVersion(candidate, current) {
+      return this.compareVersion(candidate, current) > 0;
     },
 
     formatTime(date = new Date()) {
@@ -550,8 +585,11 @@ if (res.status === 401) {
         const resp = await this.request('GET', '/api/versions/latest');
         const content = this.unwrapConfig(resp);
         if (content && content.version) {
-          Util.log(`版本检查: 当前=${CONFIG.VERSION} 最新=${content.version} ${content.version !== CONFIG.VERSION ? '↑ 有新版本' : '✓ 已是最新'}`);
-          if (content.version !== CONFIG.VERSION) {
+          const cmp = Util.compareVersion(content.version, CONFIG.VERSION);
+          const cmpText = cmp > 0 ? '↑ 有新版本' : (cmp < 0 ? '↓ 本地已是更新版本' : '✓ 已是最新');
+          Util.log(`版本检查: 当前=${CONFIG.VERSION} 最新=${content.version} ${cmpText}`);
+          // 只有服务端确实更新时才提示，避免服务端版本落后时反复弹"更新"
+          if (cmp > 0) {
             Util.notify('版本更新', `最新版本: ${content.version}，当前: ${CONFIG.VERSION}`);
             return content;
           }
@@ -657,6 +695,182 @@ if (res.status === 401) {
         clearInterval(this._autoTimer);
         this._autoTimer = null;
       }
+    }
+  };
+  // ========================
+  // 跨标签页抢码互斥
+  // 同一 IP 下多个标签页同时抢同一任务，会成倍抬高 B 站风控概率（请求量翻倍）。
+  // 这里通过 GM 存储登记「本标签页排期/正在抢的任务与目标时刻」，跨页比对时
+  // 只在【同一 taskId 且目标时刻相差 <= CONFLICT_WINDOW_MS】时才判定为冲突并提示，
+  // 时刻不同意味着不会并发打同一接口，不打扰用户。
+  // ========================
+  const CrossTab = {
+    KEY: 'bm_cross_tab_claims',
+    _pageId: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : ('p' + Math.random().toString(36).slice(2)),
+    _lastHeartbeat: 0,
+    // Worker 每 100ms 回调一次，内部限流到 5s 一次
+    HEARTBEAT_MS: 5000,
+    // 超过该时长未心跳视为页面已关闭
+    STALE_MS: 60 * 1000,
+    // 目标时刻相差在该窗口内视为「时间冲突」（会并发打同一接口）
+    CONFLICT_WINDOW_MS: 60 * 1000,
+
+    _read() {
+      let raw;
+      try { raw = GM_getValue(this.KEY, null); } catch (e) { return []; }
+      if (!raw) return [];
+      try {
+        const list = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        return Array.isArray(list) ? list : [];
+      } catch (e) { return []; }
+    },
+
+    _write(list) {
+      try { GM_setValue(this.KEY, JSON.stringify(list.slice(-20))); } catch (e) {}
+    },
+
+    // 清理过期条目：除本页外，超时未心跳或目标时刻早已过去的都丢弃
+    _prune(list, now = Date.now()) {
+      return list.filter(item => {
+        if (!item || !item.pageId || !item.taskId) return false;
+        if (item.pageId === this._pageId) return true;
+        if (typeof item.targetMs === 'number' && item.targetMs + this.STALE_MS < now) return false;
+        if (now - (item.updatedAt || 0) > this.STALE_MS) return false;
+        return true;
+      });
+    },
+
+    /** 登记本标签页的抢码计划：taskId + 校准后的目标时刻 + 阶段 */
+    register(taskId, targetMs, phase) {
+      if (!taskId || !Number.isFinite(Number(targetMs))) return;
+      const now = Date.now();
+      const key = String(taskId);
+      const list = this._prune(this._read(), now)
+        .filter(item => !(item.pageId === this._pageId && item.taskId === key));
+      list.push({
+        pageId: this._pageId,
+        taskId: key,
+        targetMs: Number(targetMs),
+        phase: phase || 'scheduled',
+        updatedAt: now
+      });
+      this._write(list);
+    },
+
+    /** 释放本标签页对某任务的登记（执行结束 / 放弃时调用） */
+    release(taskId) {
+      try {
+        const key = String(taskId);
+        this._write(this._prune(this._read(), Date.now())
+          .filter(item => !(item.pageId === this._pageId && item.taskId === key)));
+      } catch (e) {}
+    },
+
+    /** 心跳保活：挂在 Worker tick 上，避免本页登记被其它页签误判为已关闭 */
+    heartbeat() {
+      const now = Date.now();
+      if (now - this._lastHeartbeat < this.HEARTBEAT_MS) return;
+      this._lastHeartbeat = now;
+      const list = this._prune(this._read(), now);
+      let touched = false;
+      for (const item of list) {
+        if (item.pageId === this._pageId) { item.updatedAt = now; touched = true; }
+      }
+      if (touched) this._write(list);
+    },
+
+    /**
+     * 查找时间上真正冲突的其它标签页。
+     * 同一 taskId + 目标时刻相差 <= CONFLICT_WINDOW_MS 才算冲突。
+     * 本页自身、以及同一页内的重复触发（同 pageId）一律排除。
+     */
+    findConflicts(taskId, targetMs) {
+      if (!taskId) return [];
+      const list = this._prune(this._read(), Date.now());
+      const base = Number(targetMs);
+      if (!Number.isFinite(base)) return [];
+      return list.filter(item =>
+        item.pageId !== this._pageId &&
+        item.taskId === String(taskId) &&
+        Number.isFinite(Number(item.targetMs)) &&
+        Math.abs(Number(item.targetMs) - base) <= this.CONFLICT_WINDOW_MS
+      );
+    },
+
+    /** 用户显式允许并发抢码：油猴存储 bm_allow_parallel = true 时放行 */
+    allowParallel() {
+      return GM_getValue('bm_allow_parallel', false) === true;
+    }
+  };
+  // ========================
+  // GitHub 国内镜像版本检查
+  // 通过 gh-proxy 镜像拉取仓库里的脚本头部解析 @version，发现新版本只弹提示 + 给更新按钮，
+  // 不阻塞页面、不强制更新 —— 是否升级由用户自己点。
+  // ========================
+  const MirrorUpdate = {
+    // 6 小时查一次，避免每次打开页面都下载整个脚本
+    CHECK_INTERVAL_MS: 6 * 60 * 60 * 1000,
+
+    rawUrl() {
+      return CONFIG.GH_REPO_RAW;
+    },
+
+    /** 镜像加速后的安装链接：点「立即更新」打开的就是它，油猴会弹出更新确认 */
+    downloadUrl() {
+      const prefix = GM_getValue('mirror_prefix', 'https://gh-proxy.com/') || '';
+      return prefix + CONFIG.GH_REPO_RAW;
+    },
+
+    _request(url, headers) {
+      return new Promise((resolve, reject) => {
+        GM_xmlhttpRequest({
+          method: 'GET',
+          url,
+          headers: headers || {},
+          timeout: 15000,
+          onload: resp => {
+            if (resp.status >= 200 && resp.status < 400) resolve(resp.responseText || '');
+            else reject(new Error('HTTP ' + resp.status));
+          },
+          onerror: () => reject(new Error('请求失败')),
+          ontimeout: () => reject(new Error('请求超时'))
+        });
+      });
+    },
+
+    parseVersion(text) {
+      const m = String(text || '').match(/@version\s+([0-9][^\s*]*)/);
+      return m ? m[1].trim() : null;
+    },
+
+    /**
+     * 取镜像端最新版本号。force=true 时忽略缓存重新拉。
+     * 优先走镜像，镜像失败再回落 raw 直连。
+     */
+    async latest(force) {
+      const now = Date.now();
+      const lastAt = Number(GM_getValue('bm_gh_checked_at', 0)) || 0;
+      const cached = GM_getValue('bm_gh_latest_version', '');
+      if (!force && cached && now - lastAt < this.CHECK_INTERVAL_MS) return cached;
+      let lastErr = null;
+      for (const url of [this.downloadUrl(), this.rawUrl()]) {
+        try {
+          // @version 在文件第 4 行，取头部即可；镜像不支持 Range 时会返回整份，同样能解析
+          const text = await this._request(url, { Range: 'bytes=0-1024' });
+          const v = this.parseVersion(text);
+          if (v) {
+            GM_setValue('bm_gh_checked_at', now);
+            GM_setValue('bm_gh_latest_version', v);
+            Util.log(`镜像检查: 最新版本 ${v}（来源 ${url.slice(0, 60)}…）`);
+            return v;
+          }
+          lastErr = new Error('未能解析 @version');
+        } catch (e) {
+          lastErr = e;
+          Util.warn('镜像检查请求失败:', url.slice(0, 60), e.message || e);
+        }
+      }
+      throw lastErr || new Error('镜像检查失败');
     }
   };
   // ========================
@@ -968,6 +1182,10 @@ if (res.status === 401) {
 
     syncCurrentTaskConfigFromInputs(options = {}) {
       const currentTask = Util.extractTaskIdFromPage() || 'unknown_task';
+      const storedCfg = this.state.taskConfigs[currentTask];
+      // 输入框没有任何改动时，直接采信已保存配置：
+      // 否则会把 DOM 里的陈旧值（AI 回填后未重渲染的 input）反向写回 state，等于丢掉 AI 解析出的时间。
+      if (storedCfg && !this._isCurrentConfigDirty()) return { ...storedCfg };
       const currentConfigEl = document.querySelector('#biliauto-panel [data-ba="currentTaskConfig"]');
       if (!currentConfigEl || !currentTask || currentTask === 'unknown_task') return this.state.taskConfigs[currentTask] || Util.defaultTaskConfig(currentTask);
       const current = this.state.taskConfigs[currentTask] || Util.defaultTaskConfig(currentTask);
@@ -1024,7 +1242,13 @@ if (res.status === 401) {
       const current = this.state.taskConfigs[taskId] || Util.defaultTaskConfig(taskId);
       let nextValue = field === 'selected' ? Boolean(value) : value;
       if (field === 'start_time') nextValue = Util.normalizeStartTimeInput(value) || CONFIG.DEFAULT_START_TIME;
-      if (field === 'start_time') this._refreshCountdown();
+      if (field === 'start_time') {
+        this._refreshCountdown();
+        // 立即把值回写到 DOM 输入框：AI 解析回填走的是 noRender:true，不会触发 render()，
+        // 若不同步，后续 syncCurrentTaskConfigFromInputs 会拿陈旧的 input 值反向覆盖掉最新 start_time。
+        const startInputEl = document.querySelector('#biliauto-panel [data-ba="currentTaskConfig"] [data-field="start_time"]');
+        if (startInputEl) startInputEl.value = nextValue;
+      }
       this.state.taskConfigs[taskId] = { ...current, [field]: nextValue };
       if (field === 'click_mode') {
         const currentTaskConfig = document.querySelector('#biliauto-panel [data-ba="currentTaskConfig"]');
@@ -1225,6 +1449,23 @@ updatePageLog(text) {
     },
 
     _doExecuteTask(taskId) {
+      // 互斥 1：同一时刻只允许一条执行路径（main 直接执行 / 手动 runCurrent / 调度触发）。
+      // state.running 曾被当作锁，但调度侧已不再读取它，导致两条路径在同一毫秒并发连点。
+      if (this.state.running) {
+        Util.warn(`_doExecuteTask: 已有执行路径在运行，忽略本次到点触发 task_id=${taskId}`);
+        this.updatePageLog(`【调度跳过】已有任务执行中，忽略本次到点触发 task_id=${taskId}`);
+        this._cleanupTimers();
+        return;
+      }
+      // 互斥 2：跨标签页 —— 到点瞬间复核一次，防止排期之后又有新页签加入造成并发
+      const conflicts = this._warnCrossTabConflict(taskId, ServerTime.now());
+      if (conflicts.length && !CrossTab.allowParallel()) {
+        this.setStatus(`已让出：另有标签页同时抢 ${taskId}，本页放弃本次执行以避免并发风控`);
+        this.updatePageLog(`【跨页让出】task_id=${taskId} 另有 ${conflicts.length} 个标签页同时抢，本页放弃本次执行`);
+        CrossTab.release(taskId);
+        return;
+      }
+      CrossTab.register(taskId, ServerTime.now(), 'running');
       const latestCfg = this.syncCurrentTaskConfigFromInputs({ log: false }) || this.state.taskConfigs[taskId] || Util.defaultTaskConfig(taskId);
       this.state.running = true;
       this.setStatus('Auto run starting: ' + taskId);
@@ -1341,6 +1582,8 @@ updatePageLog(text) {
     },
 
     _checkKeepAlive() {
+      // 顺带做跨标签页登记心跳（内部限流 5s 一次），保证本页登记不被误判为已关闭
+      CrossTab.heartbeat();
       if (!this._keepAliveCtx) {
         this._startKeepAliveAudio();
         return;
@@ -1424,6 +1667,108 @@ updatePageLog(text) {
       scheduleNext();
     },
 
+    // ============ GitHub 镜像版本检查（只提示，不强更） ============
+
+    /** 打开更新页：新标签页打开镜像安装链接，油猴会弹出更新确认，避免打断当前页面的抢码 */
+    openUpdatePage() {
+      const url = MirrorUpdate.downloadUrl();
+      Util.info('打开更新页:', url);
+      try {
+        if (typeof GM_openInTab === 'function') {
+          GM_openInTab(url, { active: true, insert: true });
+        } else {
+          window.open(url, '_blank', 'noopener');
+        }
+      } catch (e) {
+        window.open(url, '_blank', 'noopener');
+      }
+    },
+
+    /**
+     * 发现新版本时的可关闭横幅：只提示、不强制更新。
+     * 同一版本点过「稍后」后不再打扰，直到出现更新的版本。
+     */
+    showUpdateBanner(latest) {
+      if (GM_getValue('bm_gh_dismissed_version', '') === latest) return;
+      let banner = document.getElementById('biliauto-update-banner');
+      if (!banner) {
+        banner = document.createElement('div');
+        banner.id = 'biliauto-update-banner';
+        document.body.appendChild(banner);
+      }
+      const btnBase = 'padding:6px 14px;border-radius:6px;font-size:13px;font-family:inherit;cursor:pointer;border:none;';
+      banner.style.cssText = 'position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:2147483647;'
+        + 'padding:10px 16px;border-radius:10px;display:flex;align-items:center;gap:12px;'
+        + 'font-size:13px;font-family:var(--tm-font,Inter,sans-serif);max-width:92vw;'
+        + 'background:rgba(15,23,42,.96);border:1px solid rgba(6,182,212,.45);color:#e2e8f0;'
+        + 'box-shadow:0 6px 20px rgba(0,0,0,.35);';
+      banner.textContent = '';
+      const label = document.createElement('span');
+      label.textContent = `发现新版本 ${latest}（当前 ${CONFIG.VERSION}）`;
+
+      const btnUpdate = document.createElement('button');
+      btnUpdate.textContent = '立即更新';
+      btnUpdate.style.cssText = btnBase + 'background:#06b6d4;color:#04212b;font-weight:600;';
+      btnUpdate.title = '新标签页打开镜像安装链接，油猴会弹出更新确认';
+      btnUpdate.addEventListener('click', () => this.openUpdatePage());
+
+      const btnLater = document.createElement('button');
+      btnLater.textContent = '稍后';
+      btnLater.style.cssText = btnBase + 'background:rgba(255,255,255,.12);color:#cbd5e1;';
+      btnLater.addEventListener('click', () => {
+        GM_setValue('bm_gh_dismissed_version', latest);
+        banner.remove();
+        this.updatePageLog(`【版本更新】已忽略 ${latest} 的更新提示`);
+      });
+
+      banner.append(label, btnUpdate, btnLater);
+      Util.info(`镜像检查: 发现新版本 ${latest}（当前 ${CONFIG.VERSION}）`);
+      this.showToast(`发现新版本 ${latest}`, 'info');
+      this.updatePageLog(`【版本更新】发现新版本 ${latest}（当前 ${CONFIG.VERSION}）。`
+        + '点击横幅「立即更新」在新标签页打开镜像安装链接，由油猴确认后生效；也可在油猴扩展里手动更新。');
+    },
+
+    /**
+     * 镜像版本检查入口：只提示不阻塞。
+     * 检查失败（断网/镜像挂了）一律降级为日志，不影响抢码主流程。
+     */
+    async checkMirrorUpdate(force) {
+      try {
+        const latest = await MirrorUpdate.latest(force);
+        if (latest && Util.isNewerVersion(latest, CONFIG.VERSION)) {
+          this.showUpdateBanner(latest);
+        } else {
+          Util.log(`镜像检查: 最新=${latest} 当前=${CONFIG.VERSION}，无需更新`);
+        }
+        return latest;
+      } catch (e) {
+        Util.warn('镜像版本检查失败（不影响抢码）: ' + (e.message || e));
+        return null;
+      }
+    },
+
+    /**
+     * 跨标签页冲突预警：只有「同一 taskId 且目标时刻相近」才提示。
+     * 时刻不同则不会并发请求同一接口，静默处理不打扰用户。
+     */
+    _warnCrossTabConflict(taskId, targetMs) {
+      const conflicts = CrossTab.findConflicts(taskId, targetMs);
+      if (!conflicts.length) return [];
+      const when = Util.formatTime(new Date(targetMs));
+      const others = conflicts.map(c =>
+        `${c.phase === 'running' ? '正在抢' : '已排期'} ${Util.formatTime(new Date(c.targetMs))}`).join('；');
+      const msg = `⚠️ 另有 ${conflicts.length} 个标签页也在抢 task_id=${taskId}（本页 ${when}，对方 ${others}）。`
+        + '同一 IP 下并发抢码请求量翻倍，触发 B 站风控 / IP 异常的概率会大幅升高，建议关闭多余标签页。';
+      Util.warn(msg);
+      this.showToast(`⚠️ 另有标签页同时抢 ${taskId}，风控概率升高`, 'warn');
+      this.updatePageLog(msg);
+      this.setStatus(`另有标签页同时抢 ${taskId}：${when}`);
+      if (CrossTab.allowParallel()) {
+        this.updatePageLog('已开启 bm_allow_parallel，本次允许并发抢码');
+      }
+      return conflicts;
+    },
+
     scheduleCurrentTask() {
       // 不再强行重置 running（幂等 _fired + generation 已保证不会重复执行）
       this._cleanupTimers();
@@ -1440,6 +1785,9 @@ updatePageLog(text) {
       this._currentScheduledTaskId = taskId;
       this._currentTargetMs = parsed.target.getTime();
       this._fired = false;
+      // 跨标签页登记 + 冲突预警（时刻不冲突则静默）
+      CrossTab.register(taskId, this._currentTargetMs, 'scheduled');
+      this._warnCrossTabConflict(taskId, this._currentTargetMs);
       this._scheduleGeneration = (this._scheduleGeneration || 0) + 1;
       const gen = this._scheduleGeneration;
       Util.log('schedule current task:', taskId, parsed.normalized, 'delay=', parsed.delayMs);
@@ -1597,13 +1945,15 @@ updatePageLog(text) {
 
     async runCurrent() {
       if (this.state.running) {
-        if (this._currentScheduledTaskId) {
-          Util.warn('runCurrent: 自动调度任务正在等待，强制重置 running 状态');
-          this.state.running = false;
-        } else {
-          this.setStatus('正在执行中...');
-          return;
-        }
+        // 不再强制解锁重跑：原来这条分支会让「自动调度 + 手动点击」同时连点，
+        // 造成同一时刻两路请求（direct 模式下即触发风控）。
+        const msg = this._currentScheduledTaskId
+          ? `已有任务正在等待/执行（task_id=${this._currentScheduledTaskId}），本次不再重复执行`
+          : '正在执行中...';
+        Util.warn('runCurrent: ' + msg);
+        this.setStatus(msg);
+        this.showToast('已有任务在等待/执行中，已忽略本次手动执行', 'warn');
+        return;
       }
       if (!this.state.baseConfig || !this.state.baseConfig.reward_claim_selector) {
         this.setStatus('缺少领取按钮选择器配置');
@@ -2542,6 +2892,11 @@ updatePageLog(text) {
     },
 
     async runSingleTask(taskId, config, selector, results) {
+      // 现取最新配置：loadTaskConfigs()/updateTaskConfig() 每次都返回全新对象，
+      // 调用方(main)持有的快照与 Panel.state.taskConfigs 没有引用关系，
+      // 不现取就会丢掉 AI 解析回填的 start_time，导致调度器与执行路径等到不同时刻。
+      const liveCfg = Panel && Panel.state && Panel.state.taskConfigs && Panel.state.taskConfigs[taskId];
+      if (liveCfg) config = { ...config, ...liveCfg };
       const startTimeStr = config.start_time || CONFIG.DEFAULT_START_TIME;
       const intervalMs = Math.max(0, Number(config.interval || CONFIG.DEFAULT_CLICK_INTERVAL_MS / 1000) * 1000);
       const durationMs = Math.max(1, Number(config.duration || CONFIG.DEFAULT_CLICK_DURATION_MS / 1000) * 1000);
@@ -2558,7 +2913,33 @@ updatePageLog(text) {
       RewardMonitor.clear(taskId);
       Util.info(`开始执行任务: ${taskId}`);
       Panel.updatePageLog(`【任务开始】task_id=${taskId} 计划时间=${startSpec.normalized} 实际时间=${Util.formatTime()}`);
-      const clickStats = await this.performContinuousClick(selector, intervalMs, durationMs);
+
+      // 跨标签页互斥：等待期间可能有新页签排入同一任务，到点瞬间复核（按目标时刻判定是否冲突）。
+      // 用 ServerTime.now() 而非 startSpec.target —— 后者在 waitUntil 之后解析会把刚到的时刻顺延到明天，
+      // 拿它比对会导致永远判不出冲突。
+      const targetMs = Math.round(ServerTime.now());
+      CrossTab.register(taskId, targetMs, 'running');
+      const conflicts = CrossTab.findConflicts(taskId, targetMs);
+      if (conflicts.length && !CrossTab.allowParallel()) {
+        const others = conflicts.map(c => Util.formatTime(new Date(c.targetMs))).join('；');
+        const msg = `⚠️ 另有 ${conflicts.length} 个标签页也在 ${Util.formatTime(new Date(targetMs))} 抢 task_id=${taskId}（对方 ${others}）。`
+          + '同一 IP 并发抢码会让请求量翻倍、触发风控概率大幅升高，本页已放弃本次执行；'
+          + '若确认要并发执行，可在油猴存储把 bm_allow_parallel 设为 true。';
+        Util.warn(msg);
+        Panel.showToast(`⚠️ 另有标签页同时抢 ${taskId}，本页已让出`, 'warn');
+        Panel.updatePageLog(`【跨页让出】${msg}`);
+        Panel.setStatus(`已让出：另有标签页同时抢 ${taskId}`);
+        CrossTab.release(taskId);
+        return null;
+      }
+
+      let clickStats;
+      try {
+        clickStats = await this.performContinuousClick(selector, intervalMs, durationMs);
+      } finally {
+        // 连点结束即释放登记：让其它页签后续时刻可以正常排期
+        CrossTab.release(taskId);
+      }
       const successCount = clickStats.success_count || 0;
       const totalCount = successCount + (clickStats.fail_count || 0);
       let claimResult;
@@ -2760,7 +3141,9 @@ async function _doBatchUpload(results) {
 
     const results = {};
     Util.log(`执行单任务: ${taskId}`);
-    await Executor.runSingleTask(taskId, taskConfig || Util.defaultTaskConfig(taskId), selector, results);
+    const executed = await Executor.runSingleTask(taskId, taskConfig || Util.defaultTaskConfig(taskId), selector, results);
+    // runSingleTask 返回 null = 跨标签页让出，本次未执行，不发"执行完成"通知
+    if (executed === null) return results;
 
     Util.notify('BiliAuto 执行完成', Object.values(results).map(item => `${item.task_id}: ${item.status}`).join('\n'));
     Util.info('当前任务结果:', results);
@@ -2806,7 +3189,7 @@ async function _doBatchUpload(results) {
       const versionResp = await API.request('GET', '/api/versions/latest');
       if (versionResp && versionResp.status === 'success' && versionResp.data) {
         const latest = versionResp.data;
-        if (latest.force_update && (latest.version || '') > (CONFIG.VERSION || '')) {
+        if (latest.force_update && Util.isNewerVersion(latest.version, CONFIG.VERSION)) {
           Util.warn('强制更新: 版本过低, 阻塞执行');
           Panel.showForceUpdateOverlay(latest);
           return;
@@ -2815,6 +3198,10 @@ async function _doBatchUpload(results) {
     } catch (e) {
       Util.log('版本预检失败(不影响主流程):', e.message || e);
     }
+
+    // GitHub 镜像版本检查：只提示、不强制更新；
+    // 断网/镜像故障一律降级为日志，不阻塞后续抢码主流程
+    Panel.checkMirrorUpdate(false);
 
 	    if (!isLoggedIn()) {
 	      Util.info('未登录，显示全屏登录界面');
@@ -2944,8 +3331,11 @@ async function _doBatchUpload(results) {
 
       const taskConfigs = Util.loadTaskConfigs(tasks);
       Util.log(`加载了 ${Object.keys(taskConfigs).length} 个任务配置`);
-      // 设置执行锁，防止面板定时器或配置更新触发重复执行
+      // 设置执行锁，并撤销调度器已武装的到点定时器：
+      // main 会自己等 start_time 再连点，若不撤销，调度器会在同一毫秒再起一份连点，
+      // 两路并发直接把 direct 模式的请求量翻倍，触发 B 站风控 / IP 异常。
       Panel.state.running = true;
+      Panel._cleanupTimers();
       let results;
       try {
         results = await runCurrentPageTask(baseConfig, taskId, taskConfigs[taskId] || Util.defaultTaskConfig(taskId), taskName);
@@ -2956,8 +3346,9 @@ async function _doBatchUpload(results) {
           const refreshedTasksResp = await API.getTasks();
           if (refreshedTasksResp.status === 'success') {
             const refreshedTasks = Util.normalizeTasks(refreshedTasksResp.data || {});
-            // 不释放 running 锁直接 setData，scheduleCurrentTask 会因 running=true 跳过
-            // 延迟到 finally 释放锁后，下次 scheduleCurrentTask 调用时自然重建
+            // 不释放 running 锁直接 setData：setData 会重建调度，
+            // 但 _doExecuteTask 已加 running 互斥守卫，不会与本次执行并发；
+            // 真正的下一次排期在 finally 释放锁后由 scheduleCurrentTask() 重建
             Panel.setData(baseConfig, refreshedTasks);
             // 用刷新后的任务名称更新已捕获的结果
             let updateCount = 0;
