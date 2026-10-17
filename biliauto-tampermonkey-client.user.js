@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BiliAutoClicker - 油猴客户端
 // @namespace    https://github.com/under-the-ocean
-// @version      1.5.0
+// @version      1.6.0
 // @match        https://www.bilibili.com/blackboard/era/award-exchange.html?*
 // @connect      bili.982835785.xyz
 // @connect      api.live.bilibili.com
@@ -72,7 +72,7 @@
     DEFAULT_START_TIME: '00:29:57',
     MAX_RELOAD_ATTEMPTS: 3,
 
-    VERSION: '1.5.0',
+    VERSION: '1.6.0',
 
     // GitHub 仓库里的最新脚本（镜像前缀可在油猴存储用 mirror_prefix 覆盖）
     GH_REPO_RAW: 'https://raw.githubusercontent.com/under-the-ocean/Bili_monkey/main/biliauto-tampermonkey-client.user.js',
@@ -138,8 +138,34 @@
       return new Promise(resolve => setTimeout(resolve, ms));
     },
 
+    /**
+     * 单调计数器：performance.now() 不受系统对时/时区跳变影响，分辨率 ~0.1ms。
+     * 所有"流逝了多少时间"的计算（超时、连点时长、自旋）都应基于它，
+     * 而"现在几点"一律走 ServerTime（绝对时间只信 B 站 API）。
+     */
+    perfNow() {
+      return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    },
+
+    /**
+     * 当前"服务器日期"，供 parseTimeSpec 推导今天/明天。
+     * 已校准时用服务器时间；未校准（断网等）退回本地墙钟，属于显式降级。
+     */
+    serverNowDate() {
+      try {
+        if (typeof ServerTime !== 'undefined' && ServerTime.isCalibrated && ServerTime.isCalibrated()) {
+          return ServerTime.nowDate();
+        }
+      } catch (e) { /* ServerTime 尚未初始化时退回本地 */ }
+      return new Date();
+    },
+
     getByXPath(xpath, context = document) {
       try {
+        // 兼容 CSS 选择器：部分模式直接使用页面原生按钮类名，不走 XPath
+        if (typeof xpath === 'string' && /^[.#]/.test(xpath) && xpath.indexOf('/') === -1) {
+          return (context.querySelector ? context.querySelector(xpath) : null);
+        }
         return document.evaluate(
           xpath,
           context,
@@ -229,8 +255,10 @@
       return value;
     },
 
-    parseTimeSpec(timeStr, now = new Date(), options = {}) {
+    parseTimeSpec(timeStr, now = null, options = {}) {
       const noPushTomorrow = options.noPushTomorrow === true;
+      // 基准时间默认取服务器时间：任何一处漏传 now 都不会用本地墙钟算出错误的"今天/明天"
+      if (!now) now = Util.serverNowDate();
       const raw = String(timeStr || '').trim();
       const value = Util.normalizeStartTimeInput(raw || CONFIG.DEFAULT_START_TIME);
       if (!value) return Util.parseTimeSpec(CONFIG.DEFAULT_START_TIME, now, options);
@@ -397,7 +425,7 @@
         return Number.isFinite(val) && val > 0 ? val : CONFIG.DEFAULT_CLICK_DURATION_MS / 1000;
       }
       if (field === 'click_mode') {
-        return rawValue === 'direct' ? 'direct' : 'dom';
+        return (rawValue === 'direct' || rawValue === 'group') ? rawValue : 'dom';
       }
       if (field === 'selected') {
         return Boolean(rawValue);
@@ -630,42 +658,107 @@ if (res.status === 401) {
   }
 
   // ========================
-  // 时间校准 —— 从B站RTC接口获取服务器时间，补偿本地时钟偏差
+  // 时间校准 —— B站RTC接口取服务器时间
+  // 设计：**绝对时间只信 API，本地时钟只当"秒表"**
+  //   锚点 = 「单调计数器读数 ↔ 服务端毫秒」的一次对应关系；
+  //   now() = anchorServerMs + (performance.now() - anchorPerf)。
+  //   整个等待期不再读本地墙钟，系统对时 / 时区 / 夏令时跳变都不会影响触发时刻。
+  //   精度上限由 API+RTT 决定（实测中位 ±5~15ms），而非本地时钟。
   // ========================
+  const SERVER_TIME_URL = 'https://api.live.bilibili.com/xlive/open-interface/v1/rtc/getTimestamp';
   const ServerTime = {
+    _anchorPerf: null,      // 锚点的单调计数器读数（请求中点）
+    _anchorServerMs: 0,     // 该点对应的服务端毫秒
+    _calibrated: false,
+
+    // 采样质量跟踪：用于丢弃高 RTT 的坏样本
+    _minRtt: Infinity,
+    _lastRtt: null,
+
+    // 以下两个仅供界面显示
     offsetMs: 0,
     lastCalibration: null,
 
-    async calibrate() {
-      try {
-        const t0 = Date.now();
-        const resp = await fetch('https://api.live.bilibili.com/xlive/open-interface/v1/rtc/getTimestamp');
-        const t1 = Date.now();
-        if (!resp.ok) throw new Error('HTTP ' + resp.status);
-        const json = await resp.json();
-        if (json && json.code === 0 && json.data && json.data.microtime) {
-          const serverMs = json.data.microtime;
-          const rtt = t1 - t0;
-          this.offsetMs = serverMs - t0 - rtt / 2;
-          this.lastCalibration = Date.now();
-          Util.log('时间校准完成：偏差 ' + (this.offsetMs > 0 ? '+' : '') + this.offsetMs.toFixed(0) + 'ms，RTT=' + rtt + 'ms');
-          this._updateDisplay();
-          return this.offsetMs;
+    isCalibrated() {
+      return this._calibrated;
+    },
+
+    _perf() {
+      return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    },
+
+    /** 单次采样：以请求中点为基准，返回服务端毫秒与该点的单调读数 */
+    async _sample() {
+      const p0 = this._perf();
+      const resp = await fetch(SERVER_TIME_URL, { cache: 'no-store' });
+      const p1 = this._perf();
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      const json = await resp.json();
+      if (!json || json.code !== 0 || !json.data || !json.data.microtime) throw new Error('响应格式异常');
+      return { serverMs: json.data.microtime, rtt: p1 - p0, midPerf: (p0 + p1) / 2 };
+    },
+
+    /**
+     * 校准：连采 N 次 → 丢弃 RTT 超过 2×历史最小值的坏样本 → 取最小 RTT 样本做锚点。
+     * 实测依据：单次采样误差 sd≈15ms、最坏偏 41ms；多点+过滤后可压到 ±6ms 量级。
+     * options.deadlineMs 传抢码目标时刻：临近目标时只接受"更优样本"，避免把抖动注入临界路径。
+     */
+    async calibrate(options = {}) {
+      const tries = Math.max(1, options.samples || 3);
+      const deadlineMs = Number(options.deadlineMs);
+      const samples = [];
+      for (let i = 0; i < tries; i++) {
+        try {
+          samples.push(await this._sample());
+        } catch (e) {
+          Util.warn('时间采样失败：' + (e.message || e));
         }
-        throw new Error('响应格式异常');
-      } catch (e) {
-        Util.warn('时间校准失败：' + e.message);
+        if (i < tries - 1) await Util.sleep(120);
+      }
+      if (!samples.length) {
+        // 一个样本都没拿到：有旧锚点就继续用，否则显式降级到本地墙钟
+        if (this._calibrated) Util.warn('时间校准失败：沿用上一次锚点');
+        else Util.warn('时间校准失败：绝对时间降级为本地墙钟，触发时刻可能偏差（建议检查网络并手动重新校准）');
         this._updateDisplay();
         return this.offsetMs;
       }
+      // 半程校正只对"最小 RTT"样本可信，故先过滤再择优
+      const minSeen = Math.min(this._minRtt, ...samples.map(s => s.rtt));
+      const threshold = Math.max(minSeen * 2, minSeen + 30);
+      const good = samples.filter(s => s.rtt <= threshold);
+      const usable = good.length ? good : samples;
+      const best = usable.reduce((a, b) => (a.rtt <= b.rtt ? a : b));
+
+      // 临界期棘轮：距目标 ≤10s 且新样本不优于历史最好样本时，保留原锚点不动
+      const nearTarget = Number.isFinite(deadlineMs) && (deadlineMs - this.now()) <= 10000;
+      if (nearTarget && this._calibrated && best.rtt >= this._minRtt) {
+        Util.log('时间校准：临近目标且样本 RTT(' + best.rtt + 'ms) 未优于历史最小(' + this._minRtt + 'ms)，保留原锚点');
+        this.lastCalibration = Date.now();
+        this._updateDisplay();
+        return this.offsetMs;
+      }
+
+      this._anchorPerf = best.midPerf;
+      this._anchorServerMs = best.serverMs;
+      this._calibrated = true;
+      this._lastRtt = best.rtt;
+      this._minRtt = Math.min(this._minRtt, best.rtt);
+      this.offsetMs = this.now() - Date.now();   // 仅供显示
+      this.lastCalibration = Date.now();
+      Util.log('时间校准完成：偏差 ' + (this.offsetMs > 0 ? '+' : '') + this.offsetMs.toFixed(0) + 'ms，'
+        + '采用 RTT=' + best.rtt + 'ms（采样 ' + samples.length + ' 个，合格 ' + usable.length + ' 个，历史最小 ' + this._minRtt + 'ms）');
+      this._updateDisplay();
+      return this.offsetMs;
     },
 
+    /** 服务器毫秒。未校准时显式降级为本地墙钟（会在日志中警告过） */
     now() {
-      return Date.now() + this.offsetMs;
+      if (!this._calibrated) return Date.now();
+      return this._anchorServerMs + (this._perf() - this._anchorPerf);
     },
 
     nowDate() {
-      return new Date(Date.now() + this.offsetMs);
+      return new Date(this.now());
     },
 
     getOffsetDisplay() {
@@ -710,10 +803,15 @@ if (res.status === 401) {
     _lastHeartbeat: 0,
     // Worker 每 100ms 回调一次，内部限流到 5s 一次
     HEARTBEAT_MS: 5000,
-    // 超过该时长未心跳视为页面已关闭
-    STALE_MS: 60 * 1000,
+    // 竞争者存活线：心跳 5s 一次，超过 3 次没心跳即视为该页签已关闭/卡死。
+    // 必须远小于旧值 60s —— 否则"短暂多开再关掉"残留的僵尸记录会让本页到点误判有竞争而取消抢码。
+    LIVE_MS: 15 * 1000,
+    // 存储清理阈值（只用于清垃圾，不参与竞争判定）
+    STALE_MS: 120 * 1000,
     // 目标时刻相差在该窗口内视为「时间冲突」（会并发打同一接口）
     CONFLICT_WINDOW_MS: 60 * 1000,
+    // 已完成的墓碑保留时长：覆盖同刻竞争窗口，避免输家接管时重复执行
+    DONE_KEEP_MS: 90 * 1000,
 
     _read() {
       let raw;
@@ -729,12 +827,13 @@ if (res.status === 401) {
       try { GM_setValue(this.KEY, JSON.stringify(list.slice(-20))); } catch (e) {}
     },
 
-    // 清理过期条目：除本页外，超时未心跳或目标时刻早已过去的都丢弃
+    // 清理过期条目：除本页外，超时未心跳、目标时刻早已过去、墓碑过期的都丢弃
     _prune(list, now = Date.now()) {
       return list.filter(item => {
         if (!item || !item.pageId || !item.taskId) return false;
         if (item.pageId === this._pageId) return true;
-        if (typeof item.targetMs === 'number' && item.targetMs + this.STALE_MS < now) return false;
+        if (typeof item.targetMs === 'number' && item.targetMs && item.targetMs + this.STALE_MS < now) return false;
+        if (item.phase === 'done' && now - (item.updatedAt || 0) > this.DONE_KEEP_MS) return false;
         if (now - (item.updatedAt || 0) > this.STALE_MS) return false;
         return true;
       });
@@ -757,12 +856,56 @@ if (res.status === 401) {
       this._write(list);
     },
 
-    /** 释放本标签页对某任务的登记（执行结束 / 放弃时调用） */
+    /** 更新本页某任务的阶段（scheduled / running / yielded / done）并刷新心跳 */
+    mark(taskId, targetMs, phase) {
+      if (!taskId) return;
+      const now = Date.now();
+      const key = String(taskId);
+      const list = this._prune(this._read(), now);
+      let found = false;
+      for (const item of list) {
+        if (item.pageId === this._pageId && item.taskId === key) {
+          if (phase) item.phase = phase;
+          if (Number.isFinite(Number(targetMs))) item.targetMs = Number(targetMs);
+          item.updatedAt = now;
+          found = true;
+        }
+      }
+      // done 是墓碑：没有旧条目就不必造；yielded 需要留痕让赢家知道本页已让出
+      if (!found && phase && phase !== 'done') {
+        list.push({ pageId: this._pageId, taskId: key, targetMs: Number(targetMs) || 0, phase, updatedAt: now });
+      }
+      this._write(list);
+    },
+
+    /** 执行完成后的墓碑：保留一小段时间，避免同刻竞争的输家误判"赢家没跑"而重复执行 */
+    markDone(taskId) {
+      this.mark(taskId, null, 'done');
+    },
+
+    /** 释放本标签页对某任务的登记 */
     release(taskId) {
       try {
         const key = String(taskId);
         this._write(this._prune(this._read(), Date.now())
           .filter(item => !(item.pageId === this._pageId && item.taskId === key)));
+      } catch (e) {}
+    },
+
+    /** 页面关闭/跳转时清掉本页全部登记：不能留僵尸记录去干扰其它页签 */
+    releaseAll() {
+      try {
+        this._write(this._prune(this._read(), Date.now()).filter(item => item.pageId !== this._pageId));
+      } catch (e) {}
+    },
+    /** 安装卸载钩子（幂等） */
+    hookUnload() {
+      if (this._unloadHooked) return;
+      this._unloadHooked = true;
+      const bye = () => this.releaseAll();
+      try {
+        window.addEventListener('pagehide', bye);
+        window.addEventListener('beforeunload', bye);
       } catch (e) {}
     },
 
@@ -780,21 +923,30 @@ if (res.status === 401) {
     },
 
     /**
-     * 查找时间上真正冲突的其它标签页。
-     * 同一 taskId + 目标时刻相差 <= CONFLICT_WINDOW_MS 才算冲突。
+     * 真正的竞争页签：必须同时满足
+     *   1) 同一 taskId，且目标时刻相差 <= CONFLICT_WINDOW_MS（时刻不同不会并发，不算冲突）
+     *   2) 阶段是 scheduled / running（yielded、done 都不再参与竞争）
+     *   3) 最近 LIVE_MS 内还有心跳（关掉/卡死的页签会自动失去资格，而不是继续"占坑"）
      * 本页自身、以及同一页内的重复触发（同 pageId）一律排除。
      */
-    findConflicts(taskId, targetMs) {
+    livePeers(taskId, targetMs) {
       if (!taskId) return [];
-      const list = this._prune(this._read(), Date.now());
+      const now = Date.now();
       const base = Number(targetMs);
       if (!Number.isFinite(base)) return [];
-      return list.filter(item =>
+      return this._prune(this._read(), now).filter(item =>
         item.pageId !== this._pageId &&
         item.taskId === String(taskId) &&
+        (item.phase === 'scheduled' || item.phase === 'running') &&
+        now - (item.updatedAt || 0) <= this.LIVE_MS &&
         Number.isFinite(Number(item.targetMs)) &&
         Math.abs(Number(item.targetMs) - base) <= this.CONFLICT_WINDOW_MS
       );
+    },
+
+    /** 兼容旧名：排期提示用，语义已收敛为「只统计仍然存活的竞争页签」 */
+    findConflicts(taskId, targetMs) {
+      return this.livePeers(taskId, targetMs);
     },
 
     /** 用户显式允许并发抢码：油猴存储 bm_allow_parallel = true 时放行 */
@@ -895,6 +1047,8 @@ if (res.status === 401) {
     },
 
     init() {
+      // 关闭/跳转页面时立刻注销跨页登记：残留条目会让别的页签误判"有人同时在抢"
+      CrossTab.hookUnload();
       if (document.getElementById('biliauto-panel') && document.getElementById('biliauto-fab')) return;
 
       if (!document.getElementById('biliauto-fab')) {
@@ -1137,6 +1291,10 @@ if (res.status === 401) {
           }
           const currentTaskConfig = fieldTarget.closest('[data-ba="currentTaskConfig"]');
           if (currentTaskConfig) {
+            // 群友方式：选中即给出那句来源说明（保存后生效），不展开具体做法
+            if (field === 'click_mode' && fieldTarget.value === 'group') {
+              this.setStatus('群友方式：某群友提出的据说成功率很高的方式');
+            }
             if (this._isCurrentConfigDirty()) {
               this.showToast('配置已修改未保存', 'warn');
             }
@@ -1209,7 +1367,9 @@ if (res.status === 401) {
       }
       const checkedModeInput = currentConfigEl.querySelector('[data-field="click_mode"]:checked') || currentConfigEl.querySelector('[data-field="click_mode"]');
       if (checkedModeInput) {
-        next.click_mode = checkedModeInput.value === 'direct' ? 'direct' : 'dom';
+        next.click_mode = (checkedModeInput.value === 'direct' || checkedModeInput.value === 'group')
+          ? checkedModeInput.value
+          : 'dom';
         this.syncModeSwitch(currentConfigEl, next.click_mode);
       }
       this.state.taskConfigs[currentTask] = next;
@@ -1224,9 +1384,28 @@ if (res.status === 401) {
       GM_setValue('task_configs', this.state.taskConfigs);
     },
 
+    /**
+     * 模板兜底：用户手里的模板资源若是旧版（没有第三个选项）就补上。
+     * 界面只保留来源说明，不描述具体做法。
+     */
+    ensureGroupModeOption(container) {
+      const sw = (container && container.querySelector ? container.querySelector('[data-ba="modeSwitch"]') : null)
+        || document.querySelector('#biliauto-panel [data-ba="modeSwitch"]');
+      if (!sw || sw.querySelector('[data-mode="group"]')) return;
+      const label = document.createElement('label');
+      label.className = 'tm-cyber-mode-option';
+      label.setAttribute('data-mode', 'group');
+      label.title = '某群友提出的据说成功率很高的方式';
+      label.innerHTML = '<input class="tm-cyber-mode-native" data-field="click_mode" type="radio" name="biliauto-click-mode" value="group"><span>群友方式</span>';
+      sw.appendChild(label);
+      sw.style.gridTemplateColumns = 'repeat(3, minmax(0, 1fr))';
+      Util.log('已补齐「群友方式」模式选项（模板资源为旧版）');
+    },
+
     syncModeSwitch(container, mode) {
       if (!container) return;
-      const normalizedMode = mode === 'direct' ? 'direct' : 'dom';
+      this.ensureGroupModeOption(container);
+      const normalizedMode = (mode === 'direct' || mode === 'group') ? mode : 'dom';
       const modeOptions = container.querySelectorAll('.tm-cyber-mode-option');
       modeOptions.forEach((option) => {
         option.classList.toggle('is-active', option.getAttribute('data-mode') === normalizedMode);
@@ -1276,6 +1455,11 @@ if (res.status === 401) {
       }
       // 关键配置变更后立即回显规范化结果
       if (!options.silent) this.setStatus(`配置已保存：${field} = ${nextValue}`);
+      // 群友方式：界面只给一句来源说明，不展开具体做法
+      if (field === 'click_mode' && nextValue === 'group' && !options.silent) {
+        this.setStatus('群友方式：某群友提出的据说成功率很高的方式');
+        this.showToast('已启用「群友方式」', 'success');
+      }
       if (!options.noRender && (field === 'start_time' || field === 'selected')) {
         this.renderList();
         this.render();
@@ -1457,28 +1641,34 @@ updatePageLog(text) {
         this._cleanupTimers();
         return;
       }
-      // 互斥 2：跨标签页 —— 到点瞬间复核一次，防止排期之后又有新页签加入造成并发
-      const conflicts = this._warnCrossTabConflict(taskId, ServerTime.now());
-      if (conflicts.length && !CrossTab.allowParallel()) {
-        this.setStatus(`已让出：另有标签页同时抢 ${taskId}，本页放弃本次执行以避免并发风控`);
-        this.updatePageLog(`【跨页让出】task_id=${taskId} 另有 ${conflicts.length} 个标签页同时抢，本页放弃本次执行`);
-        CrossTab.release(taskId);
-        return;
-      }
-      CrossTab.register(taskId, ServerTime.now(), 'running');
-      const latestCfg = this.syncCurrentTaskConfigFromInputs({ log: false }) || this.state.taskConfigs[taskId] || Util.defaultTaskConfig(taskId);
+      // 互斥 2：跨标签页 —— 到点瞬间裁决。只有确认对方真的在跑，本页才会让出；
+      // 对方已关闭/卡死时本页接管执行，绝不静默取消任务。
+      const fireMs = Math.round(ServerTime.now());
       this.state.running = true;
       this.setStatus('Auto run starting: ' + taskId);
-      runCurrentPageTask(this.state.baseConfig, taskId, latestCfg).then(results => {
-        this.setStatus('上传结果中...');
-        return batchUploadAllResults(results);
-      }).then(() => {
-        this.setStatus('Auto run completed');
+      this.resolveFireConflict(taskId, fireMs).then(proceed => {
+        if (!proceed) {
+          // 让出：本页不执行，但仍保留 yielded 记录，避免赢家误判
+          this.state.running = false;
+          return;
+        }
+        CrossTab.mark(taskId, fireMs, 'running');
+        const latestCfg = this.syncCurrentTaskConfigFromInputs({ log: false }) || this.state.taskConfigs[taskId] || Util.defaultTaskConfig(taskId);
+        return runCurrentPageTask(this.state.baseConfig, taskId, latestCfg).then(results => {
+          this.setStatus('上传结果中...');
+          return batchUploadAllResults(results);
+        }).then(() => {
+          this.setStatus('Auto run completed');
+        }).catch(e => {
+          this.setStatus('Auto run failed: ' + (e.message || e));
+          Util.error('Auto run failed:', e);
+        }).finally(() => {
+          this.state.running = false;
+          CrossTab.markDone(taskId);
+        });
       }).catch(e => {
-        this.setStatus('Auto run failed: ' + (e.message || e));
-        Util.error('Auto run failed:', e);
-      }).finally(() => {
         this.state.running = false;
+        Util.error('跨页裁决异常:', e);
       });
     },
 
@@ -1657,7 +1847,8 @@ updatePageLog(text) {
         if (interval === null) return;
         this._calibrationTimer = setTimeout(() => {
           if (!this._currentStartTimeStr) return;
-          ServerTime.calibrate().finally(() => {
+          // 带上目标时刻：临近目标时启用棘轮，只接受更优样本
+          ServerTime.calibrate({ deadlineMs: this._currentTargetMs }).finally(() => {
             if (this._currentStartTimeStr) {
               scheduleNext();
             }
@@ -1748,8 +1939,8 @@ updatePageLog(text) {
     },
 
     /**
-     * 跨标签页冲突预警：只有「同一 taskId 且目标时刻相近」才提示。
-     * 时刻不同则不会并发请求同一接口，静默处理不打扰用户。
+     * 跨标签页冲突预警：只提示，不改动任何执行计划（取消抢码只能由 resolveFireConflict 在到点瞬间决定）。
+     * 只有「同一 taskId 且目标时刻相近」且「对方仍在心跳」才提示；关掉的页签不再误报。
      */
     _warnCrossTabConflict(taskId, targetMs) {
       const conflicts = CrossTab.findConflicts(taskId, targetMs);
@@ -1758,7 +1949,8 @@ updatePageLog(text) {
       const others = conflicts.map(c =>
         `${c.phase === 'running' ? '正在抢' : '已排期'} ${Util.formatTime(new Date(c.targetMs))}`).join('；');
       const msg = `⚠️ 另有 ${conflicts.length} 个标签页也在抢 task_id=${taskId}（本页 ${when}，对方 ${others}）。`
-        + '同一 IP 下并发抢码请求量翻倍，触发 B 站风控 / IP 异常的概率会大幅升高，建议关闭多余标签页。';
+        + '同一 IP 下并发抢码请求量翻倍，触发 B 站风控 / IP 异常的概率会大幅升高，建议关闭多余标签页。\n'
+        + '（到点时本页会自动与其他页签裁决：只有一个页签真正执行，本页不会因此取消任务）';
       Util.warn(msg);
       this.showToast(`⚠️ 另有标签页同时抢 ${taskId}，风控概率升高`, 'warn');
       this.updatePageLog(msg);
@@ -1767,6 +1959,45 @@ updatePageLog(text) {
         this.updatePageLog('已开启 bm_allow_parallel，本次允许并发抢码');
       }
       return conflicts;
+    },
+
+    // 让出方观察赢家是否真的开跑的时长
+    CROSS_TAKEOVER_MS: 1200,
+
+    /**
+     * 到点互斥裁决：返回 true = 本页执行，false = 让给另一页签执行。
+     * 三条硬约束（旧实现缺了后两条，导致"短暂多开后任务被自动取消"）：
+     *   1) 只有「同 taskId + 目标时刻相近 + LIVE_MS 内仍有心跳」的页签才算竞争者 —— 关掉的页签 15s 内自动失格，
+     *      且关闭时会立刻 releaseAll 注销，不再"占坑"；
+     *   2) 用 pageId 字典序做确定性裁决 —— 只有一个页签让出，绝不会两边都让出导致无人抢码；
+     *   3) 让出方会短暂观察赢家是否真的进入 running，没跑就接管执行，保证任务不会静默丢失。
+     */
+    async resolveFireConflict(taskId, targetMs) {
+      if (CrossTab.allowParallel()) return true;
+      const peers = CrossTab.livePeers(taskId, targetMs);
+      if (!peers.length) return true;
+      const winnerId = [CrossTab._pageId].concat(peers.map(p => p.pageId)).sort()[0];
+      if (winnerId === CrossTab._pageId) {
+        // 先落 running 再返回：让出方的观察窗口里必须能看到"赢家已开跑"，
+        // 否则双方同时裁决时会让出方误判、接管执行，变成两边都抢。
+        CrossTab.mark(taskId, targetMs, 'running');
+        this.updatePageLog(`【跨页裁决】另有 ${peers.length} 个页签同时抢 ${taskId}，本页取得执行权，正常抢码`);
+        return true;
+      }
+      CrossTab.mark(taskId, targetMs, 'yielded');
+      this.updatePageLog(`【跨页让出】另有页签（${String(winnerId).slice(0, 8)}）同时抢 ${taskId}，本页让出，正在确认对方已开跑…`);
+      await Util.sleep(this.CROSS_TAKEOVER_MS);
+      const winner = CrossTab._read().find(it => it.pageId === winnerId && it.taskId === String(taskId));
+      const alive = winner && (Date.now() - (winner.updatedAt || 0) <= CrossTab.LIVE_MS);
+      if (alive && (winner.phase === 'running' || winner.phase === 'done')) {
+        Util.warn(`跨页互斥：task_id=${taskId} 已让给另一页签执行`);
+        this.updatePageLog('【跨页让出】对方已开始执行，本页不重复抢码');
+        this.setStatus(`已让出：另一页签正在执行 ${taskId}`);
+        return false;
+      }
+      Util.warn('跨页互斥：另一页签未按预期开始执行，本页接管');
+      this.updatePageLog('【跨页接管】另一页签未开始执行，本页接管，任务不会丢失');
+      return true;
     },
 
     scheduleCurrentTask() {
@@ -2171,6 +2402,7 @@ updatePageLog(text) {
       panel.classList.toggle('tm-panel-visible', this.state.expanded);
       fab.classList.toggle('tm-fab-hidden', this.state.expanded);
       this.applyTheme();
+      this.ensureGroupModeOption();
 
       const meta = panel.querySelector('[data-ba="meta"]');
       const currentTask = Util.extractTaskIdFromPage() || '未识别';
@@ -2709,10 +2941,10 @@ updatePageLog(text) {
       const existing = this.get(taskId);
       if (existing) return Promise.resolve(existing);
       return new Promise(resolve => {
-        const startedAt = Date.now();
+        const startedAt = Util.perfNow();
         const timer = setInterval(() => {
           const captured = this.get(taskId);
-          if (captured || Date.now() - startedAt >= timeoutMs) {
+          if (captured || Util.perfNow() - startedAt >= timeoutMs) {
             clearInterval(timer);
             resolve(captured || null);
           }
@@ -2764,22 +2996,28 @@ updatePageLog(text) {
     async performContinuousClick(selector, intervalMs, durationMs) {
       let successCount = 0;
       let failCount = 0;
-      const startTime = Date.now();
+      // 用单调计数器而非墙钟：连点期间若系统对时，墙钟跳变会提前/延后结束连点
+      const startTime = Util.perfNow();
       const endTime = startTime + durationMs;
       const taskId = RewardMonitor.currentTaskId();
       // 从任务配置读取点击模式（默认dom保证安全）
       const taskCfg = Panel && Panel.state && Panel.state.taskConfigs && Panel.state.taskConfigs[taskId];
       const clickMode = (taskCfg && taskCfg.click_mode) || CONFIG.DEFAULT_CLICK_MODE;
       const isDirectMode = clickMode === 'direct';
+      const isGroupMode = clickMode === 'group';
       const logToPanel = (msg) => {
         if (Panel && Panel.updatePageLog) {
           Panel.updatePageLog(msg);
         }
       };
-      Util.info(`开始连点: selector=${selector}, interval=${intervalMs}ms, duration=${durationMs}ms, mode=${clickMode}, 结束时间=${Util.formatTime(new Date(endTime))}`);
+      // endTime 基于单调计数器，不可再拿去构造绝对时间。
+      // 群友方式的取按钮方式不在日志/面板里暴露，统一记作「内置」。
+      const selectorLabel = isGroupMode ? '内置' : selector;
+      Util.info(`开始连点: selector=${selectorLabel}, interval=${intervalMs}ms, duration=${durationMs}ms, mode=${clickMode}`);
       logToPanel(`【连点开始】task_id=${taskId} 间隔=${intervalMs}ms 时长=${(durationMs / 1000).toFixed(3)}秒`);
-      const btn = Util.getByXPath(selector);
-      if (btn) Executor.activateButton(btn);
+      let btn = Util.getByXPath(selector);
+      // 群友方式不改动按钮本身（保持页面原生状态）；其它模式沿用原来的激活逻辑
+      if (btn && !isGroupMode) Executor.activateButton(btn);
 
       // 执行单次点击的内部函数
       const doClick = () => {
@@ -2787,6 +3025,15 @@ updatePageLog(text) {
           if (isDirectMode) {
             const directFn = typeof unsafeWindow !== 'undefined' && unsafeWindow.__biliauto_receive_direct;
             if (directFn && directFn('user')) {
+              successCount++;
+            } else {
+              failCount++;
+            }
+          } else if (isGroupMode) {
+            // 页面重渲染后旧节点会失效，失效时重新获取
+            if (!btn || !btn.isConnected) btn = Util.getByXPath(selector);
+            if (btn) {
+              btn.click();
               successCount++;
             } else {
               failCount++;
@@ -2807,7 +3054,7 @@ updatePageLog(text) {
       // 立即执行第一次点击，避免后台标签页首个定时器回调延迟导致 0 次点击
       doClick();
       {
-        const now = Date.now();
+        const now = Util.perfNow();
         const captured = RewardMonitor.get(taskId);
         if (captured && captured._continuedClickLogged !== true) {
           captured._continuedClickLogged = true;
@@ -2819,9 +3066,19 @@ updatePageLog(text) {
       }
 
       return new Promise((resolve) => {
-        let lastLogTime = Date.now();
-        const timer = setInterval(() => {
-          const now = Date.now();
+        let lastLogTime = Util.perfNow();
+        let stopped = false;
+        const finish = () => {
+          if (stopped) return;
+          stopped = true;
+          const summary = `【连点结束】成功 ${successCount} 次, 失败 ${failCount} 次, 总点击 ${successCount + failCount} 次`;
+          Util.info(summary);
+          logToPanel(summary);
+          resolve({ success_count: successCount, fail_count: failCount });
+        };
+        // 单次循环体；返回 true 表示已到期
+        const tick = () => {
+          const now = Util.perfNow();
           const remaining = Math.max(0, endTime - now);
           logToPanel(`【连点倒计时】${(remaining / 1000).toFixed(3)}s`);
           const captured = RewardMonitor.get(taskId);
@@ -2833,20 +3090,32 @@ updatePageLog(text) {
           }
           // 先执行点击，再检查是否到期，确保至少执行一次点击
           doClick();
-          if (now >= endTime) {
-            clearInterval(timer);
-            const summary = `【连点结束】成功 ${successCount} 次, 失败 ${failCount} 次, 总点击 ${successCount + failCount} 次`;
-            Util.info(summary);
-            logToPanel(summary);
-            resolve({ success_count: successCount, fail_count: failCount });
-            return;
-          }
+          if (now >= endTime) return true;
           if (now - lastLogTime > 2000) {
             lastLogTime = now;
             const elapsed = ((now - startTime) / 1000).toFixed(3);
             const progressMsg = `【连点进度】${elapsed}s / ${(durationMs / 1000).toFixed(3)}s 成功 ${successCount} 失败 ${failCount}`;
             Util.log(progressMsg);
             logToPanel(progressMsg);
+          }
+          return false;
+        };
+        if (isGroupMode) {
+          // 群友方式：自身递归 setTimeout，每次间隔在基准值上下浮动，不用固定周期
+          const nextDelay = () => Math.max(30, Math.round(intervalMs * (0.6 + Math.random() * 0.8)));
+          const loop = () => {
+            if (stopped) return;
+            if (tick()) { finish(); return; }
+            setTimeout(loop, nextDelay());
+          };
+          // 首次点击已在上面执行过，这里等一个间隔再进循环，避免 t=0 连点两次
+          setTimeout(loop, nextDelay());
+          return;
+        }
+        const timer = setInterval(() => {
+          if (tick()) {
+            clearInterval(timer);
+            finish();
           }
         }, intervalMs);
       });
@@ -2873,12 +3142,13 @@ updatePageLog(text) {
       return { ok: false, response_code: -1, message: resultMsg };
     },
 
-    async setupCurrentPage(selector, maxAttempts) {
+    async setupCurrentPage(selector, maxAttempts, options = {}) {
       Util.log(`setupCurrentPage: 查找按钮 selector=${selector}, 最多尝试 ${maxAttempts} 次`);
       for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         const btn = Util.getByXPath(selector);
         if (btn) {
-          this.activateButton(btn);
+          // 群友方式保持页面原生按钮状态，不做任何注入式改动
+          if (!options.skipActivate) this.activateButton(btn);
           Util.log(`setupCurrentPage: 第 ${attempt}/${maxAttempts} 次找到按钮`);
           return true;
         }
@@ -2918,27 +3188,17 @@ updatePageLog(text) {
       // 用 ServerTime.now() 而非 startSpec.target —— 后者在 waitUntil 之后解析会把刚到的时刻顺延到明天，
       // 拿它比对会导致永远判不出冲突。
       const targetMs = Math.round(ServerTime.now());
-      CrossTab.register(taskId, targetMs, 'running');
-      const conflicts = CrossTab.findConflicts(taskId, targetMs);
-      if (conflicts.length && !CrossTab.allowParallel()) {
-        const others = conflicts.map(c => Util.formatTime(new Date(c.targetMs))).join('；');
-        const msg = `⚠️ 另有 ${conflicts.length} 个标签页也在 ${Util.formatTime(new Date(targetMs))} 抢 task_id=${taskId}（对方 ${others}）。`
-          + '同一 IP 并发抢码会让请求量翻倍、触发风控概率大幅升高，本页已放弃本次执行；'
-          + '若确认要并发执行，可在油猴存储把 bm_allow_parallel 设为 true。';
-        Util.warn(msg);
-        Panel.showToast(`⚠️ 另有标签页同时抢 ${taskId}，本页已让出`, 'warn');
-        Panel.updatePageLog(`【跨页让出】${msg}`);
-        Panel.setStatus(`已让出：另有标签页同时抢 ${taskId}`);
-        CrossTab.release(taskId);
-        return null;
-      }
+      // 跨页裁决：对方真的在跑才让出；对方已关闭/卡死则由本页接管，绝不静默取消任务
+      const proceed = await Panel.resolveFireConflict(taskId, targetMs);
+      if (!proceed) return null;
+      CrossTab.mark(taskId, targetMs, 'running');
 
       let clickStats;
       try {
         clickStats = await this.performContinuousClick(selector, intervalMs, durationMs);
       } finally {
-        // 连点结束即释放登记：让其它页签后续时刻可以正常排期
-        CrossTab.release(taskId);
+        // 留一条完成墓碑（而不是直接删除）：同刻竞争的输家据此判断"赢家已跑过"，避免重复执行
+        CrossTab.markDone(taskId);
       }
       const successCount = clickStats.success_count || 0;
       const totalCount = successCount + (clickStats.fail_count || 0);
@@ -3000,7 +3260,7 @@ updatePageLog(text) {
       // 这样到点/已过的目标 diff <= 0 会立即执行，而非再等 24h。
       let spec = Util.parseTimeSpec(startTimeStr, ServerTime.nowDate(), { noPushTomorrow: true });
       if (spec.target.getTime() - ServerTime.now() > 6000) {
-        await ServerTime.calibrate();
+        await ServerTime.calibrate({ deadlineMs: spec.target.getTime() });
         spec = Util.parseTimeSpec(startTimeStr, ServerTime.nowDate(), { noPushTomorrow: true });
       }
       // clock 模式过期保护：若已过超过 60s（明显是历史时刻，非刚到点），
@@ -3129,15 +3389,20 @@ async function _doBatchUpload(results) {
   // 当前页面任务流程
   // ========================
   async function runCurrentPageTask(baseConfig, taskId, taskConfig, taskName = '') {
-    const selector = baseConfig.reward_claim_selector;
+    // 现取最新配置，避免调用方快照与 Panel.state 脱钩时用错模式
+    const liveCfg = (Panel && Panel.state && Panel.state.taskConfigs && Panel.state.taskConfigs[taskId]) || taskConfig || {};
+    const mode = liveCfg.click_mode || CONFIG.DEFAULT_CLICK_MODE;
+    const isGroupMode = mode === 'group';
+    // 群友方式直接使用页面原生按钮，不依赖服务端配置的选择器
+    const selector = isGroupMode ? '.exchange-button' : baseConfig.reward_claim_selector;
     const maxAttempts = Number(baseConfig.max_reload_attempts || baseConfig.context_retry_count || CONFIG.MAX_RELOAD_ATTEMPTS);
     if (!selector) throw new Error('缺少 reward_claim_selector 配置');
-    Util.info(`runCurrentPageTask: task_id=${taskId} task_name=${taskName} selector=${selector} maxAttempts=${maxAttempts}`);
+    Util.info(`runCurrentPageTask: task_id=${taskId} task_name=${taskName} selector=${isGroupMode ? '内置' : selector} maxAttempts=${maxAttempts}`);
 
-    Util.log('设置当前页面(查找并激活按钮)...');
-    const ready = await Executor.setupCurrentPage(selector, maxAttempts);
+    Util.log('设置当前页面(查找按钮)...');
+    const ready = await Executor.setupCurrentPage(selector, maxAttempts, { skipActivate: isGroupMode });
     if (!ready) throw new Error('所有尝试均失败，未找到领取按钮');
-    Util.info('页面设置完成，按钮已激活');
+    Util.info('页面设置完成');
 
     const results = {};
     Util.log(`执行单任务: ${taskId}`);

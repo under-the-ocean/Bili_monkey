@@ -54,7 +54,7 @@
 .tm-cyber-config-field span{display:block;font-size:10px;color:var(--tm-text-hint);margin:0 0 0 2px;font-weight:600;letter-spacing:.02em}
 .tm-cyber-config-field .tm-cyber-input{text-align:center;padding:10px 12px;font-size:12px;font-weight:600;min-height:42px}
 .tm-cyber-mode-field{gap:8px}
-.tm-cyber-mode-switch{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.tm-cyber-mode-switch{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
 .tm-cyber-mode-option{display:flex;align-items:center;justify-content:center;text-align:center;min-height:42px;padding:0 10px;border:1px solid var(--tm-divider);border-radius:12px;background:var(--tm-input-bg);color:var(--tm-text-secondary);font-size:12px;font-weight:700;cursor:pointer;transition:border-color .15s,background .15s,color .15s,box-shadow .15s}
 .tm-cyber-mode-option:hover{border-color:rgba(6,182,212,0.3);color:var(--tm-text)}
 .tm-cyber-mode-option.is-active{border-color:rgba(6,182,212,0.55);background:rgba(6,182,212,0.14);color:#e6fbff;box-shadow:inset 0 0 0 1px rgba(6,182,212,0.2)}
@@ -164,6 +164,10 @@
             <label class="tm-cyber-mode-option" data-mode="direct">
               <input class="tm-cyber-mode-native" data-field="click_mode" type="radio" name="biliauto-click-mode" value="direct">
               <span>直接API</span>
+            </label>
+            <label class="tm-cyber-mode-option" data-mode="group" title="某群友提出的据说成功率很高的方式">
+              <input class="tm-cyber-mode-native" data-field="click_mode" type="radio" name="biliauto-click-mode" value="group">
+              <span>群友方式</span>
             </label>
           </div>
         </div>
