@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BiliAutoClicker - 油猴客户端
 // @namespace    https://github.com/under-the-ocean
-// @version      1.6.4
+// @version      1.7.0
 // @match        https://www.bilibili.com/blackboard/era/award-exchange.html?*
 // @connect      bili.982835785.xyz
 // @connect      api.live.bilibili.com
@@ -72,7 +72,7 @@
     DEFAULT_START_TIME: '00:29:57',
     MAX_RELOAD_ATTEMPTS: 3,
 
-    VERSION: '1.6.4',
+    VERSION: '1.7.0',
 
     // GitHub 仓库里的最新脚本（镜像前缀可在油猴存储用 mirror_prefix 覆盖）
     GH_REPO_RAW: 'https://raw.githubusercontent.com/under-the-ocean/Bili_monkey/main/biliauto-tampermonkey-client.user.js',
@@ -888,12 +888,16 @@ if (res.status === 401) {
       this.mark(taskId, null, 'done');
     },
 
-    /** 释放本标签页对某任务的登记 */
+    /**
+     * 释放本标签页对某任务的登记（保留 done 墓碑——它表示"确实抢到了"，不能被释放抹掉）。
+     * 失败/中断时调用它即可立刻允许重试。
+     */
     release(taskId) {
       try {
         const key = String(taskId);
-        this._write(this._prune(this._read(), Date.now())
-          .filter(item => !(item.pageId === this._pageId && item.taskId === key)));
+        this._write(this._prune(this._read(), Date.now()).filter(item =>
+          !(item.pageId === this._pageId && item.taskId === key) || item.phase === 'done'
+        ));
       } catch (e) {}
     },
 
@@ -1083,6 +1087,152 @@ if (res.status === 401) {
         }
       }
       throw lastErr || new Error('镜像检查失败');
+    }
+  };
+  // ========================
+  // 余量探测 —— 点击时主动查询 mission/info
+  // 为什么必须主动探测：页面只在自己需要时才请求 info，抢码临界期不会再请求，
+  // 被动 hook 拿不到当时的余量（这点容易想当然）。
+  //
+  // 实测（2026-10-18）：该接口当前**未强制 wbi 签名**，带 buvid 的裸 fetch 即可
+  // 返回 code 0 与完整 stock_info；页面自身请求会带 web_location + w_rid，
+  // 故这里保留 web_location、暂不引入 md5/wbi（少一份第三方依赖）。
+  //
+  // 字段语义（务必按 *_limit 标志判断，否则会误判"没货"）：
+  //   total_stock / day_stock            百分比
+  //   total_stock_limit / day_stock_limit 是否启用该维度限额
+  //   total_remain_num / day_remain_num  真实剩余份数
+  // day_stock_limit=false 时 day_stock=0 不代表没货；且任务未到可领状态时
+  // remain 也可能为 0（实测 status=8 时 total_remain_num 就是 0）。
+  // 因此"没货"必须同时满足：该维度启用了限额 + 余量为 0 + 本次运行中曾见过正数
+  // （第三条件即原脚本的 remainStock !== 0，避免开局就被 0 误停）。
+  // ========================
+  const StockProbe = {
+    // 探测间隔：与原脚本一致（其 queryInterval = 3000），远低于点击频率，
+    // 避免自己把请求量抬上去触发风控；可用油猴存储 stock_probe_interval_ms 覆盖（下限 1s）
+    DEFAULT_INTERVAL_MS: 3000,
+    _timer: null,
+    _sawPositive: false,
+    _last: null,
+
+    intervalMs() {
+      const v = Number(GM_getValue('stock_probe_interval_ms', this.DEFAULT_INTERVAL_MS));
+      return Number.isFinite(v) && v >= 1000 ? v : this.DEFAULT_INTERVAL_MS;
+    },
+
+    stopWhenEmpty() {
+      return GM_getValue('stock_stop_when_empty', true) !== false;
+    },
+
+    stopWhenClaimed() {
+      return GM_getValue('stock_stop_when_claimed', true) !== false;
+    },
+
+    enabled() {
+      return GM_getValue('stock_probe_enabled', true) !== false;
+    },
+
+    infoUrl(taskId) {
+      let loc = '';
+      try {
+        const meta = document.querySelector('meta[name="spm_prefix"]');
+        if (meta && meta.content) loc = '&web_location=' + encodeURIComponent(meta.content);
+      } catch (e) {}
+      return 'https://api.bilibili.com/x/activity_components/mission/info?task_id=' + encodeURIComponent(taskId) + loc;
+    },
+
+    /** 主动探测一次余量。失败一律返回 null，绝不影响抢码主流程。 */
+    async probe(taskId) {
+      if (!taskId) return null;
+      const t0 = Util.perfNow();
+      try {
+        const resp = await fetch(this.infoUrl(taskId), { credentials: 'include', cache: 'no-store' });
+        const rtt = Math.round(Util.perfNow() - t0);
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const json = await resp.json();
+        if (!json || json.code !== 0 || !json.data) throw new Error('code=' + (json && json.code) + ' ' + (json && json.message || ''));
+        const d = json.data;
+        const si = d.stock_info || {};
+        const s = {
+          rtt,
+          status: d.status,
+          message: d.message,
+          taskFinished: d.task_finished,
+          totalStock: si.total_stock,
+          dayStock: si.day_stock,
+          totalLimit: si.total_stock_limit === true,
+          dayLimit: si.day_stock_limit === true,
+          totalRemain: si.total_remain_num,
+          dayRemain: si.day_remain_num,
+          at: Util.formatTime()
+        };
+        if ((Number(s.dayRemain) > 0) || (Number(s.totalRemain) > 0) || (Number(s.dayStock) > 0) || (Number(s.totalStock) > 0)) {
+          this._sawPositive = true;
+        }
+        this._last = s;
+        return s;
+      } catch (e) {
+        Util.log('余量探测失败（忽略）: ' + (e.message || e));
+        return null;
+      }
+    },
+
+    /** 人读的余量描述 */
+    describe(s) {
+      if (!s) return '未知';
+      const parts = [];
+      if (s.dayLimit) parts.push('今日剩余 ' + (s.dayRemain == null ? '?' : s.dayRemain) + ' 份');
+      if (s.totalLimit) parts.push('总剩余 ' + (s.totalRemain == null ? '?' : s.totalRemain) + ' 份');
+      parts.push('今日 ' + (s.dayStock == null ? '?' : s.dayStock) + '%/总 ' + (s.totalStock == null ? '?' : s.totalStock) + '%');
+      if (s.status != null) parts.push('status=' + s.status);
+      parts.push('RTT ' + s.rtt + 'ms');
+      return parts.join(' · ');
+    },
+
+    /** 该次探测是否说明"已被领取"（只认原脚本验证过的 status===6，不做额外猜测） */
+    claimed(s) {
+      return !!(s && s.status === 6);
+    },
+
+    /**
+     * 该次探测是否说明"确实没货了"。
+     * 必须**同时**满足：启用了该维度限额 + 百分比归零 + 剩余份数归零 + 本次运行中见过正数。
+     * 缺一不可 —— 实测存在 total_stock_limit=true 但 total_remain_num=0、百分比仍为 100%
+     * 的中间态，只看 remain 会立刻误停。
+     */
+    empty(s) {
+      if (!s || !this._sawPositive) return false;
+      const totalEmpty = s.totalLimit && Number(s.totalStock) === 0 && Number(s.totalRemain) === 0;
+      const dayEmpty = s.dayLimit && Number(s.dayStock) === 0 && Number(s.dayRemain) === 0;
+      return totalEmpty || dayEmpty;
+    },
+
+    reset() {
+      this._sawPositive = false;
+      this._last = null;
+    },
+
+    /**
+     * 连点期间按低频率探测余量。
+     * onUpdate(sample) 每次探测成功后回调；返回 true 表示请求停止连点。
+     */
+    start(taskId, onUpdate) {
+      this.stop();
+      if (!this.enabled()) return false;
+      const tick = async () => {
+        const s = await this.probe(taskId);
+        if (s && typeof onUpdate === 'function') onUpdate(s);
+      };
+      tick();
+      this._timer = setInterval(tick, this.intervalMs());
+      return true;
+    },
+
+    stop() {
+      if (this._timer) {
+        clearInterval(this._timer);
+        this._timer = null;
+      }
     }
   };
   // ========================
@@ -1749,7 +1899,8 @@ updatePageLog(text) {
           Util.error('Auto run failed:', e);
         }).finally(() => {
           this.state.running = false;
-          CrossTab.markDone(taskId);
+          // 成败由 runSingleTask 内部决定墓碑，这里只释放持有权（保留 done）
+          CrossTab.release(taskId);
         });
       }).catch(e => {
         this.state.running = false;
@@ -3140,6 +3291,20 @@ updatePageLog(text) {
       // 群友方式不改动按钮本身（保持页面原生状态）；其它模式沿用原来的激活逻辑
       if (btn && !isGroupMode) Executor.activateButton(btn);
 
+      // 点击前主动探一次余量：页面在临界期不会再请求 info，只有主动探测才知道当时有没有货
+      StockProbe.reset();
+      let stopReason = '';
+      if (StockProbe.enabled()) {
+        const first = await StockProbe.probe(taskId);
+        if (first) {
+          const desc = StockProbe.describe(first);
+          Util.info('余量探测: ' + desc);
+          logToPanel('【余量】' + desc);
+        } else {
+          Util.log('余量探测: 首次探测未取到（不影响抢码）');
+        }
+      }
+
       // 执行单次点击的内部函数
       const doClick = () => {
         try {
@@ -3186,16 +3351,41 @@ updatePageLog(text) {
         Util.log(`【首次点击】成功 ${successCount} 失败 ${failCount}`);
       }
 
+      // 连点期间按低频率持续主动探测余量；命中"已领取/没货"即提前停止
+      // （不需要像原脚本那样每 3 秒同步等待，探测与点击互不阻塞）
+      if (StockProbe.enabled()) {
+        StockProbe.start(taskId, (s) => {
+          const desc = StockProbe.describe(s);
+          Util.info('余量探测: ' + desc);
+          logToPanel('【余量】' + desc);
+          if (StockProbe.stopWhenClaimed() && StockProbe.claimed(s)) {
+            stopReason = '已领取(status=' + s.status + ')';
+            logToPanel('【提前停止】' + stopReason);
+          } else if (StockProbe.stopWhenEmpty() && StockProbe.empty(s)) {
+            stopReason = '余量已空';
+            logToPanel('【提前停止】' + stopReason);
+          }
+        });
+      }
+
       return new Promise((resolve) => {
         let lastLogTime = Util.perfNow();
         let stopped = false;
-        const finish = () => {
+        const finish = (reason) => {
           if (stopped) return;
           stopped = true;
-          const summary = `【连点结束】成功 ${successCount} 次, 失败 ${failCount} 次, 总点击 ${successCount + failCount} 次`;
+          StockProbe.stop();
+          if (reason && !stopReason) stopReason = reason;
+          const summary = `【连点结束】成功 ${successCount} 次, 失败 ${failCount} 次, 总点击 ${successCount + failCount} 次`
+            + (stopReason ? `（提前停止：${stopReason}）` : '');
           Util.info(summary);
           logToPanel(summary);
-          resolve({ success_count: successCount, fail_count: failCount });
+          resolve({
+            success_count: successCount,
+            fail_count: failCount,
+            early_exit: !!stopReason,
+            stop_reason: stopReason
+          });
         };
         // 单次循环体；返回 true 表示已到期
         const tick = () => {
@@ -3209,9 +3399,16 @@ updatePageLog(text) {
             Util.info(summary);
             logToPanel(summary);
           }
+          // 抢到即停：receive 返回 code 0 是所有信号里最快的一个，无需等轮询
+          if (captured && captured.response_code === 0) {
+            return 'receive-code-0';
+          }
+          // 余量探测给出的停止原因（更新中/已领取/没货）
+          if (stopReason) return stopReason;
           // 先执行点击，再检查是否到期，确保至少执行一次点击
           doClick();
           if (now >= endTime) return true;
+          if (stopReason) return stopReason;
           if (now - lastLogTime > 2000) {
             lastLogTime = now;
             const elapsed = ((now - startTime) / 1000).toFixed(3);
@@ -3226,7 +3423,8 @@ updatePageLog(text) {
           const nextDelay = () => Math.max(30, Math.round(intervalMs * (0.6 + Math.random() * 0.8)));
           const loop = () => {
             if (stopped) return;
-            if (tick()) { finish(); return; }
+            const r = tick();
+            if (r) { finish(typeof r === 'string' ? r : ''); return; }
             setTimeout(loop, nextDelay());
           };
           // 首次点击已在上面执行过，这里等一个间隔再进循环，避免 t=0 连点两次
@@ -3234,9 +3432,10 @@ updatePageLog(text) {
           return;
         }
         const timer = setInterval(() => {
-          if (tick()) {
+          const r = tick();
+          if (r) {
             clearInterval(timer);
-            finish();
+            finish(typeof r === 'string' ? r : '');
           }
         }, intervalMs);
       });
@@ -3318,8 +3517,9 @@ updatePageLog(text) {
       try {
         clickStats = await this.performContinuousClick(selector, intervalMs, durationMs);
       } finally {
-        // 留一条完成墓碑（而不是直接删除）：同刻竞争的输家据此判断"赢家已跑过"，避免重复执行
-        CrossTab.markDone(taskId);
+        // 只释放 running（保留可能存在的 done）：此时还不知道成败，
+        // 无条件写 done 会让失败后的重试在 120 秒内被自己挡住。
+        CrossTab.release(taskId);
       }
       const successCount = clickStats.success_count || 0;
       const totalCount = successCount + (clickStats.fail_count || 0);
@@ -3335,7 +3535,13 @@ updatePageLog(text) {
         const btn = Util.getByXPath(selector);
         claimResult = await this.judgeClaimResult(btn, taskId);
       }
+      // 只有确认抢到才留"已完成"墓碑，避免失败后挡住重试；失败则已在上面的 finally 释放
+      if (claimResult.ok) CrossTab.markDone(taskId);
       const elapsedTime = clickStats.early_exit ? ((totalCount * intervalMs) / 1000).toFixed(3) : (durationMs / 1000).toFixed(3);
+      if (clickStats.stop_reason) {
+        Util.info(`任务 ${taskId} 提前停止：${clickStats.stop_reason}`);
+        Panel.updatePageLog(`【提前停止】task_id=${taskId} ${clickStats.stop_reason}`);
+      }
       const resultText = `${elapsedTime}秒点击结束，共点击 ${totalCount} 次，成功 ${successCount} 次，成功率 ${totalCount ? (successCount / totalCount * 100).toFixed(1) : '0.0'}%`;
       Util.info(`任务结果 [${taskId}]: ${resultText} | ${claimResult.ok ? '✅ 成功' : '❌ 失败'} — ${claimResult.message}`);
       Panel.updatePageLog(`【任务结果】task_id=${taskId} ${claimResult.ok ? '成功' : '失败'} ${resultText}；${claimResult.message}`);

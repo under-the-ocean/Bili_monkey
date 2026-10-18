@@ -130,6 +130,45 @@ now()  = anchorServerMs + (performance.now() - anchorPerf)
 
 > ⚠️ **未连接到服务端时不能保存配置**：未登录（或拉取服务端配置失败）时面板里显示的是默认值，此时点「保存配置」会用默认值覆盖你已保存的配置（含上面那个用户时间锁）。脚本会直接拒绝并提示「未连接到服务端，暂不能保存配置」。这是 1.6.4 修的问题——旧版本会静默覆盖。
 
+## 余量探测（点击时主动查询）
+
+余量**必须主动探测**：页面只在自己需要时才请求 `mission/info`，抢码临界期不会再请求，被动 hook 那一刻拿不到余量。因此脚本在连点期间**每 3 秒**（与原脚本一致）请求一次：
+
+```text
+GET https://api.bilibili.com/x/activity_components/mission/info?task_id=...&web_location=...
+```
+
+> 实测该接口当前**未强制 wbi 签名**：带 buvid 的普通 `fetch`（`credentials: include`）即可返回 `code 0` 与完整 `stock_info`。页面自身请求会带 `w_rid`，但脚本不依赖它，因此没有引入 md5/wbi 那套依赖，只补了 `web_location`。
+
+读到的字段与判定：
+
+| 字段 | 含义 |
+|---|---|
+| `total_stock` / `day_stock` | 百分比 |
+| `total_stock_limit` / `day_stock_limit` | 该维度是否启用限额 |
+| `total_remain_num` / `day_remain_num` | 真实剩余份数 |
+| `status` | `6` = 已领取（原脚本同款判定） |
+
+**判定"没货"必须四条件同时成立**：启用了该维度限额 + 百分比归零 + 剩余份数归零 + 本次运行中曾见过正数。少一条就会误停——实测存在 `total_stock_limit: true` 但 `total_remain_num: 0`、百分比仍为 `100%` 的中间态，只看 remain（甚至只看 `day_stock === 0`）都会在开局立刻停手。原脚本靠 `remainStock !== 0` 才没翻车。
+
+提前停止的两条路径：
+
+- **抢到即停**：`/mission/receive` 返回 `code 0` 是所有信号里最快的一个，无需等轮询；
+- **余量已空 / 已领取**：由上面的探测判定给出，日志会写明停止原因（`【提前停止】`）。
+
+> ⚠️ 「已完成」墓碑只在**确认抢到**时才写；失败或中断会立刻释放持有权，不会挡住重试（否则失败后 120 秒内重试会被自己挡住）。
+
+相关油猴存储项：
+
+| 键 | 默认 | 说明 |
+|---|---|---|
+| `stock_probe_enabled` | `true` | 是否启用余量探测 |
+| `stock_probe_interval_ms` | `3000` | 探测间隔（下限 1000） |
+| `stock_stop_when_empty` | `true` | 余量归零时提前停止连点 |
+| `stock_stop_when_claimed` | `true` | 检测到已领取时提前停止连点 |
+
+探测失败（断网 / 接口变化）一律静默忽略，**不影响抢码主流程**。
+
 ## GitHub 镜像版本检查（只提示，不强更）
 
 脚本启动时会通过国内镜像 `gh-proxy.com` 拉取仓库里的脚本头部，解析 `@version` 与本地 `CONFIG.VERSION` 比较：
