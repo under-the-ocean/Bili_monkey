@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BiliAutoClicker - 油猴客户端
 // @namespace    https://github.com/under-the-ocean
-// @version      1.6.3
+// @version      1.6.4
 // @match        https://www.bilibili.com/blackboard/era/award-exchange.html?*
 // @connect      bili.982835785.xyz
 // @connect      api.live.bilibili.com
@@ -72,7 +72,7 @@
     DEFAULT_START_TIME: '00:29:57',
     MAX_RELOAD_ATTEMPTS: 3,
 
-    VERSION: '1.6.3',
+    VERSION: '1.6.4',
 
     // GitHub 仓库里的最新脚本（镜像前缀可在油猴存储用 mirror_prefix 覆盖）
     GH_REPO_RAW: 'https://raw.githubusercontent.com/under-the-ocean/Bili_monkey/main/biliauto-tampermonkey-client.user.js',
@@ -2277,6 +2277,14 @@ updatePageLog(text) {
 
     async saveConfig() {
       const taskId = Util.extractTaskIdFromPage() || 'unknown_task';
+      // 未连接到服务端（未登录 / 加载失败）时面板里显示的是默认值：
+      // 此时保存会用默认值覆盖用户已保存的配置（含用户锁定的抢码时间与点击模式），必须拒绝。
+      if (!this.state.baseConfig) {
+        Util.warn('saveConfig: 未连接到服务端，拒绝保存以免用默认值覆盖已保存配置');
+        this.showToast('未连接到服务端，暂不能保存配置', 'warn');
+        this.setStatus('未连接到服务端，暂不能保存配置');
+        return;
+      }
       const cfg = this.syncCurrentTaskConfigFromInputs({ log: true }) || this.state.taskConfigs[taskId] || Util.defaultTaskConfig(taskId);
       this.state.taskConfigs[taskId] = cfg;
       this.saveTaskConfigs();
