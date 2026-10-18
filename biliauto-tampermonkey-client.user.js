@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BiliAutoClicker - 油猴客户端
 // @namespace    https://github.com/under-the-ocean
-// @version      1.6.0
+// @version      1.6.3
 // @match        https://www.bilibili.com/blackboard/era/award-exchange.html?*
 // @connect      bili.982835785.xyz
 // @connect      api.live.bilibili.com
@@ -72,7 +72,7 @@
     DEFAULT_START_TIME: '00:29:57',
     MAX_RELOAD_ATTEMPTS: 3,
 
-    VERSION: '1.6.0',
+    VERSION: '1.6.3',
 
     // GitHub 仓库里的最新脚本（镜像前缀可在油猴存储用 mirror_prefix 覆盖）
     GH_REPO_RAW: 'https://raw.githubusercontent.com/under-the-ocean/Bili_monkey/main/biliauto-tampermonkey-client.user.js',
@@ -731,8 +731,9 @@ if (res.status === 401) {
 
       // 临界期棘轮：距目标 ≤10s 且新样本不优于历史最好样本时，保留原锚点不动
       const nearTarget = Number.isFinite(deadlineMs) && (deadlineMs - this.now()) <= 10000;
+      const rttText = (v) => Math.round(v) + 'ms';
       if (nearTarget && this._calibrated && best.rtt >= this._minRtt) {
-        Util.log('时间校准：临近目标且样本 RTT(' + best.rtt + 'ms) 未优于历史最小(' + this._minRtt + 'ms)，保留原锚点');
+        Util.log('时间校准：临近目标且样本 RTT(' + rttText(best.rtt) + ') 未优于历史最小(' + rttText(this._minRtt) + ')，保留原锚点');
         this.lastCalibration = Date.now();
         this._updateDisplay();
         return this.offsetMs;
@@ -746,7 +747,7 @@ if (res.status === 401) {
       this.offsetMs = this.now() - Date.now();   // 仅供显示
       this.lastCalibration = Date.now();
       Util.log('时间校准完成：偏差 ' + (this.offsetMs > 0 ? '+' : '') + this.offsetMs.toFixed(0) + 'ms，'
-        + '采用 RTT=' + best.rtt + 'ms（采样 ' + samples.length + ' 个，合格 ' + usable.length + ' 个，历史最小 ' + this._minRtt + 'ms）');
+        + '采用 RTT=' + rttText(best.rtt) + '（采样 ' + samples.length + ' 个，合格 ' + usable.length + ' 个，历史最小 ' + rttText(this._minRtt) + '）');
       this._updateDisplay();
       return this.offsetMs;
     },
@@ -812,6 +813,10 @@ if (res.status === 401) {
     CONFLICT_WINDOW_MS: 60 * 1000,
     // 已完成的墓碑保留时长：覆盖同刻竞争窗口，避免输家接管时重复执行
     DONE_KEEP_MS: 90 * 1000,
+    // "别的页签已经接手/完成这个任务"的有效期（不依赖心跳，取足够长以覆盖后台节流）
+    EXEC_RECENT_MS: 120 * 1000,
+    // 意图握手的参与者有效期
+    HANDSHAKE_MS: 120 * 1000,
 
     _read() {
       let raw;
@@ -892,10 +897,18 @@ if (res.status === 401) {
       } catch (e) {}
     },
 
-    /** 页面关闭/跳转时清掉本页全部登记：不能留僵尸记录去干扰其它页签 */
+    /**
+     * 页面关闭/跳转时清理本页登记。
+     * 只清"尚未执行"的（scheduled/intent/yielded）；**正在执行/已完成的标记必须保留**——
+     * 执行中的页签一旦导航/关闭，若把 running/done 也删掉，其它页签会误以为无人执行而重复开抢。
+     */
     releaseAll() {
       try {
-        this._write(this._prune(this._read(), Date.now()).filter(item => item.pageId !== this._pageId));
+        this._write(this._prune(this._read(), Date.now()).filter(item =>
+          item.pageId !== this._pageId ||
+          item.phase === 'running' ||
+          item.phase === 'done'
+        ));
       } catch (e) {}
     },
     /** 安装卸载钩子（幂等） */
@@ -947,6 +960,53 @@ if (res.status === 401) {
     /** 兼容旧名：排期提示用，语义已收敛为「只统计仍然存活的竞争页签」 */
     findConflicts(taskId, targetMs) {
       return this.livePeers(taskId, targetMs);
+    },
+
+    /**
+     * 同一任务上仍然存活的其它页签（**不看目标时刻**）。
+     * 用途：到点执行前的意图握手 —— 各页签"打算执行"与"正在执行"的真实瞬间可能
+     * 与排期时刻不一致（例如刚过点被立即执行），只比时刻会漏判，必须按"谁在抢这个任务"来协调。
+     */
+    peersForTask(taskId, phases) {
+      if (!taskId) return [];
+      const now = Date.now();
+      const want = phases && phases.length ? phases : ['scheduled', 'intent', 'running'];
+      return this._prune(this._read(), now).filter(item =>
+        item.pageId !== this._pageId &&
+        item.taskId === String(taskId) &&
+        want.indexOf(item.phase) !== -1 &&
+        now - (item.updatedAt || 0) <= this.LIVE_MS
+      );
+    },
+
+    /**
+     * 执行期标记：别的页签是否「正在执行」或「已完成」这个任务。
+     * **不依赖心跳**——只看执行期写入的时间戳（running/done 各写一次即长期有效），
+     * 因为后台标签页的 Worker 心跳会被浏览器节流，用它判活会把真实竞争误判成"无人竞争"。
+     */
+    execMarkers(taskId, recentMs) {
+      if (!taskId) return [];
+      const now = Date.now();
+      const win = Number(recentMs) || this.EXEC_RECENT_MS;
+      return this._read().filter(item =>
+        item && item.pageId !== this._pageId &&
+        item.taskId === String(taskId) &&
+        (item.phase === 'running' || item.phase === 'done') &&
+        now - (item.updatedAt || 0) <= win
+      );
+    },
+
+    /** 意图握手用：别的页签对同一任务的排期/意图登记（同样不依赖心跳） */
+    contenders(taskId, phases) {
+      if (!taskId) return [];
+      const now = Date.now();
+      const want = phases && phases.length ? phases : ['scheduled', 'intent'];
+      return this._read().filter(item =>
+        item && item.pageId !== this._pageId &&
+        item.taskId === String(taskId) &&
+        want.indexOf(item.phase) !== -1 &&
+        now - (item.updatedAt || 0) <= this.HANDSHAKE_MS
+      );
     },
 
     /** 用户显式允许并发抢码：油猴存储 bm_allow_parallel = true 时放行 */
@@ -1287,10 +1347,14 @@ if (res.status === 401) {
           const taskConfig = fieldTarget.closest('[data-ba="taskConfig"]');
           if (taskConfig) {
             this.updateTaskConfig(taskConfig.getAttribute('data-taskid'), field, value);
+            // 立即刷新高亮：点击只改了隐藏 radio，不调 syncModeSwitch 则 is-active 不会移动
+            if (field === 'click_mode') this.syncModeSwitch(taskConfig, value);
             return;
           }
           const currentTaskConfig = fieldTarget.closest('[data-ba="currentTaskConfig"]');
           if (currentTaskConfig) {
+            // 同上：当前任务配置在点击时也要立刻回显高亮（保存后才写库）
+            if (field === 'click_mode') this.syncModeSwitch(currentTaskConfig, value);
             // 群友方式：选中即给出那句来源说明（保存后生效），不展开具体做法
             if (field === 'click_mode' && fieldTarget.value === 'group') {
               this.setStatus('群友方式：某群友提出的据说成功率很高的方式');
@@ -1353,6 +1417,8 @@ if (res.status === 401) {
       const next = { ...current };
       if (startInput) {
         next.start_time = Util.normalizeStartTimeInput(startInput.value) || CONFIG.DEFAULT_START_TIME;
+        // 与已存值不同 = 用户明确改过：标记为用户所有，后续 AI 解析不再覆盖
+        if (next.start_time !== current.start_time) next.start_time_source = 'user';
         startInput.value = next.start_time;
       }
       if (intervalInput) {
@@ -1398,7 +1464,14 @@ if (res.status === 401) {
       label.title = '某群友提出的据说成功率很高的方式';
       label.innerHTML = '<input class="tm-cyber-mode-native" data-field="click_mode" type="radio" name="biliauto-click-mode" value="group"><span>群友方式</span>';
       sw.appendChild(label);
-      sw.style.gridTemplateColumns = 'repeat(3, minmax(0, 1fr))';
+      // 旧模板的 CSS 还是两列，补一条样式规则（比内联 style 稳，不依赖 CSSOM 序列化）
+      if (!document.getElementById('biliauto-mode-switch-3col')) {
+        const styleEl = document.createElement('style');
+        styleEl.id = 'biliauto-mode-switch-3col';
+        styleEl.textContent = '.tm-cyber-mode-switch{grid-template-columns:repeat(3,minmax(0,1fr))!important}';
+        (document.head || document.documentElement).appendChild(styleEl);
+      }
+      try { sw.style.gridTemplateColumns = 'repeat(3, minmax(0, 1fr))'; } catch (e) {}
       Util.log('已补齐「群友方式」模式选项（模板资源为旧版）');
     },
 
@@ -1416,11 +1489,20 @@ if (res.status === 401) {
       });
     },
 
+    /** 返回 true = 配置已写入；false = 被拒绝（用户锁定/AI 被覆盖/风险确认取消） */
     updateTaskConfig(taskId, field, value, options = {}) {
-      if (!taskId) return;
+      if (!taskId) return false;
       const current = this.state.taskConfigs[taskId] || Util.defaultTaskConfig(taskId);
       let nextValue = field === 'selected' ? Boolean(value) : value;
       if (field === 'start_time') nextValue = Util.normalizeStartTimeInput(value) || CONFIG.DEFAULT_START_TIME;
+      // 用户手动保存过的开始时间优先：服务端 AI 解析结果不再覆盖它
+      const isAiBackfill = options.source === 'ai';
+      if (field === 'start_time' && isAiBackfill && current.start_time_source === 'user') {
+        Util.info(`AI 解析时间 ${nextValue} 未覆盖用户已保存的 ${current.start_time}`);
+        this.updatePageLog(`【时间保留】用户已手动设置 ${current.start_time}，忽略 AI 解析的 ${nextValue}`);
+        if (!options.silent) this.setStatus(`已保留你的抢码时间 ${current.start_time}（忽略 AI 的 ${nextValue}）`);
+        return false;
+      }
       if (field === 'start_time') {
         this._refreshCountdown();
         // 立即把值回写到 DOM 输入框：AI 解析回填走的是 noRender:true，不会触发 render()，
@@ -1428,7 +1510,9 @@ if (res.status === 401) {
         const startInputEl = document.querySelector('#biliauto-panel [data-ba="currentTaskConfig"] [data-field="start_time"]');
         if (startInputEl) startInputEl.value = nextValue;
       }
-      this.state.taskConfigs[taskId] = { ...current, [field]: nextValue };
+      this.state.taskConfigs[taskId] = field === 'start_time' && !isAiBackfill
+        ? { ...current, [field]: nextValue, start_time_source: 'user' }
+        : { ...current, [field]: nextValue };
       if (field === 'click_mode') {
         const currentTaskConfig = document.querySelector('#biliauto-panel [data-ba="currentTaskConfig"]');
         if (taskId === (Util.extractTaskIdFromPage() || 'unknown_task')) {
@@ -1445,7 +1529,7 @@ if (res.status === 401) {
           );
           this.saveTaskConfigs();
           if (!options.silent) this.setStatus('已切换回 DOM点击模式（安全模式）');
-          return;
+          return false;
         }
       }
       this.saveTaskConfigs();
@@ -1464,6 +1548,7 @@ if (res.status === 401) {
         this.renderList();
         this.render();
       }
+      return true;
     },
 
     setStatus(text) {
@@ -1963,19 +2048,47 @@ updatePageLog(text) {
 
     // 让出方观察赢家是否真的开跑的时长
     CROSS_TAKEOVER_MS: 1200,
+    // 意图广播后的静默期：等对方意图也落地，保证双方看到同一份参与者集合
+    CROSS_INTENT_SETTLE_MS: 250,
 
     /**
      * 到点互斥裁决：返回 true = 本页执行，false = 让给另一页签执行。
-     * 三条硬约束（旧实现缺了后两条，导致"短暂多开后任务被自动取消"）：
-     *   1) 只有「同 taskId + 目标时刻相近 + LIVE_MS 内仍有心跳」的页签才算竞争者 —— 关掉的页签 15s 内自动失格，
-     *      且关闭时会立刻 releaseAll 注销，不再"占坑"；
+     * 四条硬约束（前几版分别缺了后三条）：
+     *   1) 竞争者 = 「同 taskId + LIVE_MS 内仍有心跳」的页签 —— 关掉的页签 15s 内自动失格，
+     *      且关闭时会立刻 releaseAll 注销，不再"占坑"。**不看目标时刻**：排期时刻与实际
+     *      执行瞬间可能不同（例如刚过点被立即执行），按时刻比会漏判成"无竞争"→ 双方同时开抢；
      *   2) 用 pageId 字典序做确定性裁决 —— 只有一个页签让出，绝不会两边都让出导致无人抢码；
      *   3) 让出方会短暂观察赢家是否真的进入 running，没跑就接管执行，保证任务不会静默丢失。
      */
     async resolveFireConflict(taskId, targetMs) {
       if (CrossTab.allowParallel()) return true;
-      const peers = CrossTab.livePeers(taskId, targetMs);
-      if (!peers.length) return true;
+      // 判定 0：别的页签已经接手或已完成这个任务 → 直接让出，绝不重复抢。
+      // 用执行期写入的时间戳判定，不看心跳（后台节流会把心跳判成"死"）。
+      const marks = CrossTab.execMarkers(taskId);
+      if (marks.length) {
+        const who = marks[0].phase === 'done' ? '已完成' : '正在执行';
+        Util.warn(`跨页互斥：task_id=${taskId} 已被另一页签${who}`);
+        this.updatePageLog(`【跨页让出】另一页签${who} ${taskId}，本页不重复抢码`);
+        this.setStatus(`已让出：另一页签${who} ${taskId}`);
+        return false;
+      }
+      // 判定 1：有别的页签对同一任务持有排期/意图 → 做一次意图握手。
+      // 独占（单页签常规情况）直接执行，零额外延迟。
+      // 不按目标时刻筛选：排期时刻与实际执行瞬间可能不同（如刚过点立即执行），按时刻比会漏判。
+      if (!CrossTab.contenders(taskId).length) return true;
+      CrossTab.mark(taskId, targetMs, 'intent');
+      await Util.sleep(this.CROSS_INTENT_SETTLE_MS);
+      // 静默期后先看有没有人真的开跑/已完成：先到先得，直接让出。
+      // 必须在算 winner 之前查——赢家会把 phase 从 intent 改成 running，
+      // 若只按 intent 取参与者，输家就看不到赢家、会误判自己胜出（实测复现过）。
+      const started = CrossTab.execMarkers(taskId);
+      if (started.length) {
+        const who = started[0].phase === 'done' ? '已完成' : '正在执行';
+        this.updatePageLog(`【跨页让出】另一页签${who} ${taskId}，本页不重复抢码`);
+        this.setStatus(`已让出：另一页签${who} ${taskId}`);
+        return false;
+      }
+      const peers = CrossTab.contenders(taskId, ['intent']);
       const winnerId = [CrossTab._pageId].concat(peers.map(p => p.pageId)).sort()[0];
       if (winnerId === CrossTab._pageId) {
         // 先落 running 再返回：让出方的观察窗口里必须能看到"赢家已开跑"，
@@ -1987,9 +2100,8 @@ updatePageLog(text) {
       CrossTab.mark(taskId, targetMs, 'yielded');
       this.updatePageLog(`【跨页让出】另有页签（${String(winnerId).slice(0, 8)}）同时抢 ${taskId}，本页让出，正在确认对方已开跑…`);
       await Util.sleep(this.CROSS_TAKEOVER_MS);
-      const winner = CrossTab._read().find(it => it.pageId === winnerId && it.taskId === String(taskId));
-      const alive = winner && (Date.now() - (winner.updatedAt || 0) <= CrossTab.LIVE_MS);
-      if (alive && (winner.phase === 'running' || winner.phase === 'done')) {
+      const winner = CrossTab.execMarkers(taskId).find(it => it.pageId === winnerId);
+      if (winner) {
         Util.warn(`跨页互斥：task_id=${taskId} 已让给另一页签执行`);
         this.updatePageLog('【跨页让出】对方已开始执行，本页不重复抢码');
         this.setStatus(`已让出：另一页签正在执行 ${taskId}`);
@@ -2769,8 +2881,9 @@ updatePageLog(text) {
             if (resp && resp.status === 'success' && resp.task_parsed && resp.task_parsed.daily_claim_time && resp.task_parsed.daily_claim_time !== '不限') {
               const ct = resp.task_parsed.daily_claim_time;
               const adjusted = Util.claimTimeMinusSeconds(ct, 3);
-              Util.info(`AI解析: 自动设置抢码时间 ${ct} -> ${adjusted}（提前3秒）`);
-              Panel.updateTaskConfig(taskId, 'start_time', adjusted, { silent: true, noRender: true });
+              if (Panel.updateTaskConfig(taskId, 'start_time', adjusted, { silent: true, noRender: true, source: 'ai' }) !== false) {
+                Util.info(`AI解析: 自动设置抢码时间 ${ct} -> ${adjusted}（提前3秒）`);
+              }
             }
           }).catch(e => {
             Util.info(`提交奖励说明失败: ${e.message || e}`);
@@ -3522,8 +3635,9 @@ async function _doBatchUpload(results) {
             if (resp && resp.task_parsed && resp.task_parsed.daily_claim_time && resp.task_parsed.daily_claim_time !== '不限') {
               const claimTime = resp.task_parsed.daily_claim_time;
               const adjusted = Util.claimTimeMinusSeconds(claimTime, 3);
-              Util.info(`自动设置抢码时间: ${claimTime} -> ${adjusted}（提前3秒）`);
-              Panel.updateTaskConfig(taskId, 'start_time', adjusted, { silent: true, noRender: true });
+              if (Panel.updateTaskConfig(taskId, 'start_time', adjusted, { silent: true, noRender: true, source: 'ai' }) !== false) {
+                Util.info(`自动设置抢码时间: ${claimTime} -> ${adjusted}（提前3秒）`);
+              }
             }
           }).catch(e => {
             Util.log(`页面信息上传失败（不影响主流程）:`, e.message || e);
@@ -3550,8 +3664,9 @@ async function _doBatchUpload(results) {
             const adjusted = Util.claimTimeMinusSeconds(claimTime, 3);
             const currentCfg = Panel.state.taskConfigs[taskId];
             if (currentCfg && currentCfg.start_time !== adjusted) {
-              Panel.updateTaskConfig(taskId, 'start_time', adjusted, { silent: true, noRender: true });
-              Util.info(`AI解析: 自动设置抢码时间 ${claimTime} -> ${adjusted}（提前3秒）`);
+              if (Panel.updateTaskConfig(taskId, 'start_time', adjusted, { silent: true, noRender: true, source: 'ai' }) !== false) {
+                Util.info(`AI解析: 自动设置抢码时间 ${claimTime} -> ${adjusted}（提前3秒）`);
+              }
             }
           }
         }).catch(e => {
@@ -3575,7 +3690,7 @@ async function _doBatchUpload(results) {
                     const ct = r.task_parsed.daily_claim_time;
                     const adjusted = Util.claimTimeMinusSeconds(ct, 3);
                     Util.info(`AI解析: 自动设置抢码时间 ${ct} -> ${adjusted}（提前3秒）`);
-                    Panel.updateTaskConfig(taskId, 'start_time', adjusted, { silent: true, noRender: true });
+                    Panel.updateTaskConfig(taskId, 'start_time', adjusted, { silent: true, noRender: true, source: 'ai' });
                   }
                 }).catch(e => Util.log(`提交奖励说明失败: ${e.message || e}`));
               } else {
