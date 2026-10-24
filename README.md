@@ -8,9 +8,9 @@ BiliAutoClicker 的油猴客户端，独立仓库，分离 HTML 模板。
 |------|------|
 | `biliauto-tampermonkey-client.user.js` | 油猴脚本主文件，通过 `GM_getResourceText` + 镜像 raw 链接加载外部模板 |
 | `template.html` | 独立的 UI 模板文件（样式 + HTML 结构 + `<template>` 子模板），GitHub 为源、CNB 为国内镜像 |
-| `zh-cn.woff2` | 面板标题用的 `SDK_SC_Web Heavy` 子集字体（仅含 UI 实际用到的字形，约 88KB） |
+| `zh-cn.woff2` | 面板标题用的 `SDK_SC_Web Heavy` 字体（**3.4 MB，未子集化**），安装/更新时由脚本管理器按 `@resource` 下载一次并缓存 |
 
-> 字体已从原始 12MB 全量 CJK 字体子集化为约 88KB 的 woff2（仅保留粗体标题实际用到的字形，视觉无差异）；正文/任务名仍走系统字体栈 `Segoe UI / PingFang SC / Microsoft YaHei`。
+> 这个 woff2 是**完整的 3.4 MB 字体**，没有做子集化，首次安装/升级会一次性下载（之后走脚本管理器的资源缓存）。正文与任务名仍走系统字体栈 `Segoe UI / PingFang SC / Microsoft YaHei`；若不需要标题字体，删掉 `@resource CUSTOM_FONT` 即可让它退回系统字体。
 
 ## 国内镜像加速
 
