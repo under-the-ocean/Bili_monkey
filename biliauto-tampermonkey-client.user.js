@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BiliAutoClicker - 油猴客户端
 // @namespace    https://github.com/under-the-ocean
-// @version      1.7.0
+// @version      1.7.1
 // @match        https://www.bilibili.com/blackboard/era/award-exchange.html?*
 // @connect      bili.982835785.xyz
 // @connect      api.live.bilibili.com
@@ -72,7 +72,7 @@
     DEFAULT_START_TIME: '00:29:57',
     MAX_RELOAD_ATTEMPTS: 3,
 
-    VERSION: '1.7.0',
+    VERSION: '1.7.1',
 
     // GitHub 仓库里的最新脚本（镜像前缀可在油猴存储用 mirror_prefix 覆盖）
     GH_REPO_RAW: 'https://raw.githubusercontent.com/under-the-ocean/Bili_monkey/main/biliauto-tampermonkey-client.user.js',
@@ -113,6 +113,22 @@
 
     clearLogs() {
       this._logBuffer = [];
+    },
+
+    /**
+     * 面板日志镜像：互斥裁决/排期/顺延/按钮缺失这些只写进面板 DOM 的信息，
+     * 不镜像就永远进不了上传缓冲，服务端日志里复盘不到（实测线上搜不到"调度跳过"）。
+     */
+    mirrorPanel(text) {
+      const msg = String(text == null ? '' : text).trim();
+      if (!msg) return;
+      // 高频进度噪声：倒计时 50ms 一条、进度 2s 一条，会把 200 条缓冲冲干净
+      if (/^【连点(倒计时|进度)】/.test(msg)) return;
+      const now = Date.now();
+      if (msg === this._lastMirroredPanel && now - (this._lastMirroredAt || 0) < 3000) return;
+      this._lastMirroredPanel = msg;
+      this._lastMirroredAt = now;
+      this._log('INFO', ['[面板] ' + msg]);
     },
 
     log(...args) {
@@ -1840,6 +1856,7 @@ updatePageLog(text) {
         const time = new Date().toLocaleTimeString();
         this._pageLogs.push('[' + time + '] ' + text);
         if (this._pageLogs.length > 80) this._pageLogs = this._pageLogs.slice(-80);
+        Util.mirrorPanel(text);
       }
       const statusEl = document.getElementById('tm-log-status');
       if (statusEl && text) statusEl.textContent = text;
