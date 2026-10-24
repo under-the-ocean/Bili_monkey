@@ -1,10 +1,11 @@
 // ==UserScript==
 // @name         BiliAutoClicker - 油猴客户端
 // @namespace    https://github.com/under-the-ocean
-// @version      1.8.0
+// @version      1.8.1
 // @match        https://www.bilibili.com/blackboard/era/award-exchange.html?*
 // @connect      bili.982835785.xyz
 // @connect      api.live.bilibili.com
+// @connect      cnb.cool
 // @connect      gh-proxy.com
 // @connect      raw.githubusercontent.com
 // @grant        GM_xmlhttpRequest
@@ -22,11 +23,11 @@
 // @grant        GM_saveTab
 // @grant        GM_download
 // @grant        GM_setClipboard
-// @resource     TEMPLATE_HTML https://gh-proxy.com/https://raw.githubusercontent.com/under-the-ocean/Bili_monkey/main/template.html
-// @resource     CUSTOM_FONT  https://gh-proxy.com/https://raw.githubusercontent.com/under-the-ocean/Bili_monkey/main/zh-cn.woff2
+// @resource     TEMPLATE_HTML https://cnb.cool/bili-monkey/Bili_monkey/-/git/raw/main/template.html
+// @resource     CUSTOM_FONT  https://cnb.cool/bili-monkey/Bili_monkey/-/git/raw/main/zh-cn.woff2
 // @run-at       document-start
-// @downloadURL  https://gh-proxy.com/https://raw.githubusercontent.com/under-the-ocean/Bili_monkey/main/biliauto-tampermonkey-client.user.js
-// @updateURL    https://gh-proxy.com/https://raw.githubusercontent.com/under-the-ocean/Bili_monkey/main/biliauto-tampermonkey-client.user.js
+// @downloadURL  https://cnb.cool/bili-monkey/Bili_monkey/-/git/raw/main/biliauto-tampermonkey-client.user.js
+// @updateURL    https://cnb.cool/bili-monkey/Bili_monkey/-/git/raw/main/biliauto-tampermonkey-client.user.js
 // ==/UserScript==
 
 (function () {
@@ -79,14 +80,29 @@
     MAX_RELOAD_ATTEMPTS: 3,
 
     // 单一真源：@version 改了这里自动跟随（GM_info 不可用时才回退常量）
-    VERSION: (typeof GM_info !== 'undefined' && GM_info && GM_info.script && GM_info.script.version) || '1.8.0',
+    VERSION: (typeof GM_info !== 'undefined' && GM_info && GM_info.script && GM_info.script.version) || '1.8.1',
 
-    // GitHub 仓库里的最新脚本（镜像前缀可在油猴存储用 mirror_prefix 覆盖）
+    // 取源优先级：CNB（国内直连，无需代理）→ gh-proxy 加速的 GitHub → GitHub 原始地址
+    CNB_BASE: 'https://cnb.cool/bili-monkey/Bili_monkey/-/git/raw/main',
+    GH_RAW_BASE: 'https://raw.githubusercontent.com/under-the-ocean/Bili_monkey/main',
     GH_REPO_RAW: 'https://raw.githubusercontent.com/under-the-ocean/Bili_monkey/main/biliauto-tampermonkey-client.user.js',
+    MIRROR_PREFIX_DEFAULT: 'https://gh-proxy.com/',
     RETRY_COUNT: 2,
     // 调试日志默认关闭，减少生产环境控制台噪音与上传日志体积；如需排查可在油猴存储将 debug_mode 置为 true
     DEBUG: GM_getValue('debug_mode', false)
   };
+
+  // 下载源列表：CNB 优先，其次 gh-proxy 加速，最后 GitHub 直连。
+  // 每次调用都现读 mirror_prefix，用户在油猴存储里改了前缀立刻生效。
+  function buildSourceUrls(relPath) {
+    const prefix = GM_getValue('mirror_prefix', CONFIG.MIRROR_PREFIX_DEFAULT) || '';
+    const list = [CONFIG.CNB_BASE + '/' + relPath];
+    if (prefix) list.push(prefix + CONFIG.GH_RAW_BASE + '/' + relPath);
+    list.push(CONFIG.GH_RAW_BASE + '/' + relPath);
+    return list;
+  }
+  function scriptSourceUrls() { return buildSourceUrls('biliauto-tampermonkey-client.user.js'); }
+  function templateSourceUrls() { return buildSourceUrls('template.html'); }
 
   if (!GM_getValue('device_id') && !CONFIG.QQ_ID) {
     GM_setValue('device_id', CONFIG.DEVICE_ID);
@@ -1111,9 +1127,9 @@ if (res.status === 401) {
     }
   };
   // ========================
-  // GitHub 国内镜像版本检查
-  // 通过 gh-proxy 镜像拉取仓库里的脚本头部解析 @version，发现新版本只弹提示 + 给更新按钮，
-  // 不阻塞页面、不强制更新 —— 是否升级由用户自己点。
+  // 版本检查（国内可达）
+  // 依次尝试 CNB 镜像 → gh-proxy 加速 → GitHub 直连，解析脚本头部 @version，
+  // 发现新版本只弹提示 + 给更新按钮，不阻塞页面、不强制更新 —— 是否升级由用户自己点。
   // ========================
   const MirrorUpdate = {
     // 6 小时查一次，避免每次打开页面都下载整个脚本
@@ -1123,10 +1139,9 @@ if (res.status === 401) {
       return CONFIG.GH_REPO_RAW;
     },
 
-    /** 镜像加速后的安装链接：点「立即更新」打开的就是它，油猴会弹出更新确认 */
+    /** 「立即更新」打开的安装链接：CNB 镜像优先（国内直连），油猴会弹出更新确认 */
     downloadUrl() {
-      const prefix = GM_getValue('mirror_prefix', 'https://gh-proxy.com/') || '';
-      return prefix + CONFIG.GH_REPO_RAW;
+      return scriptSourceUrls()[0];
     },
 
     _request(url, headers) {
@@ -1161,7 +1176,7 @@ if (res.status === 401) {
       const cached = GM_getValue('bm_gh_latest_version', '');
       if (!force && cached && now - lastAt < this.CHECK_INTERVAL_MS) return cached;
       let lastErr = null;
-      for (const url of [this.downloadUrl(), this.rawUrl()]) {
+      for (const url of scriptSourceUrls()) {
         try {
           // @version 在文件第 4 行，取头部即可；镜像不支持 Range 时会返回整份，同样能解析
           const text = await this._request(url, { Range: 'bytes=0-1024' });
@@ -1537,8 +1552,8 @@ if (res.status === 401) {
 
       if (!tpl) {
         Util.error('模板加载失败！原因: 资源与本地缓存均为空');
-        Util.log('远程模板地址: https://gh-proxy.com/https://raw.githubusercontent.com/under-the-ocean/Bili_monkey/main/template.html');
-        Util.log('请检查：1. 网络连接 2. GitHub访问是否正常 3. 代理服务是否可用');
+        Util.log('模板候选地址:', templateSourceUrls().join(' | '));
+        Util.log('请检查：1. 网络连接 2. cnb.cool 是否可用 3. gh-proxy 是否可用');
         this.refreshTemplateAsync();   // 不阻塞主流程：拉到后自动重渲染面板
         const errHtml = this.getSubTemplate('error', { ERROR_MSG: '模板资源为空，正在后台重新拉取…' });
         // 模板为空时子模板同样解析不出来：给个最小可用兜底，避免面板整块空白
@@ -1546,7 +1561,7 @@ if (res.status === 401) {
           return '<div style="position:fixed;inset:0;z-index:2147483646;background:#0b1020;color:#e8eefc;'
             + 'font:14px/1.6 system-ui,-apple-system,sans-serif;padding:24px;box-sizing:border-box;">'
             + '<b>BiliAuto ' + CONFIG.VERSION + '</b><br>模板资源为空，正在后台重新拉取…<br>'
-            + '<span style="opacity:.7">若持续失败：检查 gh-proxy.com 是否可用，或把 template.html 放进本地 @resource。</span>'
+            + '<span style="opacity:.7">若持续失败：检查 cnb.cool / gh-proxy.com 是否可用，或把 template.html 换成可访问的 @resource。</span>'
             + '</div>';
         }
         return errHtml;
@@ -1971,9 +1986,7 @@ updatePageLog(text) {
     refreshTemplateAsync() {
       if (this._tplFetching) return;
       this._tplFetching = true;
-      const prefix = GM_getValue('mirror_prefix', 'https://gh-proxy.com/') || '';
-      const raw = 'https://raw.githubusercontent.com/under-the-ocean/Bili_monkey/main/template.html';
-      const urls = (prefix ? [prefix + raw] : []).concat([raw]);
+      const urls = templateSourceUrls();   // CNB 优先 → gh-proxy → GitHub 直连
       const tryNext = (i) => {
         if (i >= urls.length) { this._tplFetching = false; Util.warn('模板补拉失败：所有地址均不可用'); return; }
         Util.info('模板补拉:', urls[i]);   // 走 info：Util.log 只在 DEBUG 下记录，线上复盘看不到

@@ -7,14 +7,20 @@ BiliAutoClicker 的油猴客户端，独立仓库，分离 HTML 模板。
 | 文件 | 说明 |
 |------|------|
 | `biliauto-tampermonkey-client.user.js` | 油猴脚本主文件，通过 `GM_getResourceText` + 镜像 raw 链接加载外部模板 |
-| `template.html` | 独立的 UI 模板文件（样式 + HTML 结构 + `<template>` 子模板），托管在 GitHub 并走镜像加速 |
+| `template.html` | 独立的 UI 模板文件（样式 + HTML 结构 + `<template>` 子模板），GitHub 为源、CNB 为国内镜像 |
 | `zh-cn.woff2` | 面板标题用的 `SDK_SC_Web Heavy` 子集字体（仅含 UI 实际用到的字形，约 88KB） |
 
 > 字体已从原始 12MB 全量 CJK 字体子集化为约 88KB 的 woff2（仅保留粗体标题实际用到的字形，视觉无差异）；正文/任务名仍走系统字体栈 `Segoe UI / PingFang SC / Microsoft YaHei`。
 
 ## 国内镜像加速
 
-模板资源引用通过 `gh-proxy.com` 镜像加速，确保国内用户能快速加载。
+代码托管在 GitHub，国内镜像在 **CNB**：<https://cnb.cool/bili-monkey/Bili_monkey>
+
+- **CNB 优先**：`@resource`（模板/字体）、`@updateURL`/`@downloadURL`、版本检查、模板补拉全部先打 CNB raw，国内无需代理；
+- **自动回落**：CNB 不可用时依次回落 `gh-proxy.com` → `raw.githubusercontent.com` 直连；版本检查与模板补拉都按这个顺序逐级重试；
+- **自动同步**：GitHub 每次提交由 `.github/workflows/sync-cnb.yml` 镜像到 CNB（全分支 + 标签，另有每 6 小时兜底 cron）。
+
+raw 链接形状：`https://cnb.cool/bili-monkey/Bili_monkey/-/git/raw/main/<文件>`
 
 ## 使用方式
 
@@ -169,14 +175,14 @@ GET https://api.bilibili.com/x/activity_components/mission/info?task_id=...&web_
 
 探测失败（断网 / 接口变化）一律静默忽略，**不影响抢码主流程**。
 
-## GitHub 镜像版本检查（只提示，不强更）
+## 版本检查（只提示，不强更）
 
-脚本启动时会通过国内镜像 `gh-proxy.com` 拉取仓库里的脚本头部，解析 `@version` 与本地 `CONFIG.VERSION` 比较：
+脚本启动时会依次尝试 **CNB 镜像 → `gh-proxy.com` → GitHub 直连** 拉取脚本头部，解析 `@version` 与本地 `CONFIG.VERSION` 比较：
 
 - 发现新版本 → 顶部弹一条**可关闭的横幅**（`发现新版本 x.y.z（当前 a.b.c）`）+ toast 提示 + 日志面板记录，**不会阻塞页面，也不会强制更新**；
 - 点击横幅「立即更新」→ 在**新标签页**打开镜像安装链接，由油猴弹出更新确认（不打断当前页面的抢码），也可直接在油猴扩展里更新；
 - 点击「稍后」→ 记录 `bm_gh_dismissed_version`，同一版本不再打扰，直到出现更新的版本；
-- 检查失败（断网 / 镜像挂了）→ 降级为一条日志，**不影响抢码主流程**；镜像失败会自动回落到 `raw.githubusercontent.com` 直连。
+- 检查失败（断网 / 三处都挂）→ 降级为一条日志，**不影响抢码主流程**。
 
 检查结果缓存 6 小时，不会每次打开页面都下载整个脚本。
 
@@ -186,7 +192,7 @@ GET https://api.bilibili.com/x/activity_components/mission/info?task_id=...&web_
 |------|------|
 | `bm_gh_latest_version` / `bm_gh_checked_at` | 镜像端最新版本号与检查时间（内部缓存） |
 | `bm_gh_dismissed_version` | 被点「稍后」忽略的版本号 |
-| `mirror_prefix` | 镜像前缀，默认 `https://gh-proxy.com/`，可换成别的加速服务 |
+| `mirror_prefix` | gh-proxy 加速前缀，默认 `https://gh-proxy.com/`，可换成别的加速服务（CNB 是首选源，不受此项影响） |
 
 > 服务端 `/api/versions/latest` 的**强制更新**机制仍然保留且独立：只有服务端 `force_update` 为真、且版本确实更新时才弹阻塞遮罩。
 
@@ -197,6 +203,7 @@ GET https://api.bilibili.com/x/activity_components/mission/info?task_id=...&web_
 ## 开发说明
 
 - 这是**单文件油猴脚本**，无构建步骤。修改后需同步更新 `@version` 与脚本内的 `CONFIG.VERSION`（版本号比较用 `Util.compareVersion`，分段数值比较，`1.10.0 > 1.9.0` 判定正确）。
-- 走 `GM_xmlhttpRequest` 的域名必须列进 `@connect`（当前：`bili.982835785.xyz`、`api.live.bilibili.com`、`gh-proxy.com`、`raw.githubusercontent.com`）。
+- 走 `GM_xmlhttpRequest` 的域名必须列进 `@connect`（当前：`bili.982835785.xyz`、`api.live.bilibili.com`、`cnb.cool`、`gh-proxy.com`、`raw.githubusercontent.com`）。
+- 下载源顺序由 `buildSourceUrls(relPath)` 统一决定（CNB → gh-proxy → GitHub raw），改源只改这一处。
 - 模板变量：主骨架用 `${CONFIG.KEY}` / `${CONFIG.KEY?'a':'b'}` 在加载时替换；运行期动态内容一律走 `<template id="tmpl-*">` + `{{KEY}}` 占位机制（见 `Panel.getSubTemplate`）。
 - 网络拦截 hook 只有一份实现 `installNetworkHooks(win)`，同时用于 `unsafeWindow` 直接安装与页面上下文注入两条路径。
