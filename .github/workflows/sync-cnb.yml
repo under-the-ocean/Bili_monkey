@@ -1,0 +1,41 @@
+name: Sync to CNB
+
+# GitHub 是源，CNB（cnb.cool）是国内镜像：每次提交自动同步一次。
+# 另加每 6 小时的兜底，防止偶发漏事件（schedule 只在默认分支上触发）。
+on:
+  push:
+  delete:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 */6 * * *'
+
+concurrency:
+  group: sync-cnb
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Mirror branches and tags to CNB
+        env:
+          CNB_TOKEN: ${{ secrets.CNB_TOKEN }}
+          CNB_USER: ${{ vars.CNB_USER || 'cnb' }}
+          CNB_REPO: ${{ vars.CNB_REPO || 'bili-monkey/Bili_monkey' }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CNB_TOKEN}" ]; then
+            echo "::error::缺少 CNB_TOKEN secret（Settings → Secrets and variables → Actions）"
+            exit 1
+          fi
+          git remote add cnb "https://${CNB_USER}:${CNB_TOKEN}@cnb.cool/${CNB_REPO}.git"
+          git fetch --prune origin '+refs/heads/*:refs/remotes/origin/*'
+          git push cnb --prune "refs/remotes/origin/*:refs/heads/*"
+          git push cnb --tags --force
+          echo "synced $(git rev-parse --short HEAD) -> cnb.cool/${CNB_REPO}"
