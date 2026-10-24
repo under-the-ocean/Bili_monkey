@@ -1540,7 +1540,16 @@ if (res.status === 401) {
         Util.log('远程模板地址: https://gh-proxy.com/https://raw.githubusercontent.com/under-the-ocean/Bili_monkey/main/template.html');
         Util.log('请检查：1. 网络连接 2. GitHub访问是否正常 3. 代理服务是否可用');
         this.refreshTemplateAsync();   // 不阻塞主流程：拉到后自动重渲染面板
-        return this.getSubTemplate('error', { ERROR_MSG: '模板资源为空，正在后台重新拉取…' });
+        const errHtml = this.getSubTemplate('error', { ERROR_MSG: '模板资源为空，正在后台重新拉取…' });
+        // 模板为空时子模板同样解析不出来：给个最小可用兜底，避免面板整块空白
+        if (!errHtml || errHtml.indexOf('<') === -1) {
+          return '<div style="position:fixed;inset:0;z-index:2147483646;background:#0b1020;color:#e8eefc;'
+            + 'font:14px/1.6 system-ui,-apple-system,sans-serif;padding:24px;box-sizing:border-box;">'
+            + '<b>BiliAuto ' + CONFIG.VERSION + '</b><br>模板资源为空，正在后台重新拉取…<br>'
+            + '<span style="opacity:.7">若持续失败：检查 gh-proxy.com 是否可用，或把 template.html 放进本地 @resource。</span>'
+            + '</div>';
+        }
+        return errHtml;
       }
 
       Util.log('模板加载成功，开始替换变量...');
@@ -1967,10 +1976,13 @@ updatePageLog(text) {
       const urls = (prefix ? [prefix + raw] : []).concat([raw]);
       const tryNext = (i) => {
         if (i >= urls.length) { this._tplFetching = false; Util.warn('模板补拉失败：所有地址均不可用'); return; }
-        Util.log('模板补拉:', urls[i]);
+        Util.info('模板补拉:', urls[i]);   // 走 info：Util.log 只在 DEBUG 下记录，线上复盘看不到
         Util.httpGetText(urls[i]).then(text => {
           if (!text || text.indexOf('<') === -1) throw new Error('内容异常');
           GM_setValue('bm_template_cache', text);
+          // 关键：子模板缓存必须失效 —— @resource 为空时首次 getSubTemplate 会把 {} 缓存住，
+          // 不清掉的话补拉成功也照样渲染成空面板
+          this._parsedTemplates = null;
           this._tplFetching = false;
           Util.info(`模板补拉成功（${text.length} 字符），重新渲染面板`);
           this.updatePageLog('【模板】已从网络补拉并缓存，面板重新渲染');
