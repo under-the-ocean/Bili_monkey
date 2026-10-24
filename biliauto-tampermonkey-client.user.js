@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BiliAutoClicker - 油猴客户端
 // @namespace    https://github.com/under-the-ocean
-// @version      1.7.2
+// @version      1.8.0
 // @match        https://www.bilibili.com/blackboard/era/award-exchange.html?*
 // @connect      bili.982835785.xyz
 // @connect      api.live.bilibili.com
@@ -16,6 +16,12 @@
 // @grant        GM_getResourceText
 // @grant        GM_getResourceURL
 // @grant        unsafeWindow
+// @grant        GM_registerMenuCommand
+// @grant        GM_addValueChangeListener
+// @grant        GM_getTab
+// @grant        GM_saveTab
+// @grant        GM_download
+// @grant        GM_setClipboard
 // @resource     TEMPLATE_HTML https://gh-proxy.com/https://raw.githubusercontent.com/under-the-ocean/Bili_monkey/main/template.html
 // @resource     CUSTOM_FONT  https://gh-proxy.com/https://raw.githubusercontent.com/under-the-ocean/Bili_monkey/main/zh-cn.woff2
 // @run-at       document-start
@@ -72,7 +78,8 @@
     DEFAULT_START_TIME: '00:29:57',
     MAX_RELOAD_ATTEMPTS: 3,
 
-    VERSION: '1.7.2',
+    // 单一真源：@version 改了这里自动跟随（GM_info 不可用时才回退常量）
+    VERSION: (typeof GM_info !== 'undefined' && GM_info && GM_info.script && GM_info.script.version) || '1.8.0',
 
     // GitHub 仓库里的最新脚本（镜像前缀可在油猴存储用 mirror_prefix 覆盖）
     GH_REPO_RAW: 'https://raw.githubusercontent.com/under-the-ocean/Bili_monkey/main/biliauto-tampermonkey-client.user.js',
@@ -129,6 +136,32 @@
       this._lastMirroredPanel = msg;
       this._lastMirroredAt = now;
       this._log('INFO', ['[面板] ' + msg]);
+    },
+
+    /** GM_xmlhttpRequest 包装：运行期兜底拉取模板等文本资源（不受页面 CORS 限制） */
+    httpGetText(url, headers) {
+      return new Promise((resolve, reject) => {
+        try {
+          GM_xmlhttpRequest({
+            method: 'GET', url: url, headers: headers || {}, timeout: 15000,
+            onload: r => (r.status >= 200 && r.status < 400) ? resolve(r.responseText || '') : reject(new Error('HTTP ' + r.status)),
+            onerror: () => reject(new Error('请求失败')),
+            ontimeout: () => reject(new Error('请求超时'))
+          });
+        } catch (e) { reject(e); }
+      });
+    },
+
+    /** 复制到剪贴板：优先 GM_setClipboard（不依赖安全上下文/用户手势） */
+    copyText(text) {
+      const s = String(text == null ? '' : text);
+      if (typeof GM_setClipboard === 'function') {
+        try { GM_setClipboard(s, 'text'); return Promise.resolve(true); } catch (e) {}
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        return navigator.clipboard.writeText(s).then(() => true).catch(() => false);
+      }
+      return Promise.resolve(false);
     },
 
     log(...args) {
@@ -863,6 +896,7 @@ if (res.status === 401) {
     /** 登记本标签页的抢码计划：taskId + 校准后的目标时刻 + 阶段 */
     register(taskId, targetMs, phase) {
       if (!taskId || !Number.isFinite(Number(targetMs))) return;
+      this.installListener();
       const now = Date.now();
       const key = String(taskId);
       const list = this._prune(this._read(), now)
@@ -1027,6 +1061,48 @@ if (res.status === 401) {
         want.indexOf(item.phase) !== -1 &&
         now - (item.updatedAt || 0) <= this.HANDSHAKE_MS
       );
+    },
+
+    // ===== 事件加速：GM_addValueChangeListener 让"对方一写就醒" =====
+    // 跨页裁决里的固定 sleep（250ms 静默期 / 1200ms 观察赢家）是唯一的盲等；
+    // 监听登记表变更可以让"观察赢家是否开跑"从盲等变成即时确认，脚本管理器不支持时退化为纯超时。
+    _waiters: [],
+    _listenerInstalled: false,
+
+    installListener() {
+      if (this._listenerInstalled || typeof GM_addValueChangeListener !== 'function') return;
+      this._listenerInstalled = true;
+      try {
+        GM_addValueChangeListener(this.KEY, (key, oldValue, newValue, remote) => {
+          if (remote === false) return;   // 只关心别的页签写入
+          this._flushWaiters();
+        });
+      } catch (e) {
+        this._listenerInstalled = false;
+      }
+    },
+
+    _flushWaiters() {
+      if (!this._waiters.length) return;
+      const list = this._waiters.slice();
+      this._waiters.length = 0;
+      for (const fn of list) { try { fn(); } catch (e) {} }
+    },
+
+    /** 等"登记表被别的页签改动"或超时；返回 true 表示是被事件唤醒的 */
+    waitForChange(timeoutMs) {
+      return new Promise(resolve => {
+        let done = false;
+        const finish = (byEvent) => {
+          if (done) return;
+          done = true;
+          this._waiters = this._waiters.filter(w => w !== onEvent);
+          resolve(byEvent);
+        };
+        const onEvent = () => finish(true);
+        this._waiters.push(onEvent);
+        setTimeout(() => finish(false), Math.max(0, Number(timeoutMs) || 0));
+      });
     },
 
     /** 用户显式允许并发抢码：油猴存储 bm_allow_parallel = true 时放行 */
@@ -1301,6 +1377,9 @@ if (res.status === 401) {
       this.setupDrag();
       this.bind();
       this.render();
+      this.hookUrlChange();          // SPA 切换任务时重建排期（脚本不会重跑）
+      this.registerMenuCommands();   // 油猴菜单：执行 / 校准 / 导出日志
+      this._restoreConsumed();       // 刷新后恢复"本轮已点过"标记，防止重复点击
     },
 
     applyDarkModeOptions() {
@@ -1447,15 +1526,21 @@ if (res.status === 401) {
     template() {
       Util.log('=== 模板加载开始 ===');
       Util.log('尝试从 @resource TEMPLATE_HTML 获取模板...');
-      const tpl = GM_getResourceText('TEMPLATE_HTML');
-      const fontUrl = GM_getResourceURL('CUSTOM_FONT');
-      Util.log(`模板获取结果: ${tpl ? `成功，长度=${tpl.length}字符` : '失败（返回空或undefined）'}`);
+      const resourceTpl = GM_getResourceText('TEMPLATE_HTML');
+      const fontUrl = GM_getResourceURL('CUSTOM_FONT') || '';
+      // @resource 是安装/更新那一刻由脚本管理器拉的：那一刻镜像不通就永久为空
+      // （线上 23 次面板直接渲染成错误模板）。三级兜底：资源 → 上次缓存 → 运行期补拉。
+      const cachedTpl = GM_getValue('bm_template_cache', '');
+      const tpl = resourceTpl || cachedTpl || '';
+      Util.log(`模板获取结果: ${tpl ? `成功，长度=${tpl.length}字符（来源 ${resourceTpl ? '@resource' : '缓存'}）` : '失败（返回空或undefined）'}`);
+      if (resourceTpl && resourceTpl !== cachedTpl) GM_setValue('bm_template_cache', resourceTpl);
 
       if (!tpl) {
-        Util.error('模板加载失败！原因: GM_getResourceText 返回空值');
+        Util.error('模板加载失败！原因: 资源与本地缓存均为空');
         Util.log('远程模板地址: https://gh-proxy.com/https://raw.githubusercontent.com/under-the-ocean/Bili_monkey/main/template.html');
         Util.log('请检查：1. 网络连接 2. GitHub访问是否正常 3. 代理服务是否可用');
-        return this.getSubTemplate('error', { ERROR_MSG: 'GM_getResourceText 返回空值' });
+        this.refreshTemplateAsync();   // 不阻塞主流程：拉到后自动重渲染面板
+        return this.getSubTemplate('error', { ERROR_MSG: '模板资源为空，正在后台重新拉取…' });
       }
 
       Util.log('模板加载成功，开始替换变量...');
@@ -1868,6 +1953,142 @@ updatePageLog(text) {
         scrollEl.scrollTop = scrollEl.scrollHeight;
       }
       if (!this._countdownTimer) { this._refreshCountdown(); }
+    },
+
+    /**
+     * 运行期补拉模板：@resource 失败时兜底，成功后写入 bm_template_cache 并重渲染面板。
+     * 只拉一次、失败只记日志，绝不阻塞抢码主流程。
+     */
+    refreshTemplateAsync() {
+      if (this._tplFetching) return;
+      this._tplFetching = true;
+      const prefix = GM_getValue('mirror_prefix', 'https://gh-proxy.com/') || '';
+      const raw = 'https://raw.githubusercontent.com/under-the-ocean/Bili_monkey/main/template.html';
+      const urls = (prefix ? [prefix + raw] : []).concat([raw]);
+      const tryNext = (i) => {
+        if (i >= urls.length) { this._tplFetching = false; Util.warn('模板补拉失败：所有地址均不可用'); return; }
+        Util.log('模板补拉:', urls[i]);
+        Util.httpGetText(urls[i]).then(text => {
+          if (!text || text.indexOf('<') === -1) throw new Error('内容异常');
+          GM_setValue('bm_template_cache', text);
+          this._tplFetching = false;
+          Util.info(`模板补拉成功（${text.length} 字符），重新渲染面板`);
+          this.updatePageLog('【模板】已从网络补拉并缓存，面板重新渲染');
+          const root = document.getElementById('biliauto-panel');
+          if (root) { root.innerHTML = this.template(); this.bind(); this.render(); }
+        }).catch(e => { Util.warn('模板补拉失败:', e.message || e); tryNext(i + 1); });
+      };
+      tryNext(0);
+    },
+
+    /** 油猴菜单：把常用动作挂到脚本管理器的菜单里（不依赖面板是否可见） */
+    registerMenuCommands() {
+      if (this._menuRegistered || typeof GM_registerMenuCommand !== 'function') return;
+      this._menuRegistered = true;
+      const reg = (name, fn) => { try { GM_registerMenuCommand(name, fn); } catch (e) {} };
+      reg('▶ 立即执行当前任务', () => this.runCurrent());
+      reg('⏱ 重新校准时间', () => { ServerTime.calibrate(); });
+      reg('📄 导出运行日志到本地', () => this.exportLogs());
+      reg('🧾 复制页面信息', () => this.copyPageInfo());
+      reg('🗂 打开/关闭面板', () => this.toggle());
+    },
+
+    /** 导出最近日志为本地文件：服务端只收 last-100，本地留全量便于复盘 */
+    exportLogs() {
+      try {
+        const taskId = Util.extractTaskIdFromPage() || 'unknown_task';
+        const payload = {
+          script_version: CONFIG.VERSION,
+          exported_at: Util.formatTime(),
+          url: window.location.href,
+          task_id: taskId,
+          schedule: {
+            target_ms: this._currentTargetMs,
+            scheduled_task: this._currentScheduledTaskId,
+            fired: this._fired,
+            running: this.state.running
+          },
+          page_logs: (this._pageLogs || []).slice(-80),
+          logs: Util.getLogs()
+        };
+        const json = JSON.stringify(payload, null, 2);
+        const name = 'biliauto-log-' + taskId + '-' + Date.now() + '.json';
+        if (typeof GM_download === 'function') {
+          const blobUrl = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
+          const revoke = () => { try { URL.revokeObjectURL(blobUrl); } catch (e) {} };
+          GM_download({ url: blobUrl, name: name, saveAs: true, onload: revoke, onerror: revoke, ontimeout: revoke });
+          this.setStatus('日志已导出：' + name);
+        } else {
+          Util.copyText(json).then(ok => this.setStatus(ok ? '日志已复制到剪贴板' : '导出失败：无可用下载能力'));
+        }
+        Util.info('导出运行日志:', name, '条数=', payload.logs.length);
+      } catch (e) {
+        Util.warn('导出日志失败:', e.message || e);
+        this.setStatus('导出失败：' + (e.message || e));
+      }
+    },
+
+    /**
+     * SPA 切换任务时脚本不会重跑：URL 变了必须自己重建排期，否则会一直挂在旧 task_id 上。
+     * 三级兜底：TM 的 window.onurlchange → history.pushState/replaceState 补丁 → popstate/hashchange。
+     */
+    hookUrlChange() {
+      if (this._urlHookInstalled) return;
+      this._urlHookInstalled = true;
+      this._lastUrlTaskId = Util.extractTaskIdFromPage() || 'unknown_task';
+      const onChanged = () => {
+        const tid = Util.extractTaskIdFromPage() || 'unknown_task';
+        if (tid === this._lastUrlTaskId) return;
+        this._lastUrlTaskId = tid;
+        Util.info('[SPA] 任务切换 → 重建排期 task_id=' + tid);
+        this.updatePageLog('【页面切换】task_id=' + tid + '，重建排期');
+        try {
+          this.state.taskConfigs = Object.assign({}, Util.loadTaskConfigs(this.state.tasks), this.state.taskConfigs);
+          this._consumedTarget = null;
+          this.render();
+          this.scheduleCurrentTask();
+        } catch (e) { Util.warn('[SPA] 重建排期失败:', e.message || e); }
+      };
+      const win = (typeof unsafeWindow !== 'undefined' && unsafeWindow) ? unsafeWindow : window;
+      try { win.onurlchange = () => { try { onChanged(); } catch (e) {} }; } catch (e) {}
+      try {
+        ['pushState', 'replaceState'].forEach(k => {
+          const hist = win.history;
+          const orig = hist && hist[k];
+          if (typeof orig !== 'function' || orig.__bmPatched) return;
+          const patched = function () {
+            const r = orig.apply(this, arguments);
+            try { onChanged(); } catch (e) {}
+            return r;
+          };
+          patched.__bmPatched = true;
+          hist[k] = patched;
+        });
+      } catch (e) {}
+      try {
+        window.addEventListener('popstate', onChanged);
+        window.addEventListener('hashchange', onChanged);
+      } catch (e) {}
+    },
+
+    /** 把"本轮真的点过"写到 tab 级存储：刷新页面后仍然拦得住重复点击 */
+    _persistConsumed() {
+      if (typeof GM_saveTab !== 'function') return;
+      try { GM_saveTab({ consumedTarget: this._consumedTarget || null }); } catch (e) {}
+    },
+
+    _restoreConsumed() {
+      if (typeof GM_getTab !== 'function') return;
+      try {
+        GM_getTab(tab => {
+          const c = tab && tab.consumedTarget;
+          if (!c || !c.taskId) return;
+          if (c.taskId !== (Util.extractTaskIdFromPage() || 'unknown_task')) return;
+          if (Math.abs(Date.now() - (c.atMs || 0)) > this.CONSUMED_GUARD_MS) return;
+          this._consumedTarget = c;
+          Util.info('[Tab] 恢复本轮已点击标记（防止刷新后重复点击）:', c.taskId);
+        });
+      } catch (e) {}
     },
 
     toggle() {
@@ -2339,8 +2560,16 @@ updatePageLog(text) {
       }
       CrossTab.mark(taskId, targetMs, 'yielded');
       this.updatePageLog(`【跨页让出】另有页签（${String(winnerId).slice(0, 8)}）同时抢 ${taskId}，本页让出，正在确认对方已开跑…`);
-      await Util.sleep(this.CROSS_TAKEOVER_MS);
-      const winner = CrossTab.execMarkers(taskId).find(it => it.pageId === winnerId);
+      // 观察赢家是否真的开跑：被对方的写入事件唤醒就立刻判定，最差仍等满 CROSS_TAKEOVER_MS
+      const takeoverDeadline = Date.now() + this.CROSS_TAKEOVER_MS;
+      let winner = null;
+      for (;;) {
+        winner = CrossTab.execMarkers(taskId).find(it => it.pageId === winnerId);
+        if (winner) break;
+        const left = takeoverDeadline - Date.now();
+        if (left <= 0) break;
+        await CrossTab.waitForChange(Math.min(250, left));
+      }
       if (winner) {
         Util.warn(`跨页互斥：task_id=${taskId} 已让给另一页签执行`);
         this.updatePageLog('【跨页让出】对方已开始执行，本页不重复抢码');
@@ -2460,12 +2689,8 @@ updatePageLog(text) {
       const title = document.title || '';
       const url = window.location.href;
       const text = `${title}\n${url}`;
-      try {
-        await navigator.clipboard.writeText(text);
-        this.setStatus('已复制页面标题和链接');
-      } catch {
-        this.setStatus('复制失败');
-      }
+      const ok = await Util.copyText(text);
+      this.setStatus(ok ? '已复制页面标题和链接' : '复制失败');
     },
 
     async refresh() {
@@ -2793,12 +3018,8 @@ updatePageLog(text) {
     },
 
     async copy(taskId) {
-      try {
-        await navigator.clipboard.writeText(taskId);
-        this.setStatus('已复制：' + taskId);
-      } catch {
-        this.setStatus('复制失败');
-      }
+      const ok = await Util.copyText(taskId);
+      this.setStatus(ok ? '已复制：' + taskId : '复制失败');
     },
 
     render() {
@@ -3649,7 +3870,10 @@ updatePageLog(text) {
       if (!proceed) return null;
       CrossTab.mark(taskId, targetMs, 'running');
       // 本轮"真的发起点读"的本地记号：调度补触发/失败重试都要看它，避免二次点击
-      if (Panel) Panel._consumedTarget = { taskId: taskId, atMs: Math.round(ServerTime.now()) };
+      if (Panel) {
+        Panel._consumedTarget = { taskId: taskId, atMs: Math.round(ServerTime.now()) };
+        if (Panel._persistConsumed) Panel._persistConsumed();   // 刷新页面后仍拦得住重复点击
+      }
 
       let clickStats;
       try {
