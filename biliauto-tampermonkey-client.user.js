@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BiliAutoClicker - 油猴客户端
 // @namespace    https://github.com/under-the-ocean
-// @version      1.7.1
+// @version      1.7.2
 // @match        https://www.bilibili.com/blackboard/era/award-exchange.html?*
 // @connect      bili.982835785.xyz
 // @connect      api.live.bilibili.com
@@ -72,7 +72,7 @@
     DEFAULT_START_TIME: '00:29:57',
     MAX_RELOAD_ATTEMPTS: 3,
 
-    VERSION: '1.7.1',
+    VERSION: '1.7.2',
 
     // GitHub 仓库里的最新脚本（镜像前缀可在油猴存储用 mirror_prefix 覆盖）
     GH_REPO_RAW: 'https://raw.githubusercontent.com/under-the-ocean/Bili_monkey/main/biliauto-tampermonkey-client.user.js',
@@ -1884,13 +1884,14 @@ updatePageLog(text) {
       this.render();
     },
 
-    _doExecuteTask(taskId) {
+    _doExecuteTask(taskId, fireTargetMs) {
       // 互斥 1：同一时刻只允许一条执行路径（main 直接执行 / 手动 runCurrent / 调度触发）。
       // state.running 曾被当作锁，但调度侧已不再读取它，导致两条路径在同一毫秒并发连点。
       if (this.state.running) {
         Util.warn(`_doExecuteTask: 已有执行路径在运行，忽略本次到点触发 task_id=${taskId}`);
         this.updatePageLog(`【调度跳过】已有任务执行中，忽略本次到点触发 task_id=${taskId}`);
-        this._cleanupTimers();
+        // 旧版这里直接 cleanup 就结束 —— 这一代排期成了终态，当天再也不会补触发
+        this._scheduleSkipRetry(taskId, fireTargetMs);
         return;
       }
       // 互斥 2：跨标签页 —— 到点瞬间裁决。只有确认对方真的在跑，本页才会让出；
@@ -1902,6 +1903,7 @@ updatePageLog(text) {
         if (!proceed) {
           // 让出：本页不执行，但仍保留 yielded 记录，避免赢家误判
           this.state.running = false;
+          this._rescheduleNextCycle();   // 让出也不留空档：下一轮排期照样建起来
           return;
         }
         CrossTab.mark(taskId, fireMs, 'running');
@@ -1918,11 +1920,67 @@ updatePageLog(text) {
           this.state.running = false;
           // 成败由 runSingleTask 内部决定墓碑，这里只释放持有权（保留 done）
           CrossTab.release(taskId);
+          // 调度器自己触发的执行同样必须重建排期：旧版只释放锁不重建，任务当天再无下一次排期
+          this._afterRunFinished(taskId);
         });
       }).catch(e => {
         this.state.running = false;
         Util.error('跨页裁决异常:', e);
+        this._afterRunFinished(taskId);
       });
+    },
+
+    /**
+     * 一次执行结束（成功/失败/让出）后的统一收尾：能重试就重试，否则把下一轮排期建起来。
+     * 旧版只有 main 的成功路径会重建调度，调度器自己执行完、主流程异常之后当天再无任何排期。
+     */
+    _afterRunFinished(taskId) {
+      if (this._retryAfterFailure(taskId)) return;
+      this._rescheduleNextCycle();
+    },
+
+    // 下一轮（通常就是明天）：走 skipImmediate，杜绝"刚点完又立刻补一次"
+    _rescheduleNextCycle() {
+      return this.scheduleCurrentTask({ skipImmediate: true });
+    },
+
+    /**
+     * 失败重试：按钮尚未渲染 / 接口瞬时失败时隔 20s 再来一次，最多 4 次。
+     * 只要本轮已经真的发过点击就绝不重试 —— 重试只会变成一次多余的连点。
+     */
+    _retryAfterFailure(taskId) {
+      const now = Math.round(ServerTime.now());
+      if (this._consumedTarget && this._consumedTarget.taskId === taskId
+          && Math.abs(now - this._consumedTarget.atMs) <= this.CONSUMED_GUARD_MS) {
+        return false;
+      }
+      if ((this._failRetries || 0) >= this.FAIL_RETRY_MAX) {
+        this.updatePageLog(`【失败放弃】已重试 ${this._failRetries} 次，不再重试 task_id=${taskId}`);
+        return false;
+      }
+      this._failRetries = (this._failRetries || 0) + 1;
+      this.updatePageLog(`【失败重试】${this._failRetries}/${this.FAIL_RETRY_MAX}，${this.FAIL_RETRY_DELAY_MS / 1000}s 后重试 task_id=${taskId}`);
+      return this.scheduleCurrentTask({ overrideTargetMs: now + this.FAIL_RETRY_DELAY_MS });
+    },
+
+    /**
+     * 到点时锁仍被占用（main 自己也在等同一时刻 / 上一轮还没收尾）时的有界补触发：
+     * 只在目标后 30s 内、最多 3 次；一旦本轮已经真的点过立刻罢手。
+     */
+    _scheduleSkipRetry(taskId, fireTargetMs) {
+      const now = Math.round(ServerTime.now());
+      if (!Number.isFinite(fireTargetMs) || now - fireTargetMs > this.SKIP_RETRY_WINDOW_MS) return;
+      if (this._consumedTarget && this._consumedTarget.taskId === taskId
+          && Math.abs(now - this._consumedTarget.atMs) <= this.CONSUMED_GUARD_MS) {
+        return;   // 已经有执行路径真正开点了，不再补触发
+      }
+      if ((this._skipRetries || 0) >= this.SKIP_RETRY_MAX) {
+        this.updatePageLog(`【调度放弃】锁占用超过重试上限，不再补触发 task_id=${taskId}`);
+        return;
+      }
+      this._skipRetries = (this._skipRetries || 0) + 1;
+      this.updatePageLog(`【调度重试】${this._skipRetries}/${this.SKIP_RETRY_MAX}，${this.SKIP_RETRY_DELAY_MS}ms 后补触发`);
+      this.scheduleCurrentTask({ overrideTargetMs: now + this.SKIP_RETRY_DELAY_MS });
     },
 
     // 距目标的剩余毫秒（服务器校准时间基准）；无有效调度返回 null
@@ -1942,11 +2000,12 @@ updatePageLog(text) {
       if (remaining === null || remaining > 0) return; // 还没到点
       const taskId = this._currentScheduledTaskId;
       if (!taskId) return;
+      const fireTargetMs = this._currentTargetMs;   // cleanup 会置空，先取出来供锁冲突补触发使用
       this._fired = true;
       Util.info(`[Scheduler] 到点触发 task_id=${taskId}`);
       this.updatePageLog(`[Scheduler] 到点触发 task_id=${taskId}`);
       this._cleanupTimers();      // 清理调度定时器并置空调度状态，防止重复触发
-      this._doExecuteTask(taskId);
+      this._doExecuteTask(taskId, fireTargetMs);
     },
 
     // 主线程精确定时器：远端用较粗 setTimeout，临近逐级加密，最后 ≤10ms 自旋精确命中目标时刻。
@@ -2219,6 +2278,19 @@ updatePageLog(text) {
     // 意图广播后的静默期：等对方意图也落地，保证双方看到同一份参与者集合
     CROSS_INTENT_SETTLE_MS: 250,
 
+    // ===== 排期健壮性参数（每一项都对应线上实测到的"当天不点"路径） =====
+    // 部署排期时"刚到点"的宽容窗口：≤60s 直接立即执行；超过才顺延到明天（与 waitUntil 的 60s 阈值一致）
+    SCHEDULE_LATE_GRACE_MS: 60 * 1000,
+    // 锁冲突补触发：只在短窗口内做有限次，一旦有人真正开点立刻罢手（避免二次点击）
+    SKIP_RETRY_MAX: 3,
+    SKIP_RETRY_DELAY_MS: 2000,
+    SKIP_RETRY_WINDOW_MS: 30 * 1000,
+    // 执行失败重试：按钮常常只是还没渲染出来（线上 147 次"未找到领取按钮"全压在开抢时刻）
+    FAIL_RETRY_MAX: 4,
+    FAIL_RETRY_DELAY_MS: 20000,
+    // "本轮已经真的发过点击"的保护期：此窗口内绝不再补一次点击
+    CONSUMED_GUARD_MS: 5 * 60 * 1000,
+
     /**
      * 到点互斥裁决：返回 true = 本页执行，false = 让给另一页签执行。
      * 四条硬约束（前几版分别缺了后三条）：
@@ -2280,28 +2352,74 @@ updatePageLog(text) {
       return true;
     },
 
-    scheduleCurrentTask() {
-      // 不再强行重置 running（幂等 _fired + generation 已保证不会重复执行）
+    /**
+     * 重建排期。
+     * 顺序有讲究：**只读校验全部前置，通过之后才销毁旧定时器并武装新排期**。
+     * 旧版第一句就 _cleanupTimers()，后面任何一处 return 都会把当天唯一一条排期悄悄丢掉。
+     * opts.overrideTargetMs: 失败/锁冲突补触发用，直接指定触发时刻，不再解析 start_time。
+     * opts.skipImmediate: 本轮已执行过（点击结束后重建），过点一律顺延，绝不再立即补一次。
+     */
+    scheduleCurrentTask(opts = {}) {
+      if (!this.state.baseConfig) return false;
+      const taskId = Util.extractTaskIdFromPage() || 'unknown_task';
+      if (!taskId || taskId === 'unknown_task') return false;
+      const cfg = this.state.taskConfigs[taskId] || Util.defaultTaskConfig(taskId);
+      const startTimeStr = cfg.start_time || CONFIG.DEFAULT_START_TIME;
+      const nowMs = Math.round(ServerTime.now());
+      const overrideMs = Number(opts.overrideTargetMs);
+      const isOverride = Number.isFinite(overrideMs);
+      let parsed;
+      if (isOverride) {
+        parsed = {
+          raw: '', normalized: Util.formatTime(new Date(overrideMs)),
+          target: new Date(overrideMs), delayMs: Math.max(0, overrideMs - nowMs), mode: 'override'
+        };
+      } else {
+        // noPushTomorrow：部署时也先按"今天"解释，过点由下面显式分流 ——
+        // 旧版把"已过点"直接推到明天，等于当天静默不点（线上目标时刻 00:29:57 出现 852 次全部踩在这里）
+        parsed = Util.parseTimeSpec(startTimeStr, ServerTime.nowDate(), { noPushTomorrow: true });
+        if (!parsed || !Number.isFinite(parsed.delayMs)) return false;
+        if (parsed.invalid) {
+          Util.warn(`scheduleCurrentTask: 开始时间 "${startTimeStr}" 无法识别，已回退默认 ${parsed.normalized}`);
+          this.updatePageLog(`【时间回退】"${startTimeStr}" 无法识别，按默认 ${parsed.normalized} 排期`);
+        } else if (!cfg.start_time || String(cfg.start_time).trim() === CONFIG.DEFAULT_START_TIME) {
+          Util.warn(`scheduleCurrentTask: task_id=${taskId} 未配置领取时间，使用默认 ${CONFIG.DEFAULT_START_TIME}`);
+          this.updatePageLog(`【默认时间】task_id=${taskId} 未配置领取时间，按默认 ${CONFIG.DEFAULT_START_TIME} 排期`);
+        }
+        const lateMs = nowMs - parsed.target.getTime();
+        const consumedRecently = !!(this._consumedTarget && this._consumedTarget.taskId === taskId
+          && Math.abs(nowMs - this._consumedTarget.atMs) <= this.CONSUMED_GUARD_MS);
+        if (lateMs > 0 && !opts.skipImmediate && lateMs <= this.SCHEDULE_LATE_GRACE_MS && !consumedRecently) {
+          // 刚到点（≤60s）且本轮还没点过：立即执行，别把当天排期丢掉
+          Util.warn(`scheduleCurrentTask: 目标 ${parsed.normalized} 已过 ${(lateMs / 1000).toFixed(1)}s，立即执行`);
+          this.updatePageLog(`【过点执行】${parsed.normalized} 已过 ${(lateMs / 1000).toFixed(1)}s，立即执行`);
+          parsed = { ...parsed, target: new Date(nowMs), delayMs: 0 };
+        } else if (lateMs > 0) {
+          // 明显历史时刻（白天打开页面看凌晨任务）或本轮已经执行过：顺延到明天
+          const tomorrow = new Date(parsed.target.getTime() + 24 * 3600 * 1000);
+          Util.warn(`scheduleCurrentTask: 目标 ${parsed.normalized} 已过 ${(lateMs / 1000).toFixed(1)}s，顺延到明天 ${Util.formatTime(tomorrow)}`);
+          this.updatePageLog(`【时间顺延】${parsed.normalized} 已过 ${(lateMs / 1000).toFixed(1)}s，顺延到明天 ${Util.formatTime(tomorrow)}`);
+          parsed = { ...parsed, target: tomorrow, delayMs: tomorrow.getTime() - nowMs };
+        }
+      }
+      // —— 校验通过，从这里开始才动状态 ——
       this._cleanupTimers();
       this._setupVisibilityCheck();
       this._initBackgroundWorker();      // 后备心跳 + AudioContext 保活
-      if (!this.state.baseConfig) return;
-      const taskId = Util.extractTaskIdFromPage() || 'unknown_task';
-      if (!taskId || taskId === 'unknown_task') return;
-      const cfg = this.state.taskConfigs[taskId] || Util.defaultTaskConfig(taskId);
-      const startTimeStr = cfg.start_time || CONFIG.DEFAULT_START_TIME;
-      const parsed = Util.parseTimeSpec(startTimeStr, ServerTime.nowDate());
-      if (!parsed || !Number.isFinite(parsed.delayMs)) return;
       this._currentStartTimeStr = startTimeStr;
       this._currentScheduledTaskId = taskId;
       this._currentTargetMs = parsed.target.getTime();
       this._fired = false;
-      // 跨标签页登记 + 冲突预警（时刻不冲突则静默）
+      // 跨标签页登记：补触发沿用同一任务登记，不重复做冲突预警
       CrossTab.register(taskId, this._currentTargetMs, 'scheduled');
-      this._warnCrossTabConflict(taskId, this._currentTargetMs);
+      if (!isOverride) {
+        this._skipRetries = 0;
+        this._failRetries = 0;
+        this._warnCrossTabConflict(taskId, this._currentTargetMs);
+      }
       this._scheduleGeneration = (this._scheduleGeneration || 0) + 1;
       const gen = this._scheduleGeneration;
-      Util.log('schedule current task:', taskId, parsed.normalized, 'delay=', parsed.delayMs);
+      Util.log('schedule current task:', taskId, parsed.normalized, 'delay=', parsed.delayMs, isOverride ? '(override)' : '');
       this.updatePageLog('[AutoSchedule] task_id=' + taskId + ' start=' + parsed.normalized + ' countdown=' + (parsed.delayMs / 1000).toFixed(3) + 's');
       // 立即用当前缓存 offset 武装主线程精确定时器（不等待网络）；
       // 随后异步校准并启动自适应校准，仅在早于目标足够时间时提升 offset 精度。
@@ -2309,6 +2427,7 @@ updatePageLog(text) {
       ServerTime.calibrate().then(() => {
         if (this._scheduleGeneration === gen) this._startAdaptiveCalibration();
       });
+      return true;
     },
 
     toggleDarkMode() {
@@ -3529,6 +3648,8 @@ updatePageLog(text) {
       const proceed = await Panel.resolveFireConflict(taskId, targetMs);
       if (!proceed) return null;
       CrossTab.mark(taskId, targetMs, 'running');
+      // 本轮"真的发起点读"的本地记号：调度补触发/失败重试都要看它，避免二次点击
+      if (Panel) Panel._consumedTarget = { taskId: taskId, atMs: Math.round(ServerTime.now()) };
 
       let clickStats;
       try {
@@ -3988,8 +4109,8 @@ async function _doBatchUpload(results) {
         Util.info('========================================');
       } finally {
         Panel.state.running = false;
-        // 释放锁后重新调度，确保下次定时任务能正常建立
-        Panel.scheduleCurrentTask();
+        // 释放锁后重建下一轮排期（skipImmediate：本轮已经执行过，绝不再立即补一次）
+        Panel._rescheduleNextCycle();
       }
     } catch (e) {
       Util.error('主流程异常:', e);
@@ -4053,6 +4174,9 @@ async function _doBatchUpload(results) {
         Util.warn('上传异常结果失败:', uploadErr);
       } finally {
         Panel.state.running = false;
+        // 异常同样必须收尾：旧版这里不重建调度，主流程一抛错本页当天就彻底没有排期了
+        // （线上 1,087 次"主流程异常"都走这条路）；_afterRunFinished 会先判断是否还能重试
+        Panel._afterRunFinished(Util.extractTaskIdFromPage() || 'unknown_task');
       }
     }
   }
