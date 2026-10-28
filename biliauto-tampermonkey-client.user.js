@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BiliAutoClicker - 油猴客户端
 // @namespace    https://github.com/under-the-ocean
-// @version      1.8.1
+// @version      1.8.2
 // @match        https://www.bilibili.com/blackboard/era/award-exchange.html?*
 // @connect      bili.982835785.xyz
 // @connect      api.live.bilibili.com
@@ -80,7 +80,7 @@
     MAX_RELOAD_ATTEMPTS: 3,
 
     // 单一真源：@version 改了这里自动跟随（GM_info 不可用时才回退常量）
-    VERSION: (typeof GM_info !== 'undefined' && GM_info && GM_info.script && GM_info.script.version) || '1.8.1',
+    VERSION: (typeof GM_info !== 'undefined' && GM_info && GM_info.script && GM_info.script.version) || '1.8.2',
 
     // 取源优先级：CNB（国内直连，无需代理）→ gh-proxy 加速的 GitHub → GitHub 原始地址
     CNB_BASE: 'https://cnb.cool/bili-monkey/Bili_monkey/-/git/raw/main',
@@ -2615,12 +2615,13 @@ updatePageLog(text) {
      */
     scheduleCurrentTask(opts = {}) {
       if (!this.state.baseConfig) return false;
-      // 主流程持有执行锁期间，禁止重建排期：
-      // AI 解析回填（getTaskParsedInfo/uploadPageInfo 异步回调）或 SPA 切换等逻辑在
-      // main 等待期间调用本方法，会重新武装到点定时器；到点触发 _doExecuteTask 时发现
-      // state.running=true（被 main 占着），报"调度跳过"并走 _scheduleSkipRetry 补触发，
-      // 形成"左右手互搏"的误报日志（v1.8.1 场景，锁占用超过重试上限）。
-      // 锁释放后 main 的 finally 会先 running=false 再 _rescheduleNextCycle()，下一轮照常建立。
+      // 执行窗口互斥守卫：同一时刻只允许一条执行路径（_doExecuteTask 调度触发 /
+      // runCurrent 手动触发）。执行期间任何异步回调（AI 解析回填、SPA 切换、
+      // 配置刷新）重建排期都会被拒绝 —— 否则重建的定时器到点触发 _doExecuteTask
+      // 时发现 running=true，报"调度跳过"并走 _scheduleSkipRetry 补触发，形成
+      // "左右手互搏"误报（v1.8.1 场景，锁占用超过重试上限）。
+      // 执行路径的 finally 会先 running=false 再 _afterRunFinished() 重建下一轮，
+      // 锁释放后本守卫放行，下一轮排期照常建立。
       if (this.state.running) return false;
       const taskId = Util.extractTaskIdFromPage() || 'unknown_task';
       if (!taskId || taskId === 'unknown_task') return false;
@@ -4319,55 +4320,18 @@ async function _doBatchUpload(results) {
 
       const taskConfigs = Util.loadTaskConfigs(tasks);
       Util.log(`加载了 ${Object.keys(taskConfigs).length} 个任务配置`);
-      // 设置执行锁，并撤销调度器已武装的到点定时器：
-      // main 会自己等 start_time 再连点，若不撤销，调度器会在同一毫秒再起一份连点，
-      // 两路并发直接把 direct 模式的请求量翻倍，触发 B 站风控 / IP 异常。
-      Panel.state.running = true;
-      Panel._cleanupTimers();
-      let results;
-      try {
-        results = await runCurrentPageTask(baseConfig, taskId, taskConfigs[taskId] || Util.defaultTaskConfig(taskId), taskName);
 
-        // 上传页面信息后，服务端已自动更新 task_key，重新拉取任务列表以获取最新名称
-        Util.log('任务执行完成，重新拉取任务列表刷新名称...');
-        try {
-          const refreshedTasksResp = await API.getTasks();
-          if (refreshedTasksResp.status === 'success') {
-            const refreshedTasks = Util.normalizeTasks(refreshedTasksResp.data || {});
-            // 不释放 running 锁直接 setData：setData 会重建调度，
-            // 但 _doExecuteTask 已加 running 互斥守卫，不会与本次执行并发；
-            // 真正的下一次排期在 finally 释放锁后由 scheduleCurrentTask() 重建
-            Panel.setData(baseConfig, refreshedTasks);
-            // 用刷新后的任务名称更新已捕获的结果
-            let updateCount = 0;
-            for (const key of Object.keys(results)) {
-              const refreshedTask = Util.findTaskById(refreshedTasks, key);
-              if (refreshedTask) {
-                const newName = Util.getTaskName(refreshedTask);
-                if (newName && newName !== results[key].task_name) {
-                  Util.log(`任务名称更新: ${results[key].task_name} -> ${newName}`);
-                  results[key].task_name = newName;
-                  updateCount++;
-                }
-              }
-            }
-            Util.log(`刷新任务列表完成，更新了 ${updateCount} 个任务名称`);
-          }
-        } catch (e) {
-          Util.warn('刷新任务列表失败:', e);
-        }
-
-        Util.info(`准备批量上传 ${Object.keys(results).length} 个当前任务结果`);
-        await batchUploadAllResults(results);
-
-        Util.info('========================================');
-        Util.info('主流程完成');
-        Util.info('========================================');
-      } finally {
-        Panel.state.running = false;
-        // 释放锁后重建下一轮排期（skipImmediate：本轮已经执行过，绝不再立即补一次）
-        Panel._rescheduleNextCycle();
-      }
+      // 【核心修复 v1.8.2】main 不再自己执行任务，彻底把执行权交给调度器。
+      // 原实现：main 提前 running=true 并 _cleanupTimers() 等待 start_time。
+      // 但 main 用的是启动时快照的 start_time（AI 异步回填前往往是默认/旧值），
+      // 而 AI 回填（getTaskParsedInfo/uploadPageInfo 异步回调）把 start_time 更新为
+      // 真实抢码时间后，触发的 scheduleCurrentTask() 重建排期定时器；到点
+      // _doExecuteTask 发现锁被 main 占着 → 报【调度跳过】→ 补触发 3 次放弃，
+      // main 又在 waitUntil 等旧时间不点击 → 任务彻底流产（v1.8.1 实际未点击根因）。
+      // 现在：setData() 已武装排期，AI 回填后 scheduleCurrentTask() 重建到新时间，
+      // 到点 _doExecuteTask 现取配置（syncCurrentTaskConfigFromInputs）正常执行并上传，
+      // 与 main 无任何锁竞争。main 只负责初始化，执行权完全在调度器。
+      Util.info('配置加载完成，任务交由调度器接管，等待到点触发');
     } catch (e) {
       Util.error('主流程异常:', e);
       Util.notify('BiliAuto 异常', e.message || String(e));
