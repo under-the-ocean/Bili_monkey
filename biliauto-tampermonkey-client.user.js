@@ -2615,6 +2615,13 @@ updatePageLog(text) {
      */
     scheduleCurrentTask(opts = {}) {
       if (!this.state.baseConfig) return false;
+      // 主流程持有执行锁期间，禁止重建排期：
+      // AI 解析回填（getTaskParsedInfo/uploadPageInfo 异步回调）或 SPA 切换等逻辑在
+      // main 等待期间调用本方法，会重新武装到点定时器；到点触发 _doExecuteTask 时发现
+      // state.running=true（被 main 占着），报"调度跳过"并走 _scheduleSkipRetry 补触发，
+      // 形成"左右手互搏"的误报日志（v1.8.1 场景，锁占用超过重试上限）。
+      // 锁释放后 main 的 finally 会先 running=false 再 _rescheduleNextCycle()，下一轮照常建立。
+      if (this.state.running) return false;
       const taskId = Util.extractTaskIdFromPage() || 'unknown_task';
       if (!taskId || taskId === 'unknown_task') return false;
       const cfg = this.state.taskConfigs[taskId] || Util.defaultTaskConfig(taskId);
