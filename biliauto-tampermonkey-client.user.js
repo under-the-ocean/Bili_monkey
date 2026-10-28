@@ -2870,6 +2870,8 @@ updatePageLog(text) {
         Util.error('执行失败:', e);
       } finally {
         this.state.running = false;
+        // 手动执行完也统一收尾：能重试就重试，否则重建下一轮排期，确保排期不断档
+        this._afterRunFinished(taskId);
       }
     },
 
@@ -4332,6 +4334,17 @@ async function _doBatchUpload(results) {
       // 到点 _doExecuteTask 现取配置（syncCurrentTaskConfigFromInputs）正常执行并上传，
       // 与 main 无任何锁竞争。main 只负责初始化，执行权完全在调度器。
       Util.info('配置加载完成，任务交由调度器接管，等待到点触发');
+
+      // 兜底：如果因为 DOM 未就绪/URL 无 task_id 导致排期失败，延迟 1.5s 再试一次。
+      // extractTaskIdFromPage 优先读 URL 的 task_id 参数（@match 的 award-exchange.html?*
+      // 必然带 query），通常不会失败；仅当 URL 无 task_id 且 DOM 尚未解析出 task_id 时
+      // scheduleCurrentTask 会 return false，这里兜底重建，避免当天无排期。
+      setTimeout(() => {
+        if (!Panel._currentTargetMs) {
+          Util.warn('[兜底] 检测到未建立排期，尝试重新排期...');
+          Panel.scheduleCurrentTask();
+        }
+      }, 1500);
     } catch (e) {
       Util.error('主流程异常:', e);
       Util.notify('BiliAuto 异常', e.message || String(e));
